@@ -86,26 +86,25 @@ variable "server_disk_size" {
   default     = 60
 }
 
-# --- k3s-worker-1 ---
-variable "worker_ip" {
-  description = "Static IP for k3s-worker-1"
-  type        = string
-  default     = "192.168.1.22"
-}
-
-variable "worker_cores" {
-  type    = number
-  default = 4
-}
-
-variable "worker_memory" {
-  description = "MB"
-  type        = number
-  default     = 16384
-}
-
-variable "worker_disk_size" {
-  description = "GB"
-  type        = number
-  default     = 150
+# --- workers ---
+# Map key = VM name (and Terraform state key). Adding a worker means adding
+# an entry here (or overriding the whole map in terraform.tfvars) and
+# re-applying — existing entries are untouched. Remember the matching
+# Ansible inventory entry under [k3s_agent].
+variable "workers" {
+  description = "k3s worker VMs, keyed by name"
+  type = map(object({
+    ip        = string # static LAN IP (CIDR suffix appended from network_cidr_suffix)
+    cores     = number
+    memory    = number # MB
+    disk_size = number # GB
+  }))
+  default = {
+    "k3s-worker-1" = {
+      ip        = "192.168.1.22"
+      cores     = 4
+      memory    = 16384
+      disk_size = 150
+    }
+  }
 }

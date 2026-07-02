@@ -8,7 +8,7 @@ The Ansible/Terraform/Kubernetes/platform *mechanics* these decisions rely on li
 
 ## Logs
 
-- [[v0.1 - Foundation]] — ADR-0001 … ADR-0007
+- [[v0.1 - Foundation]] — ADR-0001 … ADR-0007, ADR-0019
 - [[v0.2 - Cluster Bootstrap]] — ADR-0008 … ADR-0012
 - [[v0.3 - Ingress and TLS]] — ADR-0013 … ADR-0015
 - [[v0.4 - Public and Private Access]] — ADR-0016 … ADR-0018
@@ -37,3 +37,4 @@ v1.0 and v2.0 have no log yet — no architecture decisions have been made there
 | 0016 | Cloudflare Tunnel with exactly one route to Traefik | Accepted | [[v0.4 - Public and Private Access]] |
 | 0017 | Lock down cloudflared's egress via NetworkPolicy | Accepted | [[v0.4 - Public and Private Access]] |
 | 0018 | Tailscale as two separate mechanisms | Accepted | [[v0.4 - Public and Private Access]] |
+| 0019 | Workers as a `for_each` map; control plane as a singleton | Accepted | [[v0.1 - Foundation]] |
