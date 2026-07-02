@@ -1,0 +1,18 @@
+---
+- name: Base OS prep — every node
+  hosts: k3s_cluster
+  become: true
+  roles:
+    - common
+
+- name: Install and bootstrap the k3s control plane
+  hosts: k3s_server
+  become: true
+  roles:
+    - k3s_server
+
+- name: Join workers to the cluster
+  hosts: k3s_agent
+  become: true
+  roles:
+    - k3s_agent

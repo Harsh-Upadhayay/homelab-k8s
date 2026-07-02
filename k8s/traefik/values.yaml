@@ -1,0 +1,47 @@
+# Traefik Helm chart values.
+# Deliberately ClusterIP: cloudflared reaches this Service from inside the
+# cluster, so there is no LoadBalancer/NodePort/MetalLB in this design at all.
+
+deployment:
+  replicas: 1
+
+service:
+  type: ClusterIP
+
+ports:
+  web:
+    port: 8000
+    # This is the entrypoint cloudflared's tunnel will target (see
+    # k8s/cloudflared/). TLS already terminated at Cloudflare's edge, so
+    # plain HTTP cluster-internal is fine here — end-to-end TLS to the
+    # origin is a later hardening step, not a day-one requirement.
+  websecure:
+    port: 8443
+    tls:
+      enabled: false   # not used yet — see note above; flip on later if wanted
+  traefik:
+    # Internal dashboard/api entrypoint — NOT part of the `service` above,
+    # so it is not reachable via the ClusterIP on 8000/8443. Exposed
+    # separately, admin-only, via Tailscale (see k8s/tailscale/).
+    port: 9000
+
+api:
+  dashboard: true
+  insecure: false   # dashboard only served on the internal `traefik` entrypoint, not web/websecure
+
+providers:
+  kubernetesCRD:
+    enabled: true     # this is what makes IngressRoute objects work — Traefik's native, simplest routing API
+  kubernetesIngress:
+    enabled: true     # keep standard Ingress support too, no cost to leaving it on
+
+ingressRoute:
+  dashboard:
+    enabled: false     # dashboard IngressRoute not needed — reached via Tailscale instead, see Phase 12
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 64Mi
+  limits:
+    memory: 256Mi

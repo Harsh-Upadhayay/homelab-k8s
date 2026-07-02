@@ -1,0 +1,57 @@
+---
+# These are the actual k3s prerequisites — not general hardening (that's a
+# separate, later concern). Every task here exists because k3s specifically
+# needs it to run correctly.
+
+- name: Disable swap (Kubernetes requires swap off)
+  ansible.builtin.command: swapoff -a
+  changed_when: false
+
+- name: Remove swap entries from /etc/fstab so it stays off after reboot
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: '^([^#].*\sswap\s.*)$'
+    line: '# \1'
+    backrefs: true
+
+- name: Load required kernel modules
+  community.general.modprobe:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - br_netfilter
+    - overlay
+
+- name: Persist kernel modules across reboots
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/k3s.conf
+    content: |
+      br_netfilter
+      overlay
+    mode: "0644"
+
+- name: Set required sysctl values for pod networking
+  ansible.posix.sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    sysctl_file: /etc/sysctl.d/90-k3s.conf
+    reload: true
+  loop:
+    - { name: "net.ipv4.ip_forward", value: "1" }
+    - { name: "net.bridge.bridge-nf-call-iptables", value: "1" }
+    - { name: "net.bridge.bridge-nf-call-ip6tables", value: "1" }
+
+- name: Ensure qemu-guest-agent is running (baked into the template, just confirming)
+  ansible.builtin.systemd:
+    name: qemu-guest-agent
+    state: started
+    enabled: true
+
+- name: Set a consistent hostname
+  ansible.builtin.hostname:
+    name: "{{ inventory_hostname }}"
+
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600

@@ -1,0 +1,31 @@
+---
+# Codifies Phase 1's manual housekeeping so rebuilding the Proxmox host
+# doesn't mean re-typing the same commands by hand.
+- name: Disable the pve-enterprise repo (no subscription on this host)
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/pve-enterprise.sources
+    content: |
+      Types: deb
+      URIs: https://enterprise.proxmox.com/debian/pve
+      Suites: {{ debian_codename }}
+      Components: pve-enterprise
+      Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
+      Enabled: false
+    mode: "0644"
+
+- name: Enable the pve-no-subscription repo
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/proxmox.sources
+    content: |
+      Types: deb
+      URIs: http://download.proxmox.com/debian/pve
+      Suites: {{ debian_codename }}
+      Components: pve-no-subscription
+      Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
+    mode: "0644"
+
+- name: apt update && full-upgrade
+  ansible.builtin.apt:
+    update_cache: true
+    upgrade: full
+    cache_valid_time: 0

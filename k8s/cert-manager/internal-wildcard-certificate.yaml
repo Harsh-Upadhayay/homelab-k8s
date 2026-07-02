@@ -1,0 +1,23 @@
+# cert-manager is NOT on the public path in this design — Cloudflare
+# terminates TLS at its edge for public apps, so the tunnel already arrives
+# over HTTPS. This Certificate is for the internal side: a wildcard cert
+# for services that are only ever reached over Tailscale (Grafana, Argo CD,
+# Traefik's dashboard, etc. once those exist), so they get a real,
+# non-self-signed cert too.
+#
+# DNS-01 works here specifically because it proves domain ownership via a
+# DNS TXT record rather than an HTTP request — so it issues a valid cert
+# even for a name that's never publicly reachable.
+
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: internal-wildcard-tls
+  namespace: traefik
+spec:
+  secretName: internal-wildcard-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - "*.internal.neovara.uk"   # replace with your own internal subdomain convention

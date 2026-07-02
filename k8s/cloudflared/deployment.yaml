@@ -1,0 +1,65 @@
+# Remotely-managed tunnel: the actual routing (which public hostname maps
+# to which backend) is configured in the Cloudflare Zero Trust dashboard,
+# NOT here. This Deployment only runs the connector. See GUIDE.md Phase 11
+# for creating the tunnel and its one route: * -> http://traefik.traefik.svc.cluster.local:8000
+#
+# cloudflared makes OUTBOUND connections to Cloudflare's edge — nothing
+# inbound is ever opened on the router. That single fact is why no port
+# forwarding, no MetalLB, and no public IP exposure exist anywhere in this
+# design.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudflared
+  namespace: cloudflare
+spec:
+  replicas: 1   # bump to 2 once you care about public uptime — a tunnel supports
+                # multiple connectors; cloudflared does not load-balance itself,
+                # replicas are purely for redundancy (Cloudflare picks a healthy one)
+  selector:
+    matchLabels:
+      app: cloudflared
+  template:
+    metadata:
+      labels:
+        app: cloudflared
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: cloudflared
+          image: cloudflare/cloudflared:2026.6.1   # verify against github.com/cloudflare/cloudflared/releases before pulling
+          args:
+            - tunnel
+            - --no-autoupdate
+            - --metrics
+            - 0.0.0.0:2000
+            - run
+          env:
+            - name: TUNNEL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: cloudflared-tunnel-token
+                  key: token
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: 2000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 128Mi

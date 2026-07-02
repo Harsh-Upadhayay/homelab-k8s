@@ -1,0 +1,14 @@
+# Terraform
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/terraform.tfvars
+
+# Ansible
+ansible/*.retry
+.env
+
+# Kubeconfig pulled from the cluster
+kubeconfig
+*.kubeconfig

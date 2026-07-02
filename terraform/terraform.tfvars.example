@@ -1,0 +1,15 @@
+# Copy this to terraform.tfvars and fill in your real values.
+# terraform.tfvars is gitignored — never commit real credentials.
+
+proxmox_endpoint  = "https://192.168.1.10:8006/"
+proxmox_api_token = "terraform@pve!tf=00000000-0000-0000-0000-000000000000"
+proxmox_node      = "pve"
+
+network_gateway = "192.168.1.1"
+dns_servers     = ["1.1.1.1", "1.0.0.1"]
+
+ssh_public_key = "ssh-ed25519 AAAA...your-public-key... homelab-admin"
+vm_user        = "harsh"
+
+server_ip = "192.168.1.21"
+worker_ip = "192.168.1.22"

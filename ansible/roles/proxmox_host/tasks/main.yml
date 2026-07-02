@@ -1,0 +1,13 @@
+---
+# Two independent concerns, tagged so either can run alone:
+#   --tags repos       Phase 1 remainder — apt repo housekeeping + upgrade
+#   --tags tailscale   Phase 12 Part A — join the tailnet (needs an auth key)
+# Run with no --tags to do both.
+
+- name: Repo housekeeping + apt upgrade (Phase 1)
+  ansible.builtin.import_tasks: repos.yml
+  tags: [repos]
+
+- name: Join the tailnet (Phase 12 Part A)
+  ansible.builtin.import_tasks: tailscale.yml
+  tags: [tailscale]

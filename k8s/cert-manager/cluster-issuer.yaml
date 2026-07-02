@@ -1,0 +1,42 @@
+# Two ClusterIssuers, staging and prod — iterate against staging while
+# testing (near-zero rate limits, but the cert isn't browser-trusted),
+# switch to prod once you know the DNS-01 flow actually works.
+#
+# Both reference the same Secret, created imperatively via `kubectl create
+# secret` (see GUIDE.md Phase 10) — not committed to Git in any form.
+
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    email: you@example.com   # replace with your real email — Let's Encrypt uses this for expiry notices
+    privateKeySecretRef:
+      name: letsencrypt-staging-account-key
+    solvers:
+      - dns01:
+          cloudflare:
+            email: you@example.com   # replace — must match the Cloudflare account owning the API token
+            apiTokenSecretRef:
+              name: cloudflare-api-token
+              key: api-token
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: you@example.com   # replace
+    privateKeySecretRef:
+      name: letsencrypt-prod-account-key
+    solvers:
+      - dns01:
+          cloudflare:
+            email: you@example.com   # replace
+            apiTokenSecretRef:
+              name: cloudflare-api-token
+              key: api-token

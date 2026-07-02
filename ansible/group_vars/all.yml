@@ -1,0 +1,25 @@
+---
+# Pinned deliberately — reproducibility means "the version I tested",
+# not "whatever's newest the day this playbook happens to run".
+# Check https://github.com/k3s-io/k3s/releases before bumping.
+k3s_version: "v1.36.2+k3s1"
+
+# The join secret shared between server and agents. This is an ANSIBLE-level
+# secret, separate from Kubernetes Secrets entirely.
+# Never hardcode it here. Pass it at runtime:
+#   export K3S_TOKEN=$(openssl rand -hex 32)   # first run only, then reuse the same value
+#   ansible-playbook site.yml --extra-vars "k3s_token=${K3S_TOKEN}"
+# k3s_token is intentionally left undefined here so a missing --extra-vars fails loudly.
+
+k3s_server_ip: "192.168.1.21"
+
+# Standard k8s control-plane taint — keeps application pods off k3s-server-1.
+k3s_control_plane_taint: "node-role.kubernetes.io/control-plane:NoSchedule"
+
+# TLS SANs the API server certificate should cover — add a LAN DNS name here
+# too if you set one up, so kubeconfig access survives an IP change later.
+k3s_tls_sans:
+  - "192.168.1.21"
+
+# Where the fetched kubeconfig lands locally after the server role runs.
+local_kubeconfig_path: "{{ playbook_dir }}/../kubeconfig"

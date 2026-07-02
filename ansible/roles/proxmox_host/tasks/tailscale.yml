@@ -1,0 +1,46 @@
+---
+# Phase 12 Part A — tailscaled directly on the Proxmox host (UI + node-level
+# access). Separate mechanism from the in-cluster Tailscale Operator in
+# k8s/tailscale/ — see claude.md, don't conflate the two.
+
+- name: Add Tailscale's package signing key
+  ansible.builtin.get_url:
+    url: "https://pkgs.tailscale.com/stable/debian/{{ debian_codename }}.noarmor.gpg"
+    dest: /usr/share/keyrings/tailscale-archive-keyring.gpg
+    mode: "0644"
+
+- name: Add the Tailscale apt repository
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/tailscale.sources
+    content: |
+      Types: deb
+      URIs: https://pkgs.tailscale.com/stable/debian
+      Suites: {{ debian_codename }}
+      Components: main
+      Signed-By: /usr/share/keyrings/tailscale-archive-keyring.gpg
+    mode: "0644"
+
+- name: Install tailscale
+  ansible.builtin.apt:
+    name: tailscale
+    state: present
+    update_cache: true
+
+- name: Ensure tailscaled is running and enabled
+  ansible.builtin.systemd:
+    name: tailscaled
+    state: started
+    enabled: true
+
+- name: Check current tailnet connection state
+  ansible.builtin.command: tailscale status --json
+  register: ts_status
+  changed_when: false
+  failed_when: false
+
+- name: Join the tailnet (auth key passed at runtime, never stored in this repo)
+  ansible.builtin.command: "tailscale up --authkey={{ tailscale_auth_key }}"
+  no_log: true
+  when: >
+    ts_status.rc != 0 or
+    (ts_status.stdout | from_json).BackendState != "Running"

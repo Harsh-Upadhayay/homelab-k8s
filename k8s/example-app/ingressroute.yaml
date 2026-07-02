@@ -1,0 +1,19 @@
+# The first real IngressRoute in this cluster — this is the object that
+# does the Host-header routing job that NodePort/LoadBalancer alone can't.
+# Traefik watches for objects like this one; nothing else needs to change
+# when you add app #2, #3, etc. — just another IngressRoute pointing at
+# another Service.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: whoami
+  namespace: default
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`whoami.neovara.uk`)   # replace with your real domain
+      kind: Rule
+      services:
+        - name: whoami
+          port: 80

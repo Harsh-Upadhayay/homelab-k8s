@@ -1,0 +1,4 @@
+---
+# Matches the Debian codename Proxmox VE is pinned to in GUIDE.md's version
+# table — used to template the apt sources files in roles/proxmox_host.
+debian_codename: "trixie"

@@ -1,0 +1,47 @@
+# Without this, cloudflared has the same network reach as any pod in the
+# cluster — standard Kubernetes service discovery would let it resolve and
+# connect to every Service in every namespace (your databases, your
+# Traefik dashboard, everything), because Cloudflare's own quickstart
+# guide sets up the tunnel with zero network restriction by default.
+#
+# This is the one place a compromised public-facing component becomes a
+# pivot point if left unrestricted. With this policy, cloudflared can reach
+# Traefik on port 8000 and nothing else — confirming k3s's bundled netpol
+# controller enforces this even on plain Flannel, no Cilium required.
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cloudflared-restrict-egress
+  namespace: cloudflare
+spec:
+  podSelector:
+    matchLabels:
+      app: cloudflared
+  policyTypes:
+    - Egress
+  egress:
+    # DNS — needed to resolve Traefik's ClusterIP and to reach Cloudflare's edge
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Traefik — the only in-cluster destination cloudflared should ever reach
+    - to:
+        - namespaceSelector:
+            kubernetes.io/metadata.name: traefik
+      ports:
+        - protocol: TCP
+          port: 8000
+    # Cloudflare's edge — the outbound tunnel itself (QUIC/HTTP2, port 7844 and 443)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: UDP
+          port: 7844
+        - protocol: TCP
+          port: 443

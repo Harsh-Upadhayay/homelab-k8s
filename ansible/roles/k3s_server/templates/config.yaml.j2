@@ -1,0 +1,38 @@
+# Managed by Ansible — do not edit by hand on the node, edit the template instead.
+
+# Boots embedded etcd instead of SQLite, even at a single node. This is the
+# pivotal choice from the design phase: it gives real etcd to snapshot,
+# restore, and inspect with etcdctl, and a clean path to a 3-node quorum
+# later — without kubeadm's install toil.
+cluster-init: true
+
+token: "{{ k3s_token }}"
+
+# Encrypts Secrets at rest inside etcd (not just base64 — actual encryption).
+secrets-encryption: true
+
+# Keeps app workloads off the control plane.
+node-taint:
+  - "{{ k3s_control_plane_taint }}"
+
+tls-san:
+{% for san in k3s_tls_sans %}
+  - "{{ san }}"
+{% endfor %}
+
+# We bring our own Traefik and our own LB story (Traefik as ClusterIP, no
+# LoadBalancer needed) — disable k3s's bundled versions so there's no
+# collision later.
+disable:
+  - traefik
+  - servicelb
+
+# Flannel + kube-proxy stay on their defaults (no flags needed) — this is
+# the deliberate decision to defer Cilium and start on the simplest CNI.
+
+# Scheduled etcd snapshots, local for now. Off-box shipping (--etcd-s3-*)
+# is part of the deferred backup-strategy phase, not day one — but taking
+# the local snapshots from the start costs nothing and means there's
+# something to test restores against immediately.
+etcd-snapshot-schedule-cron: "0 * * * *"
+etcd-snapshot-retention: 24
