@@ -5,5 +5,5 @@
 - name: Proxmox host housekeeping (Phase 1)
   hosts: proxmox_hosts
   become: false   # ansible_user is already root on the hypervisor
-  roles:
-    - proxmox_host
+  roles: # Just a folder convention
+    - proxmox_host # ansible looks for this file:  roles/proxmox_host/tasks/main.yml
