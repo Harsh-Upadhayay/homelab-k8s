@@ -60,5 +60,6 @@ See [ROADMAP.md](./ROADMAP.md) for what's built, what's next, and what's intenti
 
 - **[GUIDE.md](./GUIDE.md)** — the canonical build guide, one phase at a time
 - **[Wiki](../../wiki)** — architecture decision log and troubleshooting reference
+- **[docs/Homelab Learning Map.md](./docs/Homelab%20Learning%20Map.md)** — revision notes on the Ansible/Terraform/Kubernetes/platform concepts this build actually exercises, written up as each phase lands
 - **[CHANGELOG.md](./CHANGELOG.md)** — what changed, when
 - **[ROADMAP.md](./ROADMAP.md)** — what's next and what's deliberately deferred
