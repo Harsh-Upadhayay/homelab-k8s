@@ -1,6 +1,6 @@
 # Ansible Concepts
 
-> Back to [[Homelab Learning Map]] · See also [[Platform Concepts]]
+> Back to [[Homelab Learning Map]] · See also [[Platform Concepts]] · Decisions in [[README|ADR index]]
 
 No agents, no daemons on the target — Ansible SSHs in, runs small Python-backed modules, and each one reports whether it changed anything. Everything below is organization on top of that one idea.
 
@@ -24,7 +24,7 @@ No agents, no daemons on the target — Ansible SSHs in, runs small Python-backe
 
 **Roles are a directory convention, not special syntax.** `roles/<name>/tasks/main.yml` is the entry point Ansible looks for automatically when a playbook lists that role — no explicit file path needed (`ansible/roles/proxmox_host/`).
 
-**`import_tasks` splits one role into multiple files.** `main.yml` pulls in `repos.yml` and `tailscale.yml` as if pasted inline. Combined with `tags:` on the import, this is what lets `--tags repos` skip the other file's tasks entirely — not just "don't run them," but "never even template them" (`ansible/roles/proxmox_host/tasks/main.yml`).
+**`import_tasks` splits one role into multiple files.** `main.yml` pulls in `repos.yml` and `tailscale.yml` as if pasted inline. Combined with `tags:` on the import, this is what lets `--tags repos` skip the other file's tasks entirely — not just "don't run them," but "never even template them." This is the mechanism that made ADR-0006 possible — one role covering two concerns without losing the ability to run either independently (`ansible/roles/proxmox_host/tasks/main.yml`).
 
 ## Tasks, modules, and idempotency
 

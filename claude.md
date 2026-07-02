@@ -18,6 +18,8 @@ Provisioning is split deliberately: **Terraform** (`terraform/`) provisions the 
 
 ## Decisions already made — do not silently change
 
+The formal, numbered record of these (Status/Context/Decision/Consequences, with reversals tracked via "Superseded by") lives in `docs/adr/` — this section is the fast-reading summary for AI context loading, that's the durable version.
+
 - **Embedded etcd via `cluster-init: true`**, not SQLite — even at a single server node. This is what enables real etcd snapshot/restore/inspection and a clean path to a 3-node HA quorum later.
 - **`secrets-encryption: true`** — Kubernetes Secrets encrypted at rest in etcd, not just base64.
 - **Control-plane taint** (`node-role.kubernetes.io/control-plane:NoSchedule`) on k3s-server-1 — app pods must never schedule there.

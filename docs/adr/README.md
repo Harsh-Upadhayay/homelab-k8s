@@ -1,0 +1,39 @@
+# Architecture Decision Records
+
+> Back to [[Homelab Learning Map]]
+
+Architecture decisions for this platform, in [Nygard ADR format](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions) (Status / Context / Decision / Consequences). ADRs are grouped into one log per release milestone (matching the [GitHub Milestones](../../../milestones) — v0.1 … v2.0), each log opening with a short narrative. ADR numbers are stable and append-only — a decision is never edited away, only superseded by a later ADR.
+
+The Ansible/Terraform/Kubernetes/platform *mechanics* these decisions rely on live separately in [[Ansible Concepts]], [[Terraform Concepts]], [[Kubernetes Concepts]], and [[Platform Concepts]].
+
+## Logs
+
+- [[v0.1 - Foundation]] — ADR-0001 … ADR-0007
+- [[v0.2 - Cluster Bootstrap]] — ADR-0008 … ADR-0012
+- [[v0.3 - Ingress and TLS]] — ADR-0013 … ADR-0015
+- [[v0.4 - Public and Private Access]] — ADR-0016 … ADR-0018
+
+v1.0 and v2.0 have no log yet — no architecture decisions have been made there, only deferrals already captured above (ADR-0003, ADR-0011). A new log starts only once a milestone actually produces a decision of its own.
+
+## Index
+
+| ADR | Title | Status | Log |
+|-----|-------|--------|-----|
+| 0001 | Split provisioning (Terraform) from configuration (Ansible) | Accepted | [[v0.1 - Foundation]] |
+| 0002 | Pin versions deliberately across the stack | Accepted | [[v0.1 - Foundation]] |
+| 0003 | Defer secrets management for v1 | Accepted | [[v0.1 - Foundation]] |
+| 0004 | Automate Proxmox host housekeeping and the Tailscale host join via Ansible | Accepted | [[v0.1 - Foundation]] |
+| 0005 | Split Proxmox host automation into two separate roles/playbooks | Superseded by 0006 | [[v0.1 - Foundation]] |
+| 0006 | Merge Proxmox host automation into one role with tagged task files | Accepted | [[v0.1 - Foundation]] |
+| 0007 | Inventory must use portable, resolvable connection targets | Accepted | [[v0.1 - Foundation]] |
+| 0008 | Use embedded etcd instead of SQLite | Accepted | [[v0.2 - Cluster Bootstrap]] |
+| 0009 | Enable secrets-encryption at rest | Accepted | [[v0.2 - Cluster Bootstrap]] |
+| 0010 | Taint the control-plane node against application workloads | Accepted | [[v0.2 - Cluster Bootstrap]] |
+| 0011 | Flannel + kube-proxy on defaults; defer Cilium | Accepted | [[v0.2 - Cluster Bootstrap]] |
+| 0012 | Disable k3s's bundled Traefik and ServiceLB | Accepted | [[v0.2 - Cluster Bootstrap]] |
+| 0013 | Traefik Service is ClusterIP only | Accepted | [[v0.3 - Ingress and TLS]] |
+| 0014 | Use Traefik's native IngressRoute CRD instead of Gateway API | Accepted | [[v0.3 - Ingress and TLS]] |
+| 0015 | cert-manager serves internal/Tailscale-only TLS, not the public path | Accepted | [[v0.3 - Ingress and TLS]] |
+| 0016 | Cloudflare Tunnel with exactly one route to Traefik | Accepted | [[v0.4 - Public and Private Access]] |
+| 0017 | Lock down cloudflared's egress via NetworkPolicy | Accepted | [[v0.4 - Public and Private Access]] |
+| 0018 | Tailscale as two separate mechanisms | Accepted | [[v0.4 - Public and Private Access]] |
