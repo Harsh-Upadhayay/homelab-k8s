@@ -12,8 +12,8 @@ Proxmox host prepared, VM template built, VMs provisioned.
 
 ## v0.2 — Cluster Bootstrap
 The actual k3s cluster, up and verified.
-- [ ] Phase 4–6 — Ansible: OS config + install k3s (embedded etcd, secrets-encryption, control-plane taint)
-- [ ] Phase 7 — Verify the cluster (nodes Ready, taint landed, etcd snapshot confirmed)
+- [x] Phase 4–6 — Ansible: OS config + install k3s (embedded etcd, secrets-encryption, control-plane taint). Clean run, 0 failed across all three nodes.
+- [x] Phase 7 — Verify the cluster: all 3 nodes Ready, control-plane taint confirmed, embedded etcd confirmed (`control-plane,etcd` role + working manual snapshot save/list), worker data disks confirmed mounted (ADR-0021).
 - [ ] Phase 8 — Install Helm
 
 ## v0.3 — Ingress & TLS
