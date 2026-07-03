@@ -52,6 +52,8 @@ No agents, no daemons on the target — Ansible SSHs in, runs small Python-backe
 
 **`--check --diff` is a dry run.** `--check` reports what a module *would* do without doing it; `--diff` shows before/after content for file-based tasks like `copy`. Not perfect — `command`-based tasks can't meaningfully dry-run — but free insurance for anything file-based. Run before the first real apply against a host (`ansible-playbook proxmox-host.yml --tags repos --check --diff`).
 
+**A skipped `command` task in check mode still returns `stdout: ''`** — defined, but empty, not undefined. This broke a `default('[]')` fallback that only meant to guard against a genuinely-unset variable: `''` isn't undefined, so the filter chain got `'' | from_json` and blew up on invalid JSON. Fix: `default('[]', true)` — the second argument makes `default()` also substitute on any falsy value (empty string, `None`, `0`), not just true "undefined." A one-token difference between "works" and "crashes only in `--check` mode, never in a real run" (`ansible/roles/proxmox_host/tasks/terraform_token.yml`, ADR-0023).
+
 **`--extra-vars` passes runtime secrets without writing them to disk.** Same pattern used for the k3s join token: `ansible-playbook proxmox-host.yml --tags tailscale --extra-vars "tailscale_auth_key=..."` — the value lives only in that one invocation, never in a tracked file.
 
 **`ansible <group> -m ping` is a connectivity smoke test**, independent of any playbook — confirms SSH auth and that Python exists on the remote end before trusting a real run.

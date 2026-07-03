@@ -127,13 +127,24 @@ Verify it shows up as a template (grey/cube icon) in the web UI under your node.
 
 Files: `terraform/`. This is the infra-as-code layer — think of it as the CloudFormation/Terraform equivalent you already know from AWS, just targeting Proxmox's API instead. `bpg/proxmox` is the actively-maintained community provider (the older `telmate/proxmox` is effectively legacy at this point) — it's what clones VMs from the template you just built rather than reinstalling an OS every time.
 
-**Create a dedicated API token** (don't use the root password — a scoped token is the equivalent of an IAM role vs. root credentials):
+**Create a dedicated API token** (don't use the root password — a scoped token is the equivalent of an IAM role vs. root credentials). Automated by the `proxmox_host` role's `terraform-token` tag — see below — but the equivalent by hand:
 ```bash
 # on the Proxmox host
 pveum user add terraform@pve
 pveum aclmod / -user terraform@pve -role PVEVMAdmin
+# PVEVMAdmin alone is NOT enough — it covers VM.Clone/Config/PowerMgmt but
+# has zero Datastore.* privileges, and cloning has to allocate space on the
+# target storage. Without this second grant, terraform apply fails with
+# "HTTP 403 - Permission check failed (/storage/<pool>, Datastore.AllocateSpace)".
+pveum aclmod /storage/local-lvm -user terraform@pve -role PVEDatastoreUser
 pveum user token add terraform@pve tf --privsep 0
 # copy the printed token value — it's shown exactly once
+```
+
+Or run it via Ansible (idempotent, self-heals a host that's already missing the storage grant):
+```bash
+cd ansible
+ansible-playbook proxmox-host.yml --tags terraform-token
 ```
 
 **Set up and apply:**

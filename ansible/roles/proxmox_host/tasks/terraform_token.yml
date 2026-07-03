@@ -21,19 +21,47 @@
   ansible.builtin.command: pveum aclmod / -user terraform@pve -role PVEVMAdmin
   when: not terraform_pve_user_exists
 
+# PVEVMAdmin covers VM.Clone/Config/PowerMgmt/etc but NOT storage privileges —
+# Proxmox keeps Datastore.* in a separate bucket entirely. Cloning a VM has to
+# allocate space on the target storage, which needs Datastore.AllocateSpace,
+# which only PVEDatastoreUser/PVEDatastoreAdmin grant. Checked independently
+# of terraform_pve_user_exists above so this also self-heals an already-
+# bootstrapped host that's missing it (as pve-dell's first apply attempt was).
+- name: Check current ACL entries
+  ansible.builtin.command: pveum acl list --output-format json
+  register: pveum_acls
+  changed_when: false
+  check_mode: false
+
+- name: Determine whether the storage ACL already exists
+  ansible.builtin.set_fact:
+    terraform_pve_storage_acl_exists: >-
+      {{ (pveum_acls.stdout | from_json
+          | selectattr('ugid', 'defined')
+          | selectattr('ugid', 'equalto', 'terraform@pve')
+          | selectattr('path', 'equalto', '/storage/' + proxmox_storage_pool)
+          | selectattr('roleid', 'equalto', 'PVEDatastoreUser')
+          | list | length) > 0 }}
+
+- name: Grant terraform@pve the PVEDatastoreUser role, scoped to the storage pool actually used
+  ansible.builtin.command: "pveum aclmod /storage/{{ proxmox_storage_pool }} -user terraform@pve -role PVEDatastoreUser"
+  when: not terraform_pve_storage_acl_exists
+
 - name: Check whether the tf token already exists
   ansible.builtin.command: pveum user token list terraform@pve --output-format json
   register: pveum_tokens
   changed_when: false
   when: terraform_pve_user_exists
 
-# In --check mode on a host where terraform@pve doesn't exist yet, the task
-# above is skipped (it would genuinely fail against a nonexistent user) —
-# default to an empty JSON list so the check still resolves to "no token
-# exists" instead of erroring on an unset variable.
+# In --check mode, the task above can be skipped two different ways: by its
+# own `when:` (user doesn't exist), or by check mode itself refusing to run
+# ANY command module task even when `when:` is true (a skipped command still
+# returns stdout: '' — defined but empty, not undefined). default()'s second
+# arg (true) makes it also substitute on that falsy-but-defined case, not
+# just on truly-undefined — plain default('[]') without it doesn't catch this.
 - name: Determine whether the tf token needs to be created
   ansible.builtin.set_fact:
-    terraform_pve_token_exists: "{{ 'tf' in (pveum_tokens.stdout | default('[]') | from_json | map(attribute='tokenid') | list) }}"
+    terraform_pve_token_exists: "{{ 'tf' in (pveum_tokens.stdout | default('[]', true) | from_json | map(attribute='tokenid') | list) }}"
 
 # NOTE: deliberately not no_log — this is the one time the value actually
 # needs to reach you. It's never written to a file, same exposure as running
