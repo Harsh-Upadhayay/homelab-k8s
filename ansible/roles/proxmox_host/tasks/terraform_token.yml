@@ -47,6 +47,25 @@
   ansible.builtin.command: "pveum aclmod /storage/{{ proxmox_storage_pool }} -user terraform@pve -role PVEDatastoreUser"
   when: not terraform_pve_storage_acl_exists
 
+# Third privilege bucket: attaching a VM's NIC to a bridge needs SDN.Use, even
+# for a plain Linux bridge with no SDN zones/vnets actually configured
+# (`pvesh get /cluster/sdn/zones` returns [] on this host) — Proxmox VE wraps
+# every bridge in an implicit zone (here: "localnetwork") purely for this
+# permission check. Reuses pveum_acls fetched above instead of a second query.
+- name: Determine whether the SDN ACL already exists
+  ansible.builtin.set_fact:
+    terraform_pve_sdn_acl_exists: >-
+      {{ (pveum_acls.stdout | from_json
+          | selectattr('ugid', 'defined')
+          | selectattr('ugid', 'equalto', 'terraform@pve')
+          | selectattr('path', 'equalto', '/sdn/zones/localnetwork/' + proxmox_network_bridge)
+          | selectattr('roleid', 'equalto', 'PVESDNUser')
+          | list | length) > 0 }}
+
+- name: Grant terraform@pve the PVESDNUser role, scoped to the bridge actually used
+  ansible.builtin.command: "pveum aclmod /sdn/zones/localnetwork/{{ proxmox_network_bridge }} -user terraform@pve -role PVESDNUser"
+  when: not terraform_pve_sdn_acl_exists
+
 - name: Check whether the tf token already exists
   ansible.builtin.command: pveum user token list terraform@pve --output-format json
   register: pveum_tokens

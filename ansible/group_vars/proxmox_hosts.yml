@@ -6,3 +6,7 @@ debian_codename: "trixie"
 # Must match terraform/variables.tf's storage_pool default/tfvars value —
 # this is what the terraform@pve token's storage ACL gets scoped to.
 proxmox_storage_pool: "local-lvm"
+
+# Must match terraform/variables.tf's network_bridge default/tfvars value —
+# this is what the terraform@pve token's SDN ACL gets scoped to.
+proxmox_network_bridge: "vmbr0"

@@ -8,7 +8,7 @@ Proxmox host prepared, VM template built, VMs provisioned.
 - [x] Automate Phase 1 remainder + Tailscale host join via Ansible (`ansible/roles/proxmox_host/`)
 - [ ] Phase 2 — Build the Ubuntu cloud-init template
 - [x] Bootstrap the scoped `terraform@pve` API token via Ansible (`--tags terraform-token`)
-- [ ] Phase 3 — Terraform: provision `k3s-server-1`, `k3s-worker-1`, and `k3s-worker-2` (each worker with a dedicated data disk for the future storage pool — ADR-0021)
+- [x] Phase 3 — Terraform: provision `k3s-server-1`, `k3s-worker-1`, and `k3s-worker-2` (each worker with a dedicated data disk for the future storage pool — ADR-0021). Needed two additional scoped ACL grants beyond the guide's original single grant (ADR-0023 storage, ADR-0024 SDN) before the first apply succeeded.
 
 ## v0.2 — Cluster Bootstrap
 The actual k3s cluster, up and verified.

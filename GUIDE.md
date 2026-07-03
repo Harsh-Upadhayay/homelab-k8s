@@ -137,11 +137,16 @@ pveum aclmod / -user terraform@pve -role PVEVMAdmin
 # target storage. Without this second grant, terraform apply fails with
 # "HTTP 403 - Permission check failed (/storage/<pool>, Datastore.AllocateSpace)".
 pveum aclmod /storage/local-lvm -user terraform@pve -role PVEDatastoreUser
+# A third bucket: attaching a VM's NIC to a bridge needs SDN.Use, even for a
+# plain Linux bridge with zero SDN zones/vnets actually configured — Proxmox
+# wraps every bridge in an implicit zone ("localnetwork") for this check.
+# Without it: "HTTP 403 - Permission check failed (/sdn/zones/localnetwork/<bridge>, SDN.Use)".
+pveum aclmod /sdn/zones/localnetwork/vmbr0 -user terraform@pve -role PVESDNUser
 pveum user token add terraform@pve tf --privsep 0
 # copy the printed token value — it's shown exactly once
 ```
 
-Or run it via Ansible (idempotent, self-heals a host that's already missing the storage grant):
+Or run it via Ansible (idempotent, self-heals a host that's already missing any of the three grants):
 ```bash
 cd ansible
 ansible-playbook proxmox-host.yml --tags terraform-token
