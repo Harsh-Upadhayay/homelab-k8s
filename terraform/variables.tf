@@ -22,7 +22,7 @@ variable "template_vm_id" {
 }
 
 variable "storage_pool" {
-  description = "Proxmox storage pool for VM disks — MUST be backed by NVMe for k3s-server-1"
+  description = "Proxmox storage pool for VM disks. On pve-dell this is the thin pool on the external USB SSD — the internal NVMe is strictly off-limits (ADR-0022)."
   type        = string
   default     = "local-lvm"
 }
@@ -88,7 +88,7 @@ variable "server_memory" {
 }
 
 variable "server_disk_size" {
-  description = "GB — must land on the NVMe-backed storage pool"
+  description = "GB — etcd lives here; keep it on the fastest pool the ADR-0022 constraint allows"
   type        = number
   default     = 60
 }

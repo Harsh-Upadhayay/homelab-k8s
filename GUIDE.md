@@ -32,7 +32,7 @@ Versions pinned at the time of writing (verify current before you install — li
 
 ## 0. Prerequisites
 
-**Hardware assumption** (adjust sizing to your actual box, the one hard constraint doesn't move): 8+ cores, 32–64GB RAM, and — non-negotiable — **NVMe storage for the control-plane VM**. etcd is fsync-latency sensitive; if the control-plane VM's disk ever lands on spinning storage or a contended pool, expect leader-election flakiness and latency alerts.
+**Hardware assumption** (adjust sizing to your actual box): 8+ cores, 32–64GB RAM, and the fastest storage you can give the control-plane VM — etcd is fsync-latency sensitive, so internal NVMe is the ideal. **This deployment's reality (ADR-0022): `pve-dell` is a laptop whose internal NVMe holds Windows and personal data and is strictly off-limits — everything, etcd included, runs from an external 1TB USB SSD.** That's a conscious tradeoff: USB bridges add fsync latency headroom risk, so if etcd ever shows leader-election flakiness, the disk is the first suspect (see Troubleshooting), and the long-term fix is dedicated physical nodes, not that NVMe.
 
 **On your local workstation** (the machine you'll run Terraform/Ansible/kubectl from — does not need to be the Proxmox host itself):
 ```bash
@@ -68,7 +68,7 @@ ssh-keygen -t ed25519 -C "homelab-admin"
 ssh-copy-id root@<proxmox-ip>
 ```
 
-**Verify your storage pool is actually on NVMe** — Datacenter → Storage, check which physical device backs `local-lvm` (or whatever pool you'll target). This is the constraint that matters most in the whole build — confirm it now, not after etcd is already unhappy. Left as a manual, one-time check against the live host rather than scripted.
+**Verify which physical device backs your storage pool** — `pvs` and `lsblk` on the host, or Datacenter → Storage in the UI. Confirm two things now, not after etcd is already unhappy: (1) `local-lvm` sits entirely on the intended disk (here: the external SSD, `/dev/sda3` as the only LVM PV), and (2) the off-limits internal NVMe appears in **no** volume group and nowhere in `/etc/pve/storage.cfg` (ADR-0022). Left as a manual, one-time check against the live host rather than scripted.
 
 **Everything else — disabling the enterprise repo nag and running `apt full-upgrade`  — is codified** in `ansible/roles/proxmox_host/`, once the SSH key step above has landed:
 ```bash
@@ -487,7 +487,7 @@ Everything below was explicitly scoped out of this build — not forgotten, stag
 
 ## Troubleshooting — sharp edges you're likely to actually hit
 
-- **etcd complaining about disk latency** — if you ever see leader-election flakiness or slow-apply warnings, the first thing to check is whether `k3s-server-1`'s disk is genuinely on NVMe. This is the one hardware constraint in the whole design that isn't negotiable.
+- **etcd complaining about disk latency** — leader-election flakiness or slow-apply warnings point at the disk first. On this deployment that's a *known* risk, not a surprise: everything runs from a USB-attached external SSD because the internal NVMe is off-limits (ADR-0022). Check `dmesg` on the host for USB resets, and confirm the SSD's power/control is still pinned `on` (the `uas` driver does this by default). If it becomes chronic, the fix is a dedicated physical node for the control plane — never the internal NVMe.
 - **`kubectl` from your laptop hangs or refuses to connect** — almost always the kubeconfig still points at `127.0.0.1:6443` instead of the server's real IP. The Ansible role handles this automatically, but if you ever grab a fresh kubeconfig manually, remember to fix that line.
 - **Traefik shows `EXTERNAL-IP: <none>` on the main Service** — that's correct, not broken. It's ClusterIP by design; there is no LoadBalancer in this topology.
 - **A Service can't reach an otherwise-healthy pod** — check `targetPort` against what the container is actually listening on. `containerPort` is documentation only; nothing in the traffic path enforces it matches.

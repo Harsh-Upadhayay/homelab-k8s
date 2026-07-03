@@ -8,7 +8,7 @@ The Ansible/Terraform/Kubernetes/platform *mechanics* these decisions rely on li
 
 ## Logs
 
-- [[v0.1 - Foundation]] — ADR-0001 … ADR-0007, ADR-0019 … ADR-0021
+- [[v0.1 - Foundation]] — ADR-0001 … ADR-0007, ADR-0019 … ADR-0022
 - [[v0.2 - Cluster Bootstrap]] — ADR-0008 … ADR-0012
 - [[v0.3 - Ingress and TLS]] — ADR-0013 … ADR-0015
 - [[v0.4 - Public and Private Access]] — ADR-0016 … ADR-0018
@@ -42,3 +42,4 @@ v1.0 and v2.0 have no log yet — no architecture decisions have been made there
 | 0019 | Workers as a for_each map | Rejected | [[v0.1 - Foundation]] |
 | 0020 | Near-full host allocation: overcommit CPU, never RAM | Accepted | [[v0.1 - Foundation]] |
 | 0021 | Distributed storage direction: data disks now, Longhorn later | Accepted | [[v0.1 - Foundation]] |
+| 0022 | Internal NVMe strictly off-limits; everything on the external SSD | Accepted | [[v0.1 - Foundation]] |

@@ -1,0 +1,26 @@
+---
+# pve-dell is a laptop (ADR-0022). Debian's logind default suspends the
+# machine on lid close — which would take the whole cluster down. These
+# settings are already live on the host (set manually at install time);
+# codified here so a rebuild can't silently lose them.
+#
+# USB autosuspend for the external SSD needs no task: the uas/sd driver
+# pins storage devices' power/control to "on" by default — verified on
+# the host. If that ever regresses, add a udev rule here.
+
+- name: Ignore laptop lid close (host must never suspend)
+  ansible.builtin.lineinfile:
+    path: /etc/systemd/logind.conf
+    regexp: "^#?{{ item }}="
+    line: "{{ item }}=ignore"
+  loop:
+    - HandleLidSwitch
+    - HandleLidSwitchExternalPower
+    - HandleLidSwitchDocked
+  register: lid_config
+
+- name: Restart systemd-logind if lid config changed
+  ansible.builtin.systemd:
+    name: systemd-logind
+    state: restarted
+  when: lid_config.changed

@@ -1,9 +1,10 @@
 ---
-# Three independent concerns, tagged so any one can run alone:
+# Independent concerns, tagged so any one can run alone:
 #   --tags repos             Phase 1 remainder — apt repo housekeeping + upgrade
 #   --tags tailscale         Phase 12 Part A — join the tailnet (needs an auth key)
 #   --tags terraform-token   Phase 3 prerequisite — bootstrap the terraform@pve API token
-# Run with no --tags to do all three.
+#   --tags laptop            laptop-as-server hardening — never suspend on lid close (ADR-0022)
+# Run with no --tags to do all of them.
 
 - name: Repo housekeeping + apt upgrade (Phase 1)
   ansible.builtin.import_tasks: repos.yml
@@ -16,3 +17,7 @@
 - name: Bootstrap the terraform@pve API token (Phase 3 prerequisite)
   ansible.builtin.import_tasks: terraform_token.yml
   tags: [terraform-token]
+
+- name: Laptop-as-server hardening (ADR-0022)
+  ansible.builtin.import_tasks: laptop.yml
+  tags: [laptop]

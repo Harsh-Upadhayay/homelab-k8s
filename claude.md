@@ -9,11 +9,13 @@ A production-shaped homelab Kubernetes platform on a single Proxmox host, built 
 ## Architecture
 
 ```
-Proxmox host (pve-dell: 14 threads / 30GiB / 816GiB NVMe thin pool)
+Proxmox host (pve-dell: laptop, 14 threads / 30GiB / 816GiB thin pool on an EXTERNAL 1TB USB SSD)
 ├── k3s-server-1   4c/6GiB,  60GB          control plane, tainted (no app workloads), embedded etcd
 ├── k3s-worker-1   6c/9GiB,  60GB + 250GB  application workloads + data disk
 └── k3s-worker-2   6c/9GiB,  60GB + 250GB  identical twin — makes rescheduling/storage node-agnosticism observable
 ```
+
+**HARD CONSTRAINT (ADR-0022): the laptop's internal NVMe (`nvme0n1`, Samsung 1TB) holds Windows and the user's personal data. It is STRICTLY off-limits — never add it as a storage pool, LVM PV, mount, or passthrough target, never suggest using it "for etcd performance" or "free space." The external USB SSD (`sda`) is the only working storage. Capacity grows by adding physical nodes later, never by touching that disk.**
 
 Provisioning is split deliberately: **Terraform** (`terraform/`) provisions the VMs, **Ansible** (`ansible/`) configures the OS and installs k3s. Different problems (infra existence vs. configuration state), different tools — don't collapse them into one.
 
