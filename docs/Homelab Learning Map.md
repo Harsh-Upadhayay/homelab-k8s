@@ -19,7 +19,7 @@ This is a second, formal decision record alongside `claude.md` (settled decision
 
 ## Decision logs by milestone
 
-- [[v0.1 - Foundation]] — Terraform/Ansible split, version pinning, secrets deferred, Proxmox host automation, workers as a `for_each` map (ADR-0001–0007, 0019)
+- [[v0.1 - Foundation]] — Terraform/Ansible split, version pinning, secrets deferred, Proxmox host automation (ADR-0001–0007)
 - [[v0.2 - Cluster Bootstrap]] — embedded etcd, secrets-encryption, control-plane taint, Flannel/Cilium (ADR-0008–0012)
 - [[v0.3 - Ingress and TLS]] — Traefik ClusterIP, IngressRoute vs. Gateway API, cert-manager scope (ADR-0013–0015)
 - [[v0.4 - Public and Private Access]] — Cloudflare Tunnel routing, cloudflared NetworkPolicy, Tailscale's two mechanisms (ADR-0016–0018)

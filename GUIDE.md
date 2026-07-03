@@ -479,7 +479,7 @@ Everything below was explicitly scoped out of this build — not forgotten, stag
 - **Secrets management (SOPS + age, later External Secrets Operator + Vault)** — for now, Kubernetes Secrets are created imperatively with `kubectl create secret` and never committed to Git in any form, encrypted or otherwise. SOPS+age is the natural first step when this gets automated (commit ciphertext to Git, decrypt-and-apply manually), with ESO/Vault as the later upgrade once real rotation and a secrets backend are wanted.
 - **Full backup strategy** (Velero, off-box etcd snapshots via `--etcd-s3-*`, Proxmox VM backups) — local etcd snapshots are already running from Phase 5; shipping them off-box and adding Velero + Proxmox Backup Server is the next layer, not a redo.
 - **Cilium** — deliberately deferred; recall this is the one *non-additive* item on this whole list. Flannel → Cilium isn't an upgrade, it's a rebuild (pod networking can't be live-migrated between CNIs). Treat it as its own dedicated project later — and a good real rebuild-from-Git/DR drill when you get there.
-- **HA control plane** (`k3s-server-2`, `k3s-server-3`) and **more workers** — both are additive. A second/third server joins the existing embedded-etcd cluster for real quorum; a second worker is one new entry in the `workers` map in `terraform.tfvars` plus an Ansible inventory entry under `[k3s_agent]` — `workers.tf` expands the map with `for_each`, so re-applying adds the new VM without touching existing ones. This is exactly the path the embedded-etcd choice back in the design phase was making room for.
+- **HA control plane** (`k3s-server-2`, `k3s-server-3`) and **more workers** — both are additive. A second/third server joins the existing embedded-etcd cluster for real quorum; a second worker just needs a new Terraform resource block and an Ansible inventory entry. This is exactly the path the embedded-etcd choice back in the design phase was making room for.
 
 ---
 
@@ -502,7 +502,7 @@ homelab-k8s/
 ├── GUIDE.md
 ├── .gitignore
 ├── terraform/
-│   ├── versions.tf / provider.tf / variables.tf / server.tf / workers.tf / outputs.tf
+│   ├── versions.tf / provider.tf / variables.tf / main.tf / outputs.tf
 │   └── terraform.tfvars.example
 ├── ansible/
 │   ├── ansible.cfg / inventory.ini / site.yml / proxmox-host.yml / requirements.yml

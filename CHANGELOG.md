@@ -12,8 +12,5 @@ Loosely follows [Keep a Changelog](https://keepachangelog.com/). Dates are when 
 - `GUIDE.md` — full phase-by-phase build guide with the reasoning behind every architectural decision.
 - `claude.md` — durable context and decisions for AI-assisted work in this repo.
 
-### Changed
-- Terraform layout split by concern: `main.tf` → `server.tf` (control-plane singleton) + `workers.tf` (one resource expanded over a `workers` map with `for_each`). Adding a worker is now a map entry in `terraform.tfvars` plus an Ansible inventory entry, not a copy-pasted resource block (ADR-0019).
-
 ### Removed
 - SOPS + age secrets scaffolding (`.sops.yaml`, `secrets/`, the worked-example encrypted Secret manifest). Deferred by design for v1 — Kubernetes Secrets are created imperatively via `kubectl create secret` and are not committed to Git in any form for now. See `claude.md` and `ROADMAP.md`.
