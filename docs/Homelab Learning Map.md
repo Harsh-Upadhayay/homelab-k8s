@@ -14,7 +14,7 @@ This is a second, formal decision record alongside `claude.md` (settled decision
 - [[README|ADR index]] — every decision by number, with status, in one table
 - [[Ansible Concepts]] — inventory, playbooks, roles, modules, idempotency
 - [[Terraform Concepts]] — providers, resources, state (populated from Phase 3 onward)
-- [[Kubernetes Concepts]] — manifests, Helm, CRDs (populated from Phase 9 onward)
+- [[Kubernetes Concepts]] — Helm, CRDs/Operator pattern, RBAC, kubectl debugging (first populated at Phase 12 Part B)
 - [[Platform Concepts]] — Linux, networking, and infra ideas that don't belong to one tool
 
 ## Decision logs by milestone
@@ -22,7 +22,7 @@ This is a second, formal decision record alongside `claude.md` (settled decision
 - [[v0.1 - Foundation]] — Terraform/Ansible split, version pinning, secrets deferred, Proxmox host automation (ADR-0001–0007)
 - [[v0.2 - Cluster Bootstrap]] — embedded etcd, secrets-encryption, control-plane taint, Flannel/Cilium (ADR-0008–0012)
 - [[v0.3 - Ingress and TLS]] — Traefik ClusterIP, IngressRoute vs. Gateway API, cert-manager scope (ADR-0013–0015)
-- [[v0.4 - Public and Private Access]] — Cloudflare Tunnel routing, cloudflared NetworkPolicy, Tailscale's two mechanisms (ADR-0016–0018)
+- [[v0.4 - Public and Private Access]] — Cloudflare Tunnel routing, cloudflared NetworkPolicy, Tailscale's two mechanisms, the Kubernetes Operator's OAuth scopes and RBAC (ADR-0016–0018, 0025–0026)
 
 ## Conventions
 

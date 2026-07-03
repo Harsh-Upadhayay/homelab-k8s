@@ -6,7 +6,7 @@ Tracked as GitHub Milestones + Issues in this repo (see the [Milestones](../../m
 Proxmox host prepared, VM template built, VMs provisioned.
 - [x] Phase 1 — Proxmox host: enterprise repo disabled, no-subscription repo enabled, storage verified on NVMe, SSH key access established
 - [x] Automate Phase 1 remainder + Tailscale host join via Ansible (`ansible/roles/proxmox_host/`)
-- [ ] Phase 2 — Build the Ubuntu cloud-init template
+- [x] Phase 2 — Build the Ubuntu cloud-init template
 - [x] Bootstrap the scoped `terraform@pve` API token via Ansible (`--tags terraform-token`)
 - [x] Phase 3 — Terraform: provision `k3s-server-1`, `k3s-worker-1`, and `k3s-worker-2` (each worker with a dedicated data disk for the future storage pool — ADR-0021). Needed two additional scoped ACL grants beyond the guide's original single grant (ADR-0023 storage, ADR-0024 SDN) before the first apply succeeded.
 
@@ -14,7 +14,7 @@ Proxmox host prepared, VM template built, VMs provisioned.
 The actual k3s cluster, up and verified.
 - [x] Phase 4–6 — Ansible: OS config + install k3s (embedded etcd, secrets-encryption, control-plane taint). Clean run, 0 failed across all three nodes.
 - [x] Phase 7 — Verify the cluster: all 3 nodes Ready, control-plane taint confirmed, embedded etcd confirmed (`control-plane,etcd` role + working manual snapshot save/list), worker data disks confirmed mounted (ADR-0021).
-- [ ] Phase 8 — Install Helm
+- [x] Phase 8 — Install Helm
 
 ## v0.3 — Ingress & TLS
 - [ ] Phase 9 — Traefik (ClusterIP, IngressRoute CRDs)
@@ -22,8 +22,8 @@ The actual k3s cluster, up and verified.
 
 ## v0.4 — Public & Private Access
 - [ ] Phase 11 — Cloudflare Tunnel (`cloudflared` + NetworkPolicy)
-- [ ] Phase 12 Part A — Tailscale on the Proxmox host (automated, needs an auth key to run)
-- [ ] Phase 12 Part B — Tailscale Kubernetes Operator (API server proxy, `loadBalancerClass: tailscale`)
+- [x] Phase 12 Part A — Tailscale on the Proxmox host
+- [x] Phase 12 Part B — Tailscale Kubernetes Operator: API server proxy live, confirmed working `kubectl` access from a second physical device (MacBook) over the tailnet, zero exposed ports. Needed a 3-scope OAuth client (ADR-0025) and an explicit RBAC `ClusterRoleBinding` (ADR-0026) beyond the base install.
 
 ## v1.0 — Validated Base Platform
 - [ ] Phase 13 — End-to-end validation (public path via Cloudflare, private path via Tailscale, both proven against the `whoami` example app)

@@ -1,0 +1,25 @@
+# Grants kubectl access through the Tailscale Operator's API server proxy.
+#
+# The proxy authenticates a request by the caller's TAILNET identity (their
+# Tailscale login), then forwards it to the real API server with
+# Impersonate-User set to that login name — standard Kubernetes user
+# impersonation, nothing Tailscale-specific on the Kubernetes side. Without
+# a binding like this, that impersonated identity has zero RBAC permissions
+# and every request is correctly Forbidden, no matter how many devices are
+# on the tailnet or how correctly the proxy itself is working.
+#
+# cluster-admin, not a narrower role: this is a personal, single-operator
+# homelab (no other tailnet users), so there's no meaningful distinction
+# between "the owner" and "an admin" here — matches the same reasoning
+# already applied to Longhorn's replicas=1 and the no-HA decisions.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: harsh-tailscale-cluster-admin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: User
+    name: harshupadhayay906@gmail.com

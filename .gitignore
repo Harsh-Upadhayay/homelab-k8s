@@ -12,3 +12,7 @@ ansible/*.retry
 # Kubeconfig pulled from the cluster
 kubeconfig
 *.kubeconfig
+
+# Stray shell redirect artifacts at repo root (caught one holding a live
+# OAuth client secret - never intentional, never meant to be tracked)
+/*.log
