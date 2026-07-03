@@ -1,8 +1,9 @@
 ---
-# Two independent concerns, tagged so either can run alone:
-#   --tags repos       Phase 1 remainder — apt repo housekeeping + upgrade
-#   --tags tailscale   Phase 12 Part A — join the tailnet (needs an auth key)
-# Run with no --tags to do both.
+# Three independent concerns, tagged so any one can run alone:
+#   --tags repos             Phase 1 remainder — apt repo housekeeping + upgrade
+#   --tags tailscale         Phase 12 Part A — join the tailnet (needs an auth key)
+#   --tags terraform-token   Phase 3 prerequisite — bootstrap the terraform@pve API token
+# Run with no --tags to do all three.
 
 - name: Repo housekeeping + apt upgrade (Phase 1)
   ansible.builtin.import_tasks: repos.yml
@@ -11,3 +12,7 @@
 - name: Join the tailnet (Phase 12 Part A)
   ansible.builtin.import_tasks: tailscale.yml
   tags: [tailscale]
+
+- name: Bootstrap the terraform@pve API token (Phase 3 prerequisite)
+  ansible.builtin.import_tasks: terraform_token.yml
+  tags: [terraform-token]

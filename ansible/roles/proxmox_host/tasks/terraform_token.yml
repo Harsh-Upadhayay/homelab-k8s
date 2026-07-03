@@ -1,0 +1,49 @@
+---
+# Phase 3 prerequisite — bootstraps a scoped terraform@pve API token instead
+# of using the root password. One-time: once terraform@pve exists, this
+# whole file becomes a no-op on rerun.
+
+- name: Check whether the terraform@pve user already exists
+  ansible.builtin.command: pveum user list --output-format json
+  register: pveum_users
+  changed_when: false
+  check_mode: false
+
+- name: Determine whether terraform@pve needs to be created
+  ansible.builtin.set_fact:
+    terraform_pve_user_exists: "{{ 'terraform@pve' in (pveum_users.stdout | from_json | map(attribute='userid') | list) }}"
+
+- name: Create the terraform@pve user
+  ansible.builtin.command: pveum user add terraform@pve
+  when: not terraform_pve_user_exists
+
+- name: Grant terraform@pve the PVEVMAdmin role
+  ansible.builtin.command: pveum aclmod / -user terraform@pve -role PVEVMAdmin
+  when: not terraform_pve_user_exists
+
+- name: Check whether the tf token already exists
+  ansible.builtin.command: pveum user token list terraform@pve --output-format json
+  register: pveum_tokens
+  changed_when: false
+  when: terraform_pve_user_exists
+
+# In --check mode on a host where terraform@pve doesn't exist yet, the task
+# above is skipped (it would genuinely fail against a nonexistent user) —
+# default to an empty JSON list so the check still resolves to "no token
+# exists" instead of erroring on an unset variable.
+- name: Determine whether the tf token needs to be created
+  ansible.builtin.set_fact:
+    terraform_pve_token_exists: "{{ 'tf' in (pveum_tokens.stdout | default('[]') | from_json | map(attribute='tokenid') | list) }}"
+
+# NOTE: deliberately not no_log — this is the one time the value actually
+# needs to reach you. It's never written to a file, same exposure as running
+# the command by hand: visible in this terminal, once, and nowhere else.
+- name: Create the tf API token for terraform@pve
+  ansible.builtin.command: pveum user token add terraform@pve tf --privsep 0 --output-format json
+  register: pveum_token_result
+  when: not terraform_pve_token_exists
+
+- name: Show the token — copy this into terraform.tfvars now, it is shown only once
+  ansible.builtin.debug:
+    var: pveum_token_result.stdout
+  when: not terraform_pve_token_exists
