@@ -284,10 +284,13 @@ helm show crds traefik/traefik | kubectl apply --server-side --force-conflicts -
 
 helm install traefik traefik/traefik \
   --namespace traefik \
+  --version 41.0.1 \
   --values k8s/traefik/values.yaml
 ```
 
 (`k8s/traefik/dashboard-service.yaml` gets applied in Phase 12 — it depends on the Tailscale operator existing first, since it's claimed by `loadBalancerClass: tailscale`.)
+
+**Pin the chart version.** The chart's values schema isn't stable across releases — this exact install failed once against an unpinned `traefik/traefik` because the schema had moved `ports.websecure.tls` to `ports.websecure.http.tls`, and separately, silently defaulted `service.type` to `LoadBalancer` because `service.spec.type` had replaced it without erroring (ADR-0027). Before trusting this values file against a newer chart version, diff it against `helm show values traefik/traefik --version <new-version>` first.
 
 Verify:
 ```bash

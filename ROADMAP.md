@@ -17,7 +17,7 @@ The actual k3s cluster, up and verified.
 - [x] Phase 8 — Install Helm
 
 ## v0.3 — Ingress & TLS
-- [ ] Phase 9 — Traefik (ClusterIP, IngressRoute CRDs)
+- [x] Phase 9 — Traefik (ClusterIP, IngressRoute CRDs). Chart had drifted its values schema since the guide was written — caught two silent/loud breaks (`ports.websecure.tls` relocation, `service.type` defaulting to `LoadBalancer` unpinned) and pinned the chart version to fix it for good (ADR-0027).
 - [ ] Phase 10 — cert-manager + Cloudflare DNS-01 ClusterIssuers
 
 ## v0.4 — Public & Private Access

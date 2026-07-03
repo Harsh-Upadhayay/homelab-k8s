@@ -6,7 +6,8 @@ deployment:
   replicas: 1
 
 service:
-  type: ClusterIP
+  spec:
+    type: ClusterIP
 
 ports:
   web:
@@ -17,8 +18,9 @@ ports:
     # origin is a later hardening step, not a day-one requirement.
   websecure:
     port: 8443
-    tls:
-      enabled: false   # not used yet — see note above; flip on later if wanted
+    http:
+      tls:
+        enabled: false   # not used yet — see note above; flip on later if wanted
   traefik:
     # Internal dashboard/api entrypoint — NOT part of the `service` above,
     # so it is not reachable via the ClusterIP on 8000/8443. Exposed
