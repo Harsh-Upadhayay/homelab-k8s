@@ -6,6 +6,10 @@ output "k3s_worker_1_ip" {
   value = var.worker_ip
 }
 
+output "k3s_worker_2_ip" {
+  value = var.worker2_ip
+}
+
 output "vm_user" {
   value = var.vm_user
 }

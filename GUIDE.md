@@ -143,14 +143,15 @@ cp terraform.tfvars.example terraform.tfvars
 # edit terraform.tfvars with your real endpoint, token, SSH key, IPs
 
 terraform init
-terraform plan    # review — should show 2 resources to add
+terraform plan    # review — should show 3 resources to add
 terraform apply
 ```
 
-After a couple of minutes you'll have two running VMs with static IPs, cloud-init-provisioned SSH access, and qemu-guest-agent reporting status back to Proxmox. Verify:
+After a couple of minutes you'll have three running VMs with static IPs, cloud-init-provisioned SSH access, and qemu-guest-agent reporting status back to Proxmox. Both workers also carry a second, empty 250GB data disk (`scsi1`) — reserved for distributed storage (Longhorn, a later phase; see ADR-0021), formatted and mounted by Ansible in Phase 6, not by Terraform. Verify:
 ```bash
 ssh harsh@192.168.1.21 "hostname && ip a"
 ssh harsh@192.168.1.22 "hostname && ip a"
+ssh harsh@192.168.1.23 "hostname && ip a"
 ```
 
 **Why Terraform here and Ansible next, not one or the other:** provisioning (does this VM exist, with this CPU/disk/IP) is a different problem from configuration (what's installed and running inside it). Terraform is declarative infra state — rerun `apply` and it converges, doesn't reinstall. Ansible is imperative configuration over SSH — it's what actually puts k3s on the box. Using the right tool for each half is also just less to fight with than forcing one tool to do both jobs.
@@ -192,7 +193,7 @@ ansible-playbook site.yml --extra-vars "k3s_token=${K3S_TOKEN}"
 
   After install, the role fetches `/etc/rancher/k3s/k3s.yaml` back to your workstation as `kubeconfig` and rewrites the server URL from `127.0.0.1` to the real LAN IP (the file defaults to localhost, which only works *on* the node itself — an easy trap if you skip this step and then wonder why `kubectl` from your laptop can't connect).
 
-- **`k3s_agent`** (Phase 6, `k3s-worker-1`) — points at the server's real IP with the shared token and joins as an agent. Nothing else — workers stay minimal.
+- **`k3s_agent`** (Phase 6, both workers) — formats and mounts the dedicated data disk (`/dev/sdb`, ext4, label `k3s-data`, mounted at `/var/lib/longhorn` — mounted by label since `/dev/sdX` names can reorder across boots), then points at the server's real IP with the shared token and joins as an agent. The mount is preparation for the distributed-storage phase (ADR-0021); the format task is a no-op on any disk that already has a filesystem, so reruns never eat data.
 
 **One honest tradeoff in `ansible.cfg`:** `host_key_checking = False`. Convenient for a homelab where you're rebuilding VMs often (no stale host-key prompts blocking automation), but it does mean Ansible won't warn you if a host's SSH key ever unexpectedly changes. Fine here; flip it back on if this repo ever manages anything less trusted than your own LAN.
 
@@ -210,6 +211,7 @@ Expect:
 NAME            STATUS   ROLES                  AGE   VERSION
 k3s-server-1    Ready    control-plane,master   2m    v1.36.2+k3s1
 k3s-worker-1    Ready    <none>                 1m    v1.36.2+k3s1
+k3s-worker-2    Ready    <none>                 1m    v1.36.2+k3s1
 ```
 
 **Confirm the taint actually landed:**

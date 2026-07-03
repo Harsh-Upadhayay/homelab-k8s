@@ -8,10 +8,12 @@ The Ansible/Terraform/Kubernetes/platform *mechanics* these decisions rely on li
 
 ## Logs
 
-- [[v0.1 - Foundation]] — ADR-0001 … ADR-0007
+- [[v0.1 - Foundation]] — ADR-0001 … ADR-0007, ADR-0019 … ADR-0021
 - [[v0.2 - Cluster Bootstrap]] — ADR-0008 … ADR-0012
 - [[v0.3 - Ingress and TLS]] — ADR-0013 … ADR-0015
 - [[v0.4 - Public and Private Access]] — ADR-0016 … ADR-0018
+
+(0019–0021 live in the v0.1 log despite the number gap: 0019 was burned by a tried-and-reverted refactor and is reinstated as Rejected rather than reused, and the decisions themselves belong to Foundation's provisioning scope.)
 
 v1.0 and v2.0 have no log yet — no architecture decisions have been made there, only deferrals already captured above (ADR-0003, ADR-0011). A new log starts only once a milestone actually produces a decision of its own.
 
@@ -37,3 +39,6 @@ v1.0 and v2.0 have no log yet — no architecture decisions have been made there
 | 0016 | Cloudflare Tunnel with exactly one route to Traefik | Accepted | [[v0.4 - Public and Private Access]] |
 | 0017 | Lock down cloudflared's egress via NetworkPolicy | Accepted | [[v0.4 - Public and Private Access]] |
 | 0018 | Tailscale as two separate mechanisms | Accepted | [[v0.4 - Public and Private Access]] |
+| 0019 | Workers as a for_each map | Rejected | [[v0.1 - Foundation]] |
+| 0020 | Near-full host allocation: overcommit CPU, never RAM | Accepted | [[v0.1 - Foundation]] |
+| 0021 | Distributed storage direction: data disks now, Longhorn later | Accepted | [[v0.1 - Foundation]] |

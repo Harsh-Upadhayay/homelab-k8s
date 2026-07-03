@@ -7,7 +7,8 @@ Proxmox host prepared, VM template built, VMs provisioned.
 - [x] Phase 1 — Proxmox host: enterprise repo disabled, no-subscription repo enabled, storage verified on NVMe, SSH key access established
 - [x] Automate Phase 1 remainder + Tailscale host join via Ansible (`ansible/roles/proxmox_host/`)
 - [ ] Phase 2 — Build the Ubuntu cloud-init template
-- [ ] Phase 3 — Terraform: provision `k3s-server-1` and `k3s-worker-1`
+- [x] Bootstrap the scoped `terraform@pve` API token via Ansible (`--tags terraform-token`)
+- [ ] Phase 3 — Terraform: provision `k3s-server-1`, `k3s-worker-1`, and `k3s-worker-2` (each worker with a dedicated data disk for the future storage pool — ADR-0021)
 
 ## v0.2 — Cluster Bootstrap
 The actual k3s cluster, up and verified.
@@ -40,4 +41,5 @@ Each of these is staged as a clean, additive follow-on once v1.0 is solid. None 
 - **Secrets management** (SOPS + age, later External Secrets Operator + Vault) — Kubernetes Secrets stay imperative and uncommitted until this lands.
 - **Full backup strategy** — off-box etcd snapshot shipping (`--etcd-s3-*`), Velero, Proxmox Backup Server. Local etcd snapshots are already running from Phase 5.
 - **Cilium** — the one *non-additive* item on this list. Flannel → Cilium is a full cluster rebuild, not a live migration; treated as its own dedicated project and a real rebuild-from-Git/DR drill.
+- **Distributed storage (Longhorn)** — the disks, mounts, and second worker are already provisioned for it (ADR-0021); the install itself (Helm chart + CSI, `open-iscsi` prerequisite on workers) is its own additive phase. Until real physical nodes join, replication across the two workers simulates the topology without providing physical durability.
 - **HA control plane** (`k3s-server-2`, `k3s-server-3`) and **additional workers** — both purely additive given the embedded-etcd choice already made.

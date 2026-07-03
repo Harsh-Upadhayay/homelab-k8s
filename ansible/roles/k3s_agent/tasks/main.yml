@@ -8,6 +8,26 @@
       k3s_token is not set. Run with:
       ansible-playbook site.yml --extra-vars "k3s_token=<the same value used on the server>"
 
+# ── Data disk (scsi1 → /dev/sdb) — reserved for distributed storage ──
+# Terraform provisions this second disk raw and empty on every worker.
+# Formatted once here (the filesystem module is a no-op if one already
+# exists — it will NOT reformat a disk with data on it), mounted where
+# Longhorn expects its default disk when that phase lands.
+
+- name: Format the data disk (no-op if a filesystem already exists)
+  community.general.filesystem:
+    fstype: ext4
+    dev: /dev/sdb
+    opts: "-L k3s-data"
+
+- name: Mount the data disk at /var/lib/longhorn (by label — /dev/sdX names can reorder across boots)
+  ansible.posix.mount:
+    path: /var/lib/longhorn
+    src: LABEL=k3s-data
+    fstype: ext4
+    opts: defaults
+    state: mounted
+
 - name: Create /etc/rancher/k3s directory
   ansible.builtin.file:
     path: /etc/rancher/k3s

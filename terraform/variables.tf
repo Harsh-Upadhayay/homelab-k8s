@@ -62,6 +62,13 @@ variable "vm_user" {
   default     = "harsh"
 }
 
+# Sizing rationale (pve-dell: 14 threads / 30GiB usable RAM / 816GiB thin pool):
+# CPU is mildly overcommitted (16 vCPU on 14 threads) — vCPUs are schedulable
+# threads, not reservations, and k8s load is bursty. RAM is deliberately NOT
+# overcommitted: 6+9+9=24GiB leaves ~5GiB for the host, because a host OOM
+# kill against a VM is how etcd dies. Disks are thin-provisioned — blocks are
+# consumed on write, so 680GB provisioned of 816GB costs nothing up front.
+
 # --- k3s-server-1 ---
 variable "server_ip" {
   description = "Static IP for k3s-server-1 (control plane)"
@@ -75,9 +82,9 @@ variable "server_cores" {
 }
 
 variable "server_memory" {
-  description = "MB"
+  description = "MB — tainted control plane, no app workloads; etcd wants disk latency, not RAM"
   type        = number
-  default     = 8192
+  default     = 6144
 }
 
 variable "server_disk_size" {
@@ -86,26 +93,38 @@ variable "server_disk_size" {
   default     = 60
 }
 
-# --- k3s-worker-1 ---
+# --- workers (both sized identically) ---
 variable "worker_ip" {
   description = "Static IP for k3s-worker-1"
   type        = string
   default     = "192.168.1.22"
 }
 
+variable "worker2_ip" {
+  description = "Static IP for k3s-worker-2"
+  type        = string
+  default     = "192.168.1.23"
+}
+
 variable "worker_cores" {
   type    = number
-  default = 4
+  default = 6
 }
 
 variable "worker_memory" {
   description = "MB"
   type        = number
-  default     = 16384
+  default     = 9216
 }
 
 variable "worker_disk_size" {
-  description = "GB"
+  description = "GB — OS disk"
   type        = number
-  default     = 150
+  default     = 60
+}
+
+variable "worker_data_disk_size" {
+  description = "GB — dedicated data disk (scsi1) per worker, reserved for distributed storage (Longhorn later). Kept separate from the OS disk so storage I/O and OS I/O don't mix, and so future physical nodes arrive with the same symmetric layout."
+  type        = number
+  default     = 250
 }
