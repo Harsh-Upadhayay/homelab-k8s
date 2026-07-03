@@ -124,7 +124,7 @@ variable "worker_disk_size" {
 }
 
 variable "worker_data_disk_size" {
-  description = "GB — dedicated data disk (scsi1) per worker, reserved for distributed storage (Longhorn later). Kept separate from the OS disk so storage I/O and OS I/O don't mix, and so future physical nodes arrive with the same symmetric layout."
+  description = "GB — dedicated data disk (scsi1) per worker, reserved for distributed storage (Longhorn later). Kept separate from the OS disk so storage I/O and OS I/O don't mix, and so future physical nodes arrive with the same symmetric layout. Thin-provisioned: sized to keep total declared ≈91% of the pool, leaving the crumple zone that stops the pool silently filling under its guests."
   type        = number
-  default     = 250
+  default     = 280
 }

@@ -147,7 +147,7 @@ terraform plan    # review — should show 3 resources to add
 terraform apply
 ```
 
-After a couple of minutes you'll have three running VMs with static IPs, cloud-init-provisioned SSH access, and qemu-guest-agent reporting status back to Proxmox. Both workers also carry a second, empty 250GB data disk (`scsi1`) — reserved for distributed storage (Longhorn, a later phase; see ADR-0021), formatted and mounted by Ansible in Phase 6, not by Terraform. Verify:
+After a couple of minutes you'll have three running VMs with static IPs, cloud-init-provisioned SSH access, and qemu-guest-agent reporting status back to Proxmox. Both workers also carry a second, empty 280GB data disk (`scsi1`) — reserved for distributed storage (Longhorn, a later phase; see ADR-0021), formatted and mounted by Ansible in Phase 6, not by Terraform. Total declared: 740G of the 816G thin pool (91%) — the remaining ~9% is deliberate headroom so the pool can never silently fill underneath its guests. Verify:
 ```bash
 ssh harsh@192.168.1.21 "hostname && ip a"
 ssh harsh@192.168.1.22 "hostname && ip a"

@@ -11,6 +11,15 @@ dns_servers     = ["1.1.1.1", "1.0.0.1"]
 ssh_public_key = "ssh-ed25519 AAAA...your-public-key... homelab-admin"
 vm_user        = "harsh"
 
-server_ip  = "192.168.1.21"
-worker_ip  = "192.168.1.22"
-worker2_ip = "192.168.1.23"
+# --- node specs, passed explicitly (variables.tf defaults are fallback docs) ---
+server_ip        = "192.168.1.21"
+server_cores     = 4
+server_memory    = 6144
+server_disk_size = 60
+
+worker_ip             = "192.168.1.22"
+worker2_ip            = "192.168.1.23"
+worker_cores          = 6
+worker_memory         = 9216
+worker_disk_size      = 60
+worker_data_disk_size = 280
