@@ -12,13 +12,12 @@ metadata:
 spec:
   acme:
     server: https://acme-staging-v02.api.letsencrypt.org/directory
-    email: you@example.com   # replace with your real email — Let's Encrypt uses this for expiry notices
+    email: harshupadhayay906@gmail.com   # replace with your real email — Let's Encrypt uses this for expiry notices
     privateKeySecretRef:
       name: letsencrypt-staging-account-key
     solvers:
       - dns01:
           cloudflare:
-            email: you@example.com   # replace — must match the Cloudflare account owning the API token
             apiTokenSecretRef:
               name: cloudflare-api-token
               key: api-token
@@ -30,13 +29,12 @@ metadata:
 spec:
   acme:
     server: https://acme-v02.api.letsencrypt.org/directory
-    email: you@example.com   # replace
+    email: harshupadhayay906@gmail.com   # replace
     privateKeySecretRef:
       name: letsencrypt-prod-account-key
     solvers:
       - dns01:
           cloudflare:
-            email: you@example.com   # replace
             apiTokenSecretRef:
               name: cloudflare-api-token
               key: api-token

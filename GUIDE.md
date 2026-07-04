@@ -309,16 +309,15 @@ Files: `k8s/cert-manager/`. TLS certificate automation. In this design cert-mana
 
 **Install:**
 ```bash
-helm repo add jetstack https://charts.jetstack.io
-helm repo update
-
 kubectl create namespace cert-manager
-kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.20.3/cert-manager.crds.yaml
 
-helm install cert-manager jetstack/cert-manager \
+helm install cert-manager oci://quay.io/jetstack/charts/cert-manager \
   --namespace cert-manager \
-  --version v1.20.3
+  --version v1.20.3 \
+  --set crds.enabled=true
 ```
+
+(cert-manager's own docs now recommend the OCI chart with `crds.enabled=true` over the older pattern of a separate `kubectl apply` for CRDs against a Helm HTTP repo — `installCRDs` is deprecated in favor of it. Verified live against `oci://quay.io/jetstack/charts/cert-manager` at v1.20.3, which is still the current stable release.)
 
 **Create a Cloudflare API token** — Cloudflare dashboard → My Profile → API Tokens → Create Token → use the "Edit zone DNS" template, scoped to your specific domain. Copy the token value (shown once).
 
@@ -329,7 +328,7 @@ kubectl create secret generic cloudflare-api-token \
   --from-literal=api-token='<paste your Cloudflare API token>'
 ```
 
-**Apply the ClusterIssuers** (edit the placeholder emails in the file first):
+**Apply the ClusterIssuers** (edit the placeholder contact email in the file first — Let's Encrypt uses it for expiry notices; not needed under the `cloudflare:` block since API Token auth, unlike API Key auth, doesn't require it):
 ```bash
 kubectl apply -f k8s/cert-manager/cluster-issuer.yaml
 kubectl get clusterissuer

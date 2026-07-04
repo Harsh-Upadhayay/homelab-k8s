@@ -17,7 +17,7 @@ metadata:
 spec:
   secretName: internal-wildcard-tls
   issuerRef:
-    name: letsencrypt-prod
+    name: letsencrypt-prod   # staging-tested first, then switched to prod for the real browser-trusted cert
     kind: ClusterIssuer
   dnsNames:
-    - "*.internal.neovara.uk"   # replace with your own internal subdomain convention
+    - "*.in.neovara.uk"
