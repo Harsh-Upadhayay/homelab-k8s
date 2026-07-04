@@ -132,3 +132,11 @@ First real entries here — Phase 12 Part B was the first time this project look
 **An egress rule's port is matched *after* Service DNAT — so it's the pod's `targetPort`, not the Service port.** The rule allows TCP **8000** to the `traefik` namespace even though cloudflared *dials* the Service on **80**: the policy is enforced after kube-proxy has already translated `ClusterIP:80 → podIP:8000`, and a `namespaceSelector` inherently matches the destination *pod*. So the wire the policy inspects carries `podIP:8000`. Same two-coordinate lesson as above, from two vantage points: cloudflared dials 80, the netpol matches 8000.
 
 **This works on plain Flannel — no Cilium needed.** k3s bundles a NetworkPolicy controller, so egress enforcement is real even though the CNI is Flannel and Cilium is deferred (ADR-0011, ADR-0017).
+
+## IngressRoute — Traefik's native routing CRD
+
+**An IngressRoute is what wires a public hostname to a pod — the final hop in the public path.** It lives under `traefik.io/v1alpha1` (a CRD-added group) and the Traefik controller watches for it. The `match: Host(\`whoami.neovara.uk\`)` field tells Traefik "when you receive a request with that exact `Host:` header on the `web` entrypoint, forward it to this Service." The `Host()` backtick syntax is Traefik's own DSL, not a Kubernetes standard — Traefik's controller parses it, not the API server.
+
+**One entrypoint per port, and the Service target is a regular ClusterIP.** The `entryPoints: [web]` field routes this rule to the `web` entrypoint (container port 8000, reachable via `traefik` Service port 80 → kube-proxy DNAT → pod 8000). The `services:` blocks target a regular `ClusterIP` Service by name + port. Adding app #2 means: one new tunnel public hostname + one new `IngressRoute` — the `cloudflared` Deployment never changes, Traefik doesn't need a restart.
+
+**Validated end-to-end in Phase 13:** `curl https://whoami.neovara.uk` → edge → tunnel → cloudflared → traefik:80 → Traefik matched `Host(\`whoami.neovara.uk\`)` → whoami Service → pod. The whoami body confirms every hop: `Cf-Connecting-Ip` (your router's real IP, from Cloudflare), `Host: whoami.neovara.uk` (the header Traefik matched), `X-Forwarded-Host` (Traefik forwarded), `Hostname:` (which specific pod served it — alternating across replicas).

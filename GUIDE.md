@@ -472,34 +472,37 @@ Reach it from any tailnet device at the MagicDNS name shown in the Tailscale adm
 
 ## Phase 13 — End-to-end validation
 
-Files: `k8s/example-app/`. Everything up to this point is infrastructure — this is the first proof that a request can actually travel the whole path: browser → Cloudflare → tunnel → Traefik → Service → pod.
+Files: `k8s/example-app/`. Everything up to this point is infrastructure — this is the first proof that a request can actually travel the whole path: browser → Cloudflare → tunnel → Traefik → Service → pod. Validated two independent planes (public + private) against a throwaway `traefik/whoami` app.
 
+**Deploy:**
 ```bash
 kubectl apply -f k8s/example-app/deployment.yaml
 kubectl apply -f k8s/example-app/service.yaml
-
-# edit ingressroute.yaml with your real domain first
 kubectl apply -f k8s/example-app/ingressroute.yaml
 ```
 
-**Add the DNS record** in the Cloudflare dashboard: `whoami.neovara.uk` → CNAME → `<your-tunnel-id>.cfargotunnel.com` (or let the dashboard's "Add route" flow under the tunnel's Public Hostname tab do this for you — it manages the DNS record automatically when you add a route there instead of relying on the wildcard from Phase 11).
+**Add the tunnel public hostname** — Cloudflare Zero Trust → Networks → Tunnels → homelab → Public Hostname:
+```
+whoami.neovara.uk → http://traefik.traefik.svc.cluster.local:80
+```
+(This auto-creates the proxied DNS CNAME. Verify it took by checking cloudflared's log: `kubectl logs -n cloudflare deployment/cloudflared | grep 'Updated to new configuration'` — the ingress config JSON should list `whoami.neovara.uk`. If it doesn't, delete and re-create the hostname rather than editing it; cloudflared config can get stuck on partial edits.)
 
 **Test the public path:**
 ```bash
 curl https://whoami.neovara.uk
-# should return whoami's output: Hostname, IP, headers — confirms the FULL
-# chain: Cloudflare DNS -> tunnel -> cloudflared pod -> Traefik -> IngressRoute
-# match -> Service -> one of the 2 whoami pods
+# → 200 with whoami's header-echo: Hostname, IP, RemoteAddr, X-Forwarded-For,
+#   Cf-Connecting-Ip, Cf-Ray — confirms the FULL chain: Cloudflare DNS → edge
+#   (TLS terminated) → tunnel → cloudflared → traefik ClusterIP:80 → kube-proxy
+#   DNAT → Traefik → IngressRoute Host(`whoami.neovara.uk`) → whoami Service
+#   → load-balanced across the 2 replicas
 ```
+Hit it several times to see the `Hostname:` alternating between pods — proof of kube-proxy load-balancing.
 
-**Test the internal path** (over Tailscale, confirming the admin plane independently of the public one):
+**Test the private path** (over Tailscale, from the Mac — confirms the admin plane independently):
 ```bash
-# from a device on your tailnet
-tailscale status   # confirm you're connected
-kubectl get pods -n default -l app=whoami   # via the API server proxy from Phase 12
+kubectl get pods -n default -l app=whoami
 ```
-
-If the public curl works and `kubectl` works over the tailnet, every layer built in this guide is doing its job correctly — CNI, Service/ClusterIP, kube-proxy, CoreDNS, Traefik's IngressRoute matching, the tunnel's outbound connection, and the operator's API server proxy, all in one working request path.
+Both work = every layer in the build is doing its job: Flannel/CNI, kube-proxy/Service, CoreDNS, Traefik IngressRoute, cloudflared tunnel, and the Tailscale Operator API proxy.
 
 Once confirmed, `kubectl delete -f k8s/example-app/` — this was scaffolding, not a real app.
 
@@ -525,7 +528,7 @@ Everything below was explicitly scoped out of this build — not forgotten, stag
 - **Traefik shows `EXTERNAL-IP: <none>` on the main Service** — that's correct, not broken. It's ClusterIP by design; there is no LoadBalancer in this topology.
 - **A Service can't reach an otherwise-healthy pod** — check `targetPort` against what the container is actually listening on. `containerPort` is documentation only; nothing in the traffic path enforces it matches.
 - **cert-manager's Certificate stays stuck in `False` / pending** — check `kubectl describe certificate <name> -n <ns>` and `kubectl get challenges -A`; almost always either the Cloudflare API token's permissions are wrong (needs Zone:DNS:Edit on the right zone) or the `email` fields in the ClusterIssuer don't match the Cloudflare account that issued the token.
-- **cloudflared shows `Registered tunnel connection` but curl still 404s** — check the tunnel's Public Hostname route actually points at `http://traefik.traefik.svc.cluster.local:8000` and that an IngressRoute exists matching the `Host()` you're testing; a tunnel with no matching IngressRoute is a very plausible-looking dead end.
+- **cloudflared shows `Registered tunnel connection` but curl still 404s** — (1) check the tunnel's ingress config actually lists your hostname: `kubectl logs -n cloudflare deployment/cloudflared | grep 'Updated to new configuration'` — a missing hostname in the JSON means the dashboard config never saved (delete and re-create, don't edit). (2) Verify the origin reaches Traefik: from inside the cluster, `curl -H 'Host: <your-host>' http://traefik.traefik.svc.cluster.local:80` — if this works but the tunnel doesn't, the tunnel's dashboard config is wrong; if this also 404s, the IngressRoute might not exist or might not match the `Host()` header. The host curl from step 2 returning 200 with whoami body means the problem is strictly tunnel-side: delete and re-add the public hostname from scratch rather than editing it.
 - **Ansible reruns fail on `k3s_token`** — this is deliberate (the `assert` task in both roles). Reusing the exact same token across runs is what makes the playbook idempotent instead of accidentally re-bootstrapping a new cluster identity.
 
 ---

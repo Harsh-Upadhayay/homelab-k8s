@@ -26,7 +26,7 @@ The actual k3s cluster, up and verified.
 - [x] Phase 12 Part B — Tailscale Kubernetes Operator: API server proxy live, confirmed working `kubectl` access from a second physical device (MacBook) over the tailnet, zero exposed ports. Needed a 3-scope OAuth client (ADR-0025) and an explicit RBAC `ClusterRoleBinding` (ADR-0026) beyond the base install.
 
 ## v1.0 — Validated Base Platform
-- [ ] Phase 13 — End-to-end validation (public path via Cloudflare, private path via Tailscale, both proven against the `whoami` example app)
+- [x] Phase 13 — End-to-end validation (public path via Cloudflare, private path via Tailscale, both proven against the `whoami` example app). Public: `https://whoami.neovara.uk` → edge → tunnel → Traefik → Service → pod (200 with load-balancing across replicas). Private: `kubectl` over Tailscale confirmed working from a second device. Hit a tunnel-config-staleness gotcha (dashboard hostname wasn't syncing to cloudflared — cloudflared debug logs showed the old `k8s.neovara.uk` entry; fixed by deleting and re-creating the hostname rather than editing). To clean up and keep the cluster lean, `kubectl delete -f k8s/example-app/`.
 
 This is the point where "a production-shaped homelab Kubernetes platform" (per `claude.md`) is actually true end to end.
 
