@@ -354,13 +354,18 @@ Files: `k8s/cloudflared/`. This is the external front door — the mechanism tha
 
 **Create the tunnel** (Cloudflare Zero Trust dashboard → Networking → Tunnels → Create a tunnel → choose "Cloudflared" as the connector type). Name it something like `homelab`. On the install-command screen, don't run the suggested command — you just need the **token** it shows you (a long string); the Kubernetes Deployment will use that instead of installing cloudflared on a host.
 
-**Configure the one route this tunnel needs** — under the tunnel's Public Hostname tab:
+**Add a public hostname per app** — under the tunnel's Public Hostname tab, add a **specific first-level** hostname (not a wildcard — see the SSL note below):
 ```
-Hostname: *.neovara.uk  (or list each subdomain individually — your call)
-Service:  http://traefik.traefik.svc.cluster.local:8000
+Hostname: whoami.neovara.uk
+Service:  http://traefik.traefik.svc.cluster.local:80
 ```
+(Target the **Service port 80**, not the container's `8000`. The Traefik Service exposes `80 → targetPort 8000`; cloudflared dials the Service's ClusterIP on 80, and kube-proxy forwards it to the pod's 8000. Connecting to the ClusterIP on 8000 hits nothing — verified: `:80` → 404-from-Traefik, `:8000` → connection refused.) Adding a *specific* hostname here also makes Cloudflare **auto-create its DNS record** — no manual DNS step.
 
-This is the whole trick: the tunnel has exactly **one** route, pointed at Traefik's ClusterIP Service — not at individual apps. Traefik does the per-app `Host:` routing from here on via IngressRoute objects (Phase 14). Adding a tenth app later means adding an IngressRoute, never touching the tunnel config again.
+**Why specific first-level names, and NOT a nested `*.k8s.neovara.uk` wildcard:** two constraints stack up. (1) A legacy homelab already owns the `*.neovara.uk` wildcard → old router, so the tunnel can't reuse that exact name. (2) Cloudflare's **free Universal SSL only covers the root + one wildcard level** (`neovara.uk`, `*.neovara.uk`) — a two-level name like `whoami.k8s.neovara.uk` gets **no edge certificate**, so its TLS handshake fails before the tunnel is ever consulted (covering `*.k8s.neovara.uk` needs the paid Advanced Certificate Manager). The free path that satisfies both: give each public app a **specific first-level** name (`whoami.neovara.uk`, `app.neovara.uk`). Universal SSL's `*.neovara.uk` cert covers it, and because a *specific* record beats the legacy wildcard, that one name routes to the cluster while everything else still flows to the old router — clean, reversible, app-by-app migration. (Internal services are unaffected: `*.in.neovara.uk` over Tailscale uses cert-manager's own Let's Encrypt cert, which *can* do multi-level wildcards since Cloudflare's edge isn't in that path.)
+
+The routing trick still holds: every public hostname points at the **same** Traefik Service (`:80`), never at individual apps. Traefik does the per-app `Host:` routing via IngressRoute objects. Adding app #2 means: one new public hostname on the tunnel + one new IngressRoute — the cloudflared Deployment itself never changes.
+
+**End-state (after migration):** once every workload is on k8s and the legacy `*.neovara.uk → old router` wildcard is retired, replace the per-app public hostnames with a **single `*.neovara.uk` tunnel route** (first-level, so still covered by free Universal SSL) plus one proxied `*.neovara.uk` DNS record. From then on a new public app needs **only** an IngressRoute — no Cloudflare or DNS change ever again. Until then, the per-app hostname step is the price of coexisting with the legacy wildcard.
 
 **Apply the manifests:**
 ```bash
@@ -381,7 +386,17 @@ kubectl logs -n cloudflare deployment/cloudflared
 # look for "Registered tunnel connection" — that's the outbound QUIC connection to Cloudflare's edge
 ```
 
-Back in the dashboard, the tunnel should now show **Healthy**.
+Back in the dashboard, the tunnel should now show **Healthy** (this only means the connector linked to the edge — it says nothing about DNS/TLS yet).
+
+**Prove the public path end-to-end:**
+```bash
+curl -I https://whoami.neovara.uk
+# HTTP 404 (from Traefik) = SUCCESS — the request reached Traefik, which has no
+# IngressRoute for this Host yet (that's Phase 13's whoami app). The 404 body is
+# Traefik's; cross-check it matches an in-cluster hit to traefik.traefik.svc:80.
+# A 502/530/1033 Cloudflare error instead = the tunnel isn't reaching the origin.
+```
+If `curl` fails with `Could not resolve host`, the DNS record is missing (a *specific* tunnel hostname auto-creates it; a *wildcard* one does not). If it fails with an SSL `handshake failure`, the name is deeper than one level and free Universal SSL doesn't cover it — use a first-level name (ADR-0028).
 
 **Why the NetworkPolicy isn't optional here.** Cloudflare's own quickstart deploys cloudflared with zero network restriction — by default it can resolve and reach *every* Service in *every* namespace via standard service discovery, because nothing stops it. That makes the one public-facing component in your entire cluster a pivot point: if a vulnerability in whatever app you're exposing ever got exploited, an attacker landing in that request path could otherwise walk straight to your databases or your Traefik dashboard through the tunnel pod's own network reach. `networkpolicy.yaml` locks cloudflared down to exactly Traefik on port 8000, plus DNS, plus Cloudflare's own edge — nothing else. This is also a nice confirmation of something from the design phase: NetworkPolicy enforcement works here even without Cilium, because k3s's bundled netpol controller enforces it on plain Flannel too.
 

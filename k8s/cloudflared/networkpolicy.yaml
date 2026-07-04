@@ -29,19 +29,29 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
-    # Traefik — the only in-cluster destination cloudflared should ever reach
+    # Traefik — the only in-cluster destination cloudflared should ever reach.
+    # Port is 8000 (the pod's targetPort), NOT 80 (the Service port cloudflared
+    # dials): a namespaceSelector matches the destination *pod*, and this egress
+    # rule is evaluated AFTER kube-proxy has already DNAT'd the ClusterIP:80
+    # connection to podIP:8000. So the wire port the policy sees is 8000.
     - to:
         - namespaceSelector:
-            kubernetes.io/metadata.name: traefik
+            matchLabels:
+              kubernetes.io/metadata.name: traefik
       ports:
         - protocol: TCP
           port: 8000
-    # Cloudflare's edge — the outbound tunnel itself (QUIC/HTTP2, port 7844 and 443)
+    # Cloudflare's edge — the outbound tunnel itself. Port 7844 is required on
+    # BOTH UDP (quic, the default) and TCP (http2, the fallback when UDP is
+    # blocked/degraded) per Cloudflare's firewall docs. TCP 443 is optional —
+    # software-update checks and post-quantum reporting — kept for those.
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0
       ports:
         - protocol: UDP
+          port: 7844
+        - protocol: TCP
           port: 7844
         - protocol: TCP
           port: 443

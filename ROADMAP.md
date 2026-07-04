@@ -21,7 +21,7 @@ The actual k3s cluster, up and verified.
 - [x] Phase 10 — cert-manager + Cloudflare DNS-01 ClusterIssuers. Installed via the OCI chart (`crds.enabled=true`), staging+prod `ClusterIssuer`s Ready. Issued a real browser-trusted wildcard cert for `*.in.neovara.uk` (staging-tested first, then prod) into the `internal-wildcard-tls` Secret in `traefik`. Validated the ClusterIssuer secret-namespace rule against live docs (input creds in `cert-manager`, output cert in `traefik`).
 
 ## v0.4 — Public & Private Access
-- [ ] Phase 11 — Cloudflare Tunnel (`cloudflared` + NetworkPolicy)
+- [x] Phase 11 — Cloudflare Tunnel (`cloudflared` + NetworkPolicy). Remotely-managed tunnel live and **Healthy**, egress locked to Traefik/DNS/edge. Public path verified end-to-end: `https://whoami.neovara.uk` → edge → tunnel → Traefik returns the same 404 as an in-cluster hit. Hit and documented Cloudflare's Universal SSL one-level-wildcard limit → public apps use specific first-level names during migration (ADR-0028); also fixed the tunnel target `:8000`→`:80`, added TCP 7844 to the netpol, and fixed a `namespaceSelector` schema bug.
 - [x] Phase 12 Part A — Tailscale on the Proxmox host
 - [x] Phase 12 Part B — Tailscale Kubernetes Operator: API server proxy live, confirmed working `kubectl` access from a second physical device (MacBook) over the tailnet, zero exposed ports. Needed a 3-scope OAuth client (ADR-0025) and an explicit RBAC `ClusterRoleBinding` (ADR-0026) beyond the base install.
 

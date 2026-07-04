@@ -12,7 +12,7 @@ spec:
   entryPoints:
     - web
   routes:
-    - match: Host(`whoami.neovara.uk`)   # replace with your real domain
+    - match: Host(`whoami.neovara.uk`)   # first-level: covered by Cloudflare's free Universal SSL (*.neovara.uk); a specific record overrides the legacy wildcard for just this name
       kind: Rule
       services:
         - name: whoami

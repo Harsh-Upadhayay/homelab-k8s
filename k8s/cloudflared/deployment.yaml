@@ -1,7 +1,7 @@
 # Remotely-managed tunnel: the actual routing (which public hostname maps
 # to which backend) is configured in the Cloudflare Zero Trust dashboard,
 # NOT here. This Deployment only runs the connector. See GUIDE.md Phase 11
-# for creating the tunnel and its one route: * -> http://traefik.traefik.svc.cluster.local:8000
+# for creating the tunnel and its one route: * -> http://traefik.traefik.svc.cluster.local:80
 #
 # cloudflared makes OUTBOUND connections to Cloudflare's edge — nothing
 # inbound is ever opened on the router. That single fact is why no port
