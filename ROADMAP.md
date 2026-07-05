@@ -31,6 +31,10 @@ The actual k3s cluster, up and verified.
 
 This is the point where "a production-shaped homelab Kubernetes platform" (per `claude.md`) is actually true end to end.
 
+## v2.0 — Operability (in progress)
+The platform grows the things that make it *operable*: storage, GitOps, observability, backups.
+- [x] Distributed storage — Longhorn 1.12.0 live on the ADR-0021 disk layout (zero disk changes needed). Two StorageClass tiers as data-replica policy: `longhorn` (1 copy, dev) and `longhorn-replicated` (2 copies, prod) — ADR-0030/0031; upstream `longhorn-system` namespace kept after verifying the alternative (ADR-0032); auth-less UI internal-only at `longhorn.in.neovara.uk` (ADR-0033). Smoke-tested: volume survived pod rescheduling, replicas confirmed one-per-worker, PVC delete confirmed as the real data delete. Standing caveat: one physical NVMe under both workers — topology is real, durability is simulated until physical nodes arrive.
+
 ---
 
 ## Deferred — deliberate, not forgotten
@@ -42,5 +46,4 @@ Each of these is staged as a clean, additive follow-on once v1.0 is solid. None 
 - **Secrets management** (SOPS + age, later External Secrets Operator + Vault) — Kubernetes Secrets stay imperative and uncommitted until this lands.
 - **Full backup strategy** — off-box etcd snapshot shipping (`--etcd-s3-*`), Velero, Proxmox Backup Server. Local etcd snapshots are already running from Phase 5.
 - **Cilium** — the one *non-additive* item on this list. Flannel → Cilium is a full cluster rebuild, not a live migration; treated as its own dedicated project and a real rebuild-from-Git/DR drill.
-- **Distributed storage (Longhorn)** — the disks, mounts, and second worker are already provisioned for it (ADR-0021); the install itself (Helm chart + CSI, `open-iscsi` prerequisite on workers) is its own additive phase. Until real physical nodes join, replication across the two workers simulates the topology without providing physical durability.
 - **HA control plane** (`k3s-server-2`, `k3s-server-3`) and **additional workers** — both purely additive given the embedded-etcd choice already made.

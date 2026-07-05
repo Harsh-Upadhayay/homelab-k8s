@@ -1,0 +1,23 @@
+# Internal-ONLY route for the Longhorn UI — same shape as whoami's internal
+# route (websecure entrypoint, *.in name, default TLSStore wildcard cert,
+# reachable only through the traefik-internal Tailscale Service).
+#
+# The Longhorn UI has NO authentication of its own and can delete volumes and
+# wipe disks — it must never get a public (web-entrypoint / Cloudflare) twin.
+# Lives in longhorn-system because Traefik only resolves same-namespace
+# Services by default (allowCrossNamespace is off in our chart values).
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: longhorn-ui-internal
+  namespace: longhorn-system
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`longhorn.in.neovara.uk`)
+      kind: Rule
+      services:
+        - name: longhorn-frontend # the chart's UI Service
+          port: 80
+  tls: {} # empty = enable TLS, serve the default TLSStore cert (*.in.neovara.uk)

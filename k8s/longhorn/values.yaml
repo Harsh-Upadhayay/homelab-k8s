@@ -1,0 +1,45 @@
+# Longhorn Helm chart values. Chart version pinned at install time (ADR-0027
+# precedent — never ride a chart's latest):
+#   helm install longhorn longhorn/longhorn --namespace longhorn-system \
+#     --create-namespace --version 1.12.0 -f k8s/longhorn/values.yaml
+#
+# Namespace is the upstream-conventional longhorn-system. (A custom namespace
+# was considered and does work — the chart is fully namespace-relative — but
+# every upstream doc, community example, and longhornctl assumes
+# longhorn-system, so convention wins.)
+#
+# NOTE ON "REPLICAS": every replica count in this file is about Longhorn's
+# own moving parts or DATA copies — none of them have anything to do with an
+# app's `spec.replicas` (pod count). Data-replica policy lives in
+# StorageClasses, not app manifests: `longhorn` (this chart, 1 copy, dev) vs
+# `longhorn-replicated` (storageclass-replicated.yaml, 2 copies, prod).
+
+persistence:
+  # The StorageClass the chart creates (named "longhorn"). Deliberately NOT
+  # the cluster default: k3s's local-path holds that annotation and its
+  # packaged manifest is reapplied on every k3s restart, so de-defaulting it
+  # doesn't stick — and two defaults make PVC binding version-dependent.
+  # PVCs say `storageClassName: longhorn` explicitly instead.
+  defaultClass: false
+  defaultClassReplicaCount: 1 # DATA copies per volume — dev tier. Prod uses longhorn-replicated (2 copies).
+
+defaultSettings:
+  # Where each node's replicas live as sparse files — this is the dedicated
+  # ext4 data disk Ansible mounts by label (ADR-0021). Chart default, pinned
+  # explicitly because everything about this phase was shaped around it.
+  defaultDataPath: /var/lib/longhorn
+  defaultReplicaCount: 1 # for volumes created outside any StorageClass (e.g. via the UI) — match the dev tier
+
+# The four CSI controller sidecars (attacher/provisioner/resizer/snapshotter)
+# are leader-elected Deployments — chart default 3 replicas is hot-standby HA
+# for zero-gap failover of *provisioning operations* (not the data path).
+# One each is fine here; worst case a PVC waits a few seconds to provision
+# while the pod reschedules.
+csi:
+  attacherReplicaCount: 1
+  provisionerReplicaCount: 1
+  resizerReplicaCount: 1
+  snapshotterReplicaCount: 1
+
+longhornUI:
+  replicas: 1 # chart default is 2 — one is plenty here; it's a stateless dashboard

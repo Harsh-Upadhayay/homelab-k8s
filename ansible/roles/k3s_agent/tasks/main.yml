@@ -28,6 +28,30 @@
     opts: defaults
     state: mounted
 
+# ── Longhorn node prerequisites (storage phase) ──
+# Longhorn's v1 data path is iSCSI: each volume's engine exposes a block
+# device to the node through the kernel's iSCSI initiator, so iscsid must be
+# running on every node that can attach volumes — that's only the workers,
+# since the tainted server never runs workloads. nfs-common is the NFSv4
+# client Longhorn needs for RWX volumes (served via a share-manager pod).
+# Tagged so this can run standalone: ansible-playbook site.yml --tags longhorn
+
+- name: Install Longhorn prerequisites (iSCSI initiator + NFSv4 client)
+  ansible.builtin.apt:
+    name:
+      - open-iscsi
+      - nfs-common
+    state: present
+    update_cache: true
+  tags: [longhorn]
+
+- name: Ensure iscsid is enabled and running (Longhorn wants the daemon up, not just socket-activated)
+  ansible.builtin.systemd:
+    name: iscsid
+    state: started
+    enabled: true
+  tags: [longhorn]
+
 - name: Create /etc/rancher/k3s directory
   ansible.builtin.file:
     path: /etc/rancher/k3s

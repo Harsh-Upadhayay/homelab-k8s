@@ -12,10 +12,11 @@ The Ansible/Terraform/Kubernetes/platform *mechanics* these decisions rely on li
 - [[v0.2 - Cluster Bootstrap]] — ADR-0008 … ADR-0012
 - [[v0.3 - Ingress and TLS]] — ADR-0013 … ADR-0015, ADR-0027
 - [[v0.4 - Public and Private Access]] — ADR-0016 … ADR-0018, ADR-0025 … ADR-0026, ADR-0028 … ADR-0029
+- [[v2.0 - Operability]] — ADR-0030 … ADR-0033
 
 (0019–0021 live in the v0.1 log despite the number gap: 0019 was burned by a tried-and-reverted refactor and is reinstated as Rejected rather than reused, and the decisions themselves belong to Foundation's provisioning scope.)
 
-v1.0 and v2.0 have no log yet — no architecture decisions have been made there, only deferrals already captured above (ADR-0003, ADR-0011). A new log starts only once a milestone actually produces a decision of its own.
+v1.0 has no log — it produced no architecture decisions of its own, only validation of decisions already captured above. The v2.0 log opened with the Longhorn phase.
 
 ## Index
 
@@ -50,3 +51,7 @@ v1.0 and v2.0 have no log yet — no architecture decisions have been made there
 | 0022 | Internal NVMe strictly off-limits; everything on the external SSD | Accepted | [[v0.1 - Foundation]] |
 | 0023 | terraform@pve needs a storage-scoped ACL, not just PVEVMAdmin | Accepted | [[v0.1 - Foundation]] |
 | 0024 | terraform@pve also needs an SDN-scoped ACL for network attach | Accepted | [[v0.1 - Foundation]] |
+| 0030 | Data-replica policy as StorageClass tiers (longhorn = 1 dev, longhorn-replicated = 2 prod) | Accepted | [[v2.0 - Operability]] |
+| 0031 | Longhorn's StorageClasses are not the cluster default | Accepted | [[v2.0 - Operability]] |
+| 0032 | Keep the upstream-conventional longhorn-system namespace | Accepted | [[v2.0 - Operability]] |
+| 0033 | Longhorn UI exposed internal-only via the Tailscale front door | Accepted | [[v2.0 - Operability]] |
