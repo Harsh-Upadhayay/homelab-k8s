@@ -36,6 +36,36 @@ Linux, networking, and infra ideas that don't belong to one specific tool — th
 
 **Two front doors, one Traefik — and the headers fingerprint which door a request used.** The same whoami pod is served through both access paths: publicly via cloudflared (`whoami.neovara.uk` — TLS terminated at Cloudflare's edge with the `*.neovara.uk` Google Trust Services cert, so Traefik sees plaintext and the app sees `X-Forwarded-Proto: http`, `X-Forwarded-Port: 80`), and internally via the Tailscale proxy (`whoami.in.neovara.uk` — TLS terminated by Traefik itself with the cert-manager `*.in.neovara.uk` wildcard, so the app sees `X-Forwarded-Proto: https`, `X-Forwarded-Port: 443`). Same pod, two front doors, cleanly distinguishable at the app by those headers — verified in one session with both curls returning 200 (`k8s/traefik/tailscale-service.yaml` vs `k8s/cloudflared/`, ADR-0018/ADR-0029, GUIDE.md Phase 12 Part C).
 
+**The two complete request paths, hop by hop — every hop labeled with its mechanism.** Both verified live; each path uses *both* load-balancing mechanisms in sequence (the classic kernel path to reach Traefik, then Traefik's direct endpoint dialing to reach the app — see [[Kubernetes Concepts]]).
+
+*Public* (`https://whoami.neovara.uk`):
+```
+client → public DNS (proxied CNAME → Cloudflare anycast IPs)
+       → Cloudflare edge  [TLS TERMINATED HERE — *.neovara.uk Universal SSL cert]
+       → tunnel (edge → cloudflared's held-open OUTBOUND connection; no inbound port anywhere)
+       → cloudflared pod → dials traefik.traefik.svc.cluster.local:80
+             [CoreDNS → ClusterIP; node-kernel DNAT :80→pod:8000 — L4, per-connection]
+       → Traefik "web" entrypoint → router (web, Host whoami.neovara.uk)
+       → reads whoami's EndpointSlices → dials a pod IP :80 directly  [L7, per-request]
+       → whoami pod  (sees X-Forwarded-Proto: http, Port: 80, Cf-Connecting-Ip)
+```
+
+*Internal* (`https://whoami.in.neovara.uk`):
+```
+tailnet client → quad-100 resolver (CNAME *.in.neovara.uk → traefik-internal.<tailnet>.ts.net,
+                 A record patched from live MagicDNS state — resolves ONLY on-tailnet)
+       → WireGuard to the operator's proxy pod (the traefik-internal tailnet device, 100.x)
+       → proxy forwards to Service traefik-internal:443
+             [node-kernel DNAT :443→pod:8443 — L4, per-connection]
+       → Traefik "websecure" entrypoint  [TLS TERMINATED HERE — *.in.neovara.uk
+             Let's Encrypt wildcard via the default TLSStore]
+       → router (websecure, Host whoami.in.neovara.uk)
+       → reads whoami's EndpointSlices → dials a pod IP :80 directly  [L7, per-request]
+       → whoami pod  (sees X-Forwarded-Proto: https, Port: 443)
+```
+
+The symmetry to remember: each door has exactly one component holding an outbound-only link to its network (cloudflared → Cloudflare's edge; the ts-proxy → the tailnet), both converge on the same Traefik routing table two coordinates apart (entrypoint × Host), and the app is identical and unaware behind both (ADR-0016/0018/0028/0029).
+
 ## Proxmox templates and cloud-init
 
 **A template is inert, not running.** After `qm template <id>`, the VM can never be started again — no vCPU/RAM allocated, no QEMU process. It's just a disk plus a config file with a `template: 1` flag, sitting on storage purely as a clone source (GUIDE.md Phase 2, confirmed on `pve-dell`: the Start button disappears and `qm start 9000` fails).
