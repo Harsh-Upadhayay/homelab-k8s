@@ -1,0 +1,91 @@
+# Grafana Alloy Helm chart values — the log-shipping agent, successor to
+# Promtail (EOL March 2026, do not use). Chart version pinned at install time:
+#   helm repo add grafana https://grafana.github.io/helm-charts
+#   helm repo update
+#   helm install alloy grafana/alloy --namespace monitoring --version 1.10.0 \
+#     -f k8s/monitoring/values-alloy.yaml
+#
+# DEPLOYMENT SHAPE — single Deployment, NOT the chart's default DaemonSet.
+# Reasoning: this collector reads every pod's logs through the Kubernetes API
+# (loki.source.kubernetes — same mechanism as `kubectl logs`), so ONE replica
+# covers the whole cluster. A DaemonSet (one Alloy per node) would instead
+# need each pod scoped to its own node's on-disk log files, or it re-ships
+# every line once per node (3x duplication on this 3-node cluster).
+#
+# Why not the DaemonSet then: at homelab log volumes Alloy's cost is dominated
+# by fixed per-process baseline (Go runtime + its own API watch), not by log
+# throughput — so 3 per-node pods would each cost ~a full baseline (~3x
+# aggregate) rather than a third each. One collector is the cheaper shape here.
+# Revisit → DaemonSet + per-node file tailing only if a genuinely log-heavy
+# workload arrives (then throughput dominates and spreading pays off).
+#
+# Bonus of the API approach: it reads the control-plane node's pod logs
+# THROUGH the apiserver, so it covers tainted k3s-server-1 without needing a
+# NoSchedule toleration or running there physically.
+#
+# The write endpoint is the pinned Loki Service name from values-loki.yaml
+# (fullnameOverride: loki), so install order doesn't matter — Alloy retries
+# until the Service resolves.
+
+controller:
+  type: deployment
+  replicas: 1
+
+# loki.source.kubernetes streams logs via the API (apiserver -> kubelet), so
+# the pod's ServiceAccount needs get/list/watch on pods AND pods/log. Verified
+# against the rendered ClusterRole: the chart's default RBAC already grants
+# both, so nothing extra is needed here (a file-based DaemonSet wouldn't touch
+# pods/log at all — it reads files off local disk instead). Left explicit as
+# a reminder of the dependency.
+rbac:
+  create: true
+
+alloy:
+  # Slightly above a per-node figure because this one pod carries the whole
+  # cluster's (low) log throughput, not a third of it.
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+  # Alloy's config language (River): discover every pod via the API, attach
+  # k8s labels (namespace/pod/container — the same label vocabulary Prometheus
+  # uses), read each container's log stream via the API, push to Loki.
+  configMap:
+    content: |
+      discovery.kubernetes "pods" {
+        role = "pod"
+      }
+
+      discovery.relabel "pods" {
+        targets = discovery.kubernetes.pods.targets
+
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "container"
+        }
+      }
+
+      loki.source.kubernetes "pods" {
+        targets    = discovery.relabel.pods.output
+        forward_to = [loki.write.default.receiver]
+      }
+
+      loki.write "default" {
+        endpoint {
+          // loki = the pinned fullnameOverride in values-loki.yaml, same
+          // namespace, so the short Service name resolves via cluster DNS.
+          // (River's comment syntax is // — not YAML's #; that typo is what
+          // crash-looped this container the first time round.)
+          url = "http://loki:3100/loki/api/v1/push"
+        }
+      }

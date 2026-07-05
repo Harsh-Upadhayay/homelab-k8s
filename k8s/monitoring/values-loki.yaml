@@ -1,0 +1,103 @@
+# Loki Helm chart values — monolithic ("SingleBinary") deployment mode: the
+# documented shape for a single-tenant homelab, fine up to ~20GB logs/day.
+# Chart version pinned at install time (verified live via `helm search repo
+# grafana/loki` and `helm template` against this exact file — the classic
+# grafana.github.io/helm-charts repo is still current, no migration needed):
+#   helm repo add grafana https://grafana.github.io/helm-charts
+#   helm repo update
+#   helm install loki grafana/loki --namespace monitoring --version 7.0.0 \
+#     -f k8s/monitoring/values-loki.yaml
+#
+# Storage: filesystem, not S3/MinIO — no object store exists on this platform
+# yet, and filesystem-on-PVC is the documented path at this scale. Tier is
+# `longhorn` (1 copy, dev) — same reasoning as the Prometheus TSDB: losing log
+# history to a worker failure is low-stakes.
+#
+# Only one Grafana runs on this platform (kube-prometheus-stack's). Nothing
+# to disable here to enforce that — this chart's dependencies (checked
+# against Chart.yaml) are minio/grafana-agent-operator/rollout-operator, no
+# Grafana subchart at all (that's the older, legacy loki-stack chart, not
+# this one). Loki just gets added to the existing Grafana as a datasource.
+
+deploymentMode: SingleBinary
+
+# Pinned rather than left to the chart's default `<release>` name — a known,
+# stable Service name means values-alloy.yaml's write endpoint is a static
+# string, not something to fill in after `kubectl get svc`, here or on a
+# rebuilt cluster.
+fullnameOverride: loki
+
+loki:
+  auth_enabled: false # single-tenant homelab — no multi-tenant auth needed
+  commonConfig:
+    replication_factor: 1 # one binary, one copy — matches the longhorn (not longhorn-replicated) tier below
+  storage:
+    type: filesystem
+  # The chart ships no default schema (every Loki install's is meant to be
+  # deliberate — see the linked docs) and refuses to render without one.
+  # `useTestSchema: true` is the chart's own shortcut but explicitly for
+  # ephemeral testing with no persistence, which doesn't fit here. `from`
+  # just needs to be a fixed past date — this is when this schema period
+  # starts applying, not an expiry.
+  schemaConfig:
+    configs:
+      - from: "2024-01-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: index_
+          period: 24h
+
+singleBinary:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+
+# The chart always defines the SimpleScalable-mode components too (read/
+# write/backend, defaulting to 3 replicas each) regardless of deploymentMode
+# — leaving them nonzero alongside singleBinary fails the chart's own
+# validation ("more than zero replicas configured for both the single binary
+# and simple scalable targets"). Confirmed with `helm template` against this
+# exact file before ever touching the cluster.
+write:
+  replicas: 0
+read:
+  replicas: 0
+backend:
+  replicas: 0
+
+persistence:
+  enabled: true
+  storageClass: longhorn
+  size: 10Gi
+
+# The chart also deploys two Memcached-backed read-path caches by default —
+# NOT sized for a homelab. chunksCache defaults to allocatedMemory: 8192 (8Gi,
+# clearly a production-scale default) which actually failed to schedule on
+# this cluster ("0/3 nodes are available ... Insufficient memory" on both 9Gi
+# workers, confirmed live). resultsCache defaults to 1024 (1Gi) — it happened
+# to fit, but is still oversized relative to everything else in this stack.
+# Both are pure read-path performance optimizations (repeat-query speedups),
+# not required for ingestion or correctness — right-sized down rather than
+# disabled outright, matching every other component's "lean, not zero" sizing.
+chunksCache:
+  allocatedMemory: 256
+  allocatedCPU: 100m
+
+resultsCache:
+  allocatedMemory: 256
+  allocatedCPU: 100m
+
+# nginx gateway in front of Loki — unneeded for one internal-only binary
+# reachable in-cluster; Alloy and Grafana talk to the singleBinary Service
+# directly, at the pinned name above: loki.monitoring.svc.cluster.local:3100.
+gateway:
+  enabled: false
+
+test:
+  enabled: false

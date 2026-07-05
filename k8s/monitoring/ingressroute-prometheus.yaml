@@ -1,0 +1,31 @@
+# Internal-ONLY route for Prometheus — same shape as Grafana's and the
+# Longhorn UI's routes (ADR-0033): websecure entrypoint, *.in name, default
+# TLSStore wildcard cert, reachable only through the traefik-internal
+# Tailscale Service. No public (web-entrypoint / Cloudflare) twin, ever.
+#
+# No auth to disable here (unlike Grafana) — Prometheus ships with none by
+# default in this values file, so the same "reachability is the
+# authentication" reasoning applies automatically, not as a deliberate change.
+#
+# Service name is deterministic from the release name chosen at install time
+# (`kube-prometheus-stack`), confirmed via `helm template` — not pinned via
+# fullnameOverride like Grafana/Loki, since overriding the parent chart's
+# fullname would rename every other resource in the release too.
+#
+# Lives in monitoring because Traefik only resolves same-namespace Services
+# by default (allowCrossNamespace is off in our chart values).
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: prometheus-internal
+  namespace: monitoring
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`prometheus.in.neovara.uk`)
+      kind: Rule
+      services:
+        - name: kube-prometheus-stack-prometheus
+          port: 9090
+  tls: {} # empty = enable TLS, serve the default TLSStore cert (*.in.neovara.uk)

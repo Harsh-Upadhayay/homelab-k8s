@@ -1,0 +1,23 @@
+# Internal-ONLY route for Grafana — same shape as the Longhorn UI's route
+# (ADR-0033): websecure entrypoint, *.in name, default TLSStore wildcard
+# cert, reachable only through the traefik-internal Tailscale Service.
+# No public (web-entrypoint / Cloudflare) twin, ever — same reasoning as
+# every other operator-facing dashboard on this platform.
+#
+# Lives in monitoring because Traefik only resolves same-namespace Services
+# by default (allowCrossNamespace is off in our chart values).
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: grafana-internal
+  namespace: monitoring
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`grafana.in.neovara.uk`)
+      kind: Rule
+      services:
+        - name: grafana # pinned via fullnameOverride in values-kube-prometheus-stack.yaml — no post-install lookup needed
+          port: 80
+  tls: {} # empty = enable TLS, serve the default TLSStore cert (*.in.neovara.uk)

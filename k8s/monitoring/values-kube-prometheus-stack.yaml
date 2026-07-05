@@ -1,0 +1,109 @@
+# kube-prometheus-stack Helm chart values. Chart version pinned at install
+# time (ADR-0027 precedent — never ride a chart's latest):
+#   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+#   helm repo update
+#   helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+#     --namespace monitoring --create-namespace --version 87.10.1 \
+#     -f k8s/monitoring/values-kube-prometheus-stack.yaml
+#
+# Namespace: monitoring (upstream-conventional — same reasoning as ADR-0032:
+# every dashboard/doc/example assumes this name).
+#
+# Storage: upstream ships NO persistence and NO resource requests by default
+# for any of the three stateful pieces below (confirmed against the chart's
+# own values.yaml) — an emptyDir TSDB loses all history on every pod
+# restart. Explicit storageClassName per ADR-0031 (no cluster default to fall
+# back on); tier is `longhorn` (1 copy, dev) not `longhorn-replicated` —
+# metrics are inherently re-collected over time, so losing history to a
+# worker failure is low-stakes, unlike real application data.
+
+prometheus:
+  prometheusSpec:
+    retention: 15d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: longhorn
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 10Gi
+    resources:
+      requests:
+        cpu: 250m
+        memory: 400Mi
+      limits:
+        memory: 1Gi
+
+alertmanager:
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: longhorn
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 1Gi
+    resources:
+      requests:
+        cpu: 25m
+        memory: 64Mi
+
+grafana:
+  # Pinned rather than left to the chart's default `<release>-grafana` name —
+  # a known, stable Service name means ingressroute-grafana.yaml never needs
+  # a post-install `kubectl get svc` lookup to fill in, on this cluster or a
+  # rebuilt one.
+  fullnameOverride: grafana
+  persistence:
+    enabled: true
+    storageClassName: longhorn
+    size: 2Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+  # This platform never uses raw Ingress — every internal service gets a
+  # hand-written IngressRoute instead (ingressroute-grafana.yaml), same as the
+  # Longhorn UI (ADR-0033). Grafana's own Ingress support stays off.
+  ingress:
+    enabled: false
+  # No auth, full stop — matches the Longhorn UI precedent (ADR-0033):
+  # reachability via the Tailscale-only IngressRoute IS the authentication,
+  # deliberately, not a gap. Unlike Longhorn this isn't "nothing to disable" —
+  # Grafana's own login was a free extra layer being removed on purpose.
+  # org_role: Admin means anyone who reaches grafana.in.neovara.uk gets full
+  # admin (matching Longhorn's own no-auth blast radius), and
+  # disable_login_form hides the login screen entirely rather than just
+  # bypassing it silently.
+  grafana.ini:
+    auth.anonymous:
+      enabled: true
+      org_role: Admin
+    auth:
+      disable_login_form: true
+  # Provisioned declaratively — no click-ops. kube-prometheus-stack already
+  # provisions its own Prometheus datasource this exact way; this is the same
+  # mechanism (Grafana's file-based datasource provisioning, just expressed
+  # as chart values instead of a UI form) applied to Loki.
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      access: proxy
+      url: http://loki:3100 # the pinned Service name from values-loki.yaml
+      isDefault: false
+
+kubeStateMetrics:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+
+prometheus-node-exporter:
+  resources:
+    requests:
+      cpu: 25m
+      memory: 32Mi
