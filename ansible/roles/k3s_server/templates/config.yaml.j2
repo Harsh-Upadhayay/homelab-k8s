@@ -36,3 +36,18 @@ disable:
 # something to test restores against immediately.
 etcd-snapshot-schedule-cron: "0 * * * *"
 etcd-snapshot-retention: 24
+
+# k3s runs the scheduler, controller-manager, and etcd inside its own single
+# binary rather than as separately-labeled pods (the way kubeadm does), and
+# by default their metrics listeners bind to 127.0.0.1 only — invisible to
+# kube-prometheus-stack's Prometheus even though its ServiceMonitors for
+# these three components already exist (issue #25). These three flags open
+# each component's existing metrics endpoint to the node's real interface;
+# nothing about auth/serving changes otherwise, and the ports remain the
+# standard upstream ones kube-prometheus-stack already expects
+# (10257/10259/2381 — see values-kube-prometheus-stack.yaml).
+kube-controller-manager-arg:
+  - "bind-address=0.0.0.0"
+kube-scheduler-arg:
+  - "bind-address=0.0.0.0"
+etcd-expose-metrics: true

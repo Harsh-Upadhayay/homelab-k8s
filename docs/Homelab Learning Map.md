@@ -14,7 +14,7 @@ This is a second, formal decision record alongside `claude.md` (settled decision
 - [[README|ADR index]] — every decision by number, with status, in one table
 - [[Ansible Concepts]] — inventory, playbooks, roles, modules, idempotency
 - [[Terraform Concepts]] — providers, resources, state (populated from Phase 3 onward)
-- [[Kubernetes Concepts]] — Helm, CRDs/Operator pattern, RBAC, kubectl debugging, monitoring/logging (Prometheus Operator, DaemonSet vs. Deployment, container storage) (first populated at Phase 12 Part B)
+- [[Kubernetes Concepts]] — Helm, CRDs/Operator pattern, RBAC, kubectl debugging, monitoring/logging (Prometheus Operator's selector chain, Endpoints, DaemonSet vs. Deployment, container storage, ConfigMap-as-dashboard-provisioning) (first populated at Phase 12 Part B)
 - [[Platform Concepts]] — Linux, networking, and infra ideas that don't belong to one tool
 
 ## Decision logs by milestone
@@ -23,7 +23,7 @@ This is a second, formal decision record alongside `claude.md` (settled decision
 - [[v0.2 - Cluster Bootstrap]] — embedded etcd, secrets-encryption, control-plane taint, Flannel/Cilium (ADR-0008–0012)
 - [[v0.3 - Ingress and TLS]] — Traefik ClusterIP, IngressRoute vs. Gateway API, cert-manager scope, chart version pinning (ADR-0013–0015, 0027)
 - [[v0.4 - Public and Private Access]] — Cloudflare Tunnel routing, cloudflared NetworkPolicy, Tailscale's two mechanisms, the Kubernetes Operator's OAuth scopes and RBAC, public naming under Cloudflare's Universal SSL limit, internal service exposure over Tailscale with wildcard-CNAME DNS (ADR-0016–0018, 0025–0026, 0028–0029)
-- [[v2.0 - Operability]] — Longhorn storage-tier policy and namespace convention (ADR-0030–0033); monitoring stack storage tier, deterministic Helm naming, Grafana/Prometheus exposure and auth, one-Grafana datasource provisioning, Alloy's Deployment-not-DaemonSet shape (ADR-0034–0038)
+- [[v2.0 - Operability]] — Longhorn storage-tier policy and namespace convention (ADR-0030–0033); monitoring stack storage tier, deterministic Helm naming, Grafana/Prometheus exposure and auth, one-Grafana datasource provisioning, Alloy's Deployment-not-DaemonSet shape (ADR-0034–0038); cluster-wide ServiceMonitor discovery corrected from a scoped default, k3s control-plane metrics via hand-authored Endpoints, third-party dashboards via labeled ConfigMap (ADR-0039–0041)
 
 ## Conventions
 

@@ -43,3 +43,11 @@ csi:
 
 longhornUI:
   replicas: 1 # chart default is 2 — one is plenty here; it's a stateless dashboard
+
+metrics:
+  serviceMonitor:
+    # Chart default is false. kube-prometheus-stack's Prometheus already
+    # watches for ServiceMonitors cluster-wide (empty selectors), so this is
+    # the only change needed to get volume/replica health metrics flowing —
+    # no Service to hand-write, the chart bundles its own (issue #25).
+    enabled: true

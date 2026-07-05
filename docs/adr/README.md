@@ -12,7 +12,7 @@ The Ansible/Terraform/Kubernetes/platform *mechanics* these decisions rely on li
 - [[v0.2 - Cluster Bootstrap]] — ADR-0008 … ADR-0012
 - [[v0.3 - Ingress and TLS]] — ADR-0013 … ADR-0015, ADR-0027
 - [[v0.4 - Public and Private Access]] — ADR-0016 … ADR-0018, ADR-0025 … ADR-0026, ADR-0028 … ADR-0029
-- [[v2.0 - Operability]] — ADR-0030 … ADR-0038
+- [[v2.0 - Operability]] — ADR-0030 … ADR-0041
 
 (0019–0021 live in the v0.1 log despite the number gap: 0019 was burned by a tried-and-reverted refactor and is reinstated as Rejected rather than reused, and the decisions themselves belong to Foundation's provisioning scope.)
 
@@ -60,3 +60,6 @@ v1.0 has no log — it produced no architecture decisions of its own, only valid
 | 0036 | Grafana and Prometheus exposed internal-only; Grafana's login removed entirely | Accepted | [[v2.0 - Operability]] |
 | 0037 | One Grafana only; Loki wired in as a provisioned datasource | Accepted | [[v2.0 - Operability]] |
 | 0038 | Alloy runs as a single Deployment (API-based log collection), not a DaemonSet | Accepted | [[v2.0 - Operability]] |
+| 0039 | Prometheus discovers ServiceMonitors/PodMonitors cluster-wide, corrected from a scoped default | Accepted | [[v2.0 - Operability]] |
+| 0040 | k3s control-plane component metrics exposed via k3s server args, scraped through hand-authored Endpoints | Accepted | [[v2.0 - Operability]] |
+| 0041 | Third-party Grafana dashboards imported via labeled ConfigMap, not manual UI import | Accepted | [[v2.0 - Operability]] |

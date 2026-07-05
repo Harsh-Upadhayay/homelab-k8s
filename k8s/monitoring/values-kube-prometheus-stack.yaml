@@ -19,6 +19,20 @@
 
 prometheus:
   prometheusSpec:
+    # Chart default (serviceMonitorSelectorNilUsesHelmValues: true, etc.) is
+    # NOT actually the "empty selector, watches everything" behavior an
+    # earlier pass through this file assumed — left unset, the chart scopes
+    # Prometheus to only its own ServiceMonitors (matchLabels: {release:
+    # kube-prometheus-stack}). Confirmed live: Longhorn's and Traefik's own
+    # bundled ServiceMonitors (issue #25) never appeared in Prometheus's
+    # targets or even its generated scrape config until this was set to
+    # false. This is what actually makes selectors empty ({}) and gives
+    # cluster-wide auto-discovery of any ServiceMonitor/PodMonitor, from any
+    # chart, with no additional per-install label needed.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
     retention: 15d
     storageSpec:
       volumeClaimTemplate:
@@ -107,3 +121,33 @@ prometheus-node-exporter:
     requests:
       cpu: 25m
       memory: 32Mi
+
+# k3s runs kube-scheduler/kube-controller-manager/etcd inside its own single
+# binary, not as pods — so the chart's default Service selectors
+# (component: kube-scheduler, etc.) never match anything (issue #25). These
+# endpoints tell the chart's own Services to point at the real node IP
+# instead of discovering pods, once k3s_server's Ansible role (see
+# kube-controller-manager-arg/kube-scheduler-arg/etcd-expose-metrics in
+# config.yaml.j2) has opened each component's metrics listener beyond
+# 127.0.0.1. Single-server cluster today (ADR-0008) — one IP is the whole
+# list; a future HA control plane would add its other members here too.
+kubeControllerManager:
+  endpoints:
+    - 192.168.1.21
+  serviceMonitor:
+    # Self-signed cert from k3s's internal CA, not a publicly-trusted one —
+    # same trust boundary as every other in-cluster TLS hop on this platform.
+    insecureSkipVerify: true
+
+kubeScheduler:
+  endpoints:
+    - 192.168.1.21
+  serviceMonitor:
+    insecureSkipVerify: true
+
+kubeEtcd:
+  endpoints:
+    - 192.168.1.21
+  # No serviceMonitor.scheme/insecureSkipVerify override needed here — etcd's
+  # --etcd-expose-metrics listener is plain HTTP by design (a separate,
+  # unauthenticated metrics-only port, not the mTLS client/peer ports).

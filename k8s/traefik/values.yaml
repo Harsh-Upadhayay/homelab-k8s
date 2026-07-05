@@ -47,3 +47,20 @@ resources:
     memory: 64Mi
   limits:
     memory: 256Mi
+
+metrics:
+  # Prometheus metrics were already on by default (chart default:
+  # metrics.prometheus, entrypoint "metrics", port 9100) — confirmed live via
+  # `wget http://localhost:9100/metrics` inside the pod, 228 traefik_* lines.
+  # What was missing is a way for Prometheus to reach that port at all: the
+  # chart's main Service (this file, above) never included it, and
+  # metrics.prometheus.service.enabled defaults to false. Flipping these two
+  # on adds a second, dedicated metrics Service + a ServiceMonitor that
+  # kube-prometheus-stack's Prometheus picks up automatically (empty
+  # selectors, cluster-wide) — no hand-written Service needed, unlike
+  # dashboard-service.yaml (issue #25).
+  prometheus:
+    service:
+      enabled: true
+    serviceMonitor:
+      enabled: true
