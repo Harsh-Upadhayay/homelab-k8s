@@ -1,0 +1,21 @@
+# Internal-ONLY route for the ArgoCD UI — same shape as Grafana's and
+# Longhorn's routes (websecure entrypoint, *.in name, default TLSStore
+# wildcard cert, reachable only through the traefik-internal Tailscale
+# Service). ArgoCD can trigger cluster-wide syncs and holds no separate
+# guardrail against that besides its own login — it must never get a public
+# (web-entrypoint / Cloudflare) twin.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: argocd-server-internal
+  namespace: argocd
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`argocd.in.neovara.uk`)
+      kind: Rule
+      services:
+        - name: argocd-server # pinned via nameOverride in values.yaml
+          port: 80
+  tls: {} # empty = enable TLS, serve the default TLSStore cert (*.in.neovara.uk)

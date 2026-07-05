@@ -1,0 +1,31 @@
+# Child Application: the first non-ArgoCD component migrated to GitOps
+# management (proof-of-concept for the wider migration tracked in issue
+# #14). Same multi-source split as apps/argocd.yaml. Sync policy is
+# deliberately manual, not automated — this is the first real diff anyone
+# will watch ArgoCD compute against a chart that's been running since Phase
+# 9, and it should be reviewed by hand once before trusting auto-sync here.
+# Flip to automated (prune+selfHeal, matching apps/argocd.yaml) once that
+# first sync is confirmed clean.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: traefik
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://traefik.github.io/charts
+      chart: traefik
+      targetRevision: 41.0.1 # matches the version already live (ADR-0027) — first sync should be a no-op diff
+      helm:
+        valueFiles:
+          - $values/k8s/traefik/values.yaml
+    - repoURL: https://github.com/Harsh-Upadhayay/homelab-k8s.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: traefik
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=false

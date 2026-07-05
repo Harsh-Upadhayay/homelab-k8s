@@ -1,0 +1,31 @@
+# The "app of apps" root. This is the one Application ever applied by hand
+# (`kubectl apply -f`, see GUIDE.md) after the initial bootstrap install —
+# everything else it discovers from k8s/argocd/apps/ in this same repo,
+# including the Application that adopts ArgoCD's own Helm release
+# (apps/argocd.yaml). Add a new component to GitOps management by dropping
+# a new Application manifest in that directory and committing; this root
+# app picks it up automatically (automated sync) without any manual step.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Harsh-Upadhayay/homelab-k8s.git
+    targetRevision: main
+    path: k8s/argocd/apps
+    directory:
+      recurse: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true # removing a child Application file from Git deletes it here too
+      selfHeal: true # revert any manual kubectl edit of a child Application back to Git
+    syncOptions:
+      - CreateNamespace=false

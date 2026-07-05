@@ -1,0 +1,33 @@
+# Child Application: ArgoCD manages its own Helm release. This is the
+# resolution of the bootstrap paradox — the very first install had to be a
+# manual `helm install` (nothing existed yet to sync it), but from here on,
+# bumping the chart version or editing values.yaml and committing is enough;
+# the next reconcile picks it up. Multi-source: one source is the upstream
+# Helm chart, the other is this repo, purely to supply values.yaml — same
+# split every other chart-based Application in apps/ uses.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argocd
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://argoproj.github.io/argo-helm
+      chart: argo-cd
+      targetRevision: 10.1.2 # pinned deliberately, per ADR-0002 — bump as a conscious action, not `latest`
+      helm:
+        valueFiles:
+          - $values/k8s/argocd/values.yaml
+    - repoURL: https://github.com/Harsh-Upadhayay/homelab-k8s.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false

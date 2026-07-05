@@ -1,0 +1,50 @@
+# argo-cd Helm chart values.
+# Bootstrapped once by hand (`helm install`, see GUIDE.md), then adopted by
+# ArgoCD itself as an Application (k8s/argocd/apps/argocd.yaml) — the "app of
+# apps" pattern. From that point on, bumping ArgoCD means editing this file
+# and committing, not running `helm upgrade` again.
+
+# Deterministic component names (argocd-server, argocd-repo-server, ...)
+# instead of the chart's default double-barrelled `<release>-argo-cd-*` —
+# same reasoning as ADR-0035 (Alloy/kube-prometheus-stack fullnameOverride).
+nameOverride: argocd
+
+configs:
+  params:
+    # argocd-server terminates TLS itself by default and redirects http->https.
+    # TLS for this platform already terminates at Traefik's websecure
+    # entrypoint (default TLSStore wildcard cert, same as Grafana/Longhorn) —
+    # a second, self-signed TLS hop inside the cluster adds nothing. Serve
+    # plain HTTP on the internal ClusterIP Service, same pattern as Grafana.
+    server.insecure: true
+
+server:
+  # No public/Cloudflare route, ever — the ArgoCD UI is a control-plane tool
+  # that can trigger cluster-wide syncs. Internal-only via Tailscale, same as
+  # Grafana/Longhorn/Prometheus (ADR-0033, ADR-0036).
+  ingress:
+    enabled: false
+
+redis:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+
+controller:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+
+repoServer:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
