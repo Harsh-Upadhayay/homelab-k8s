@@ -1,0 +1,32 @@
+# The internal front door — the Tailscale counterpart of what cloudflared is
+# for the public path (ADR-0018's "two mechanisms", cluster half).
+#
+# A third Service pointed at the same Traefik pods, claimed by the Tailscale
+# Kubernetes Operator via loadBalancerClass: tailscale. The operator spins up
+# a proxy pod that joins the tailnet as its own device — Traefik becomes
+# reachable at a stable Tailscale IP / MagicDNS name, from tailnet devices
+# only. Exposes ONLY websecure (443 → 8443): internal services are TLS-only,
+# served with the cert-manager wildcard for *.in.neovara.uk (see tlsstore.yaml).
+#
+# tailscale.com/hostname pins the MagicDNS name so the public CNAME
+# (*.in.neovara.uk → traefik-internal.<tailnet>.ts.net) stays valid across
+# proxy re-creation. Note: a cluster rebuild creates a NEW tailnet device —
+# delete the stale "traefik-internal" device in the admin console first, or
+# the new one comes up name-suffixed (traefik-internal-1) and DNS breaks.
+apiVersion: v1
+kind: Service
+metadata:
+  name: traefik-internal
+  namespace: traefik
+  annotations:
+    tailscale.com/hostname: "traefik-internal"
+spec:
+  type: LoadBalancer
+  loadBalancerClass: tailscale
+  selector:
+    app.kubernetes.io/name: traefik
+    app.kubernetes.io/instance: traefik-traefik
+  ports:
+    - name: websecure
+      port: 443
+      targetPort: websecure   # named port on the Traefik pod → 8443 (unprivileged, non-root)

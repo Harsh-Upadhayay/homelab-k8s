@@ -468,6 +468,32 @@ kubectl get svc -n traefik traefik-dashboard
 ```
 Reach it from any tailnet device at the MagicDNS name shown in the Tailscale admin console under Machines. This exact `type: LoadBalancer` + `loadBalancerClass: tailscale` pattern is the one you'll reuse for Grafana and Argo CD's dashboard once those land in a later phase — same two lines on any Service, every time.
 
+**Part C — Internal apps over Tailscale (`*.in.neovara.uk`)** — this is where the Phase 10 wildcard cert finally goes into service, and it completes the cluster half of ADR-0018. The goal: any internal app gets a real HTTPS name like `whoami.in.neovara.uk`, reachable from tailnet devices only, with a browser-trusted cert and no per-app cert or DNS work. Three manifests do it (see ADR-0029 for the full decision):
+
+```bash
+kubectl apply -f k8s/traefik/tailscale-service.yaml     # internal front door
+kubectl apply -f k8s/traefik/tlsstore.yaml              # wildcard cert as Traefik's default
+kubectl apply -f k8s/example-app/ingressroute-internal.yaml   # first internal route
+kubectl get svc -n traefik traefik-internal
+# EXTERNAL-IP fills in with the Tailscale IP + MagicDNS name (~30s) once the operator claims it
+```
+
+- `tailscale-service.yaml` is a *third* Service pointed at the same Traefik pods — the same `loadBalancerClass: tailscale` pattern as the dashboard above, but exposing only `websecure` (443 → the pod's 8443). The operator's proxy pod joins the tailnet as its own device, `traefik-internal` — the internal counterpart of what cloudflared is for the public path.
+- `tlsstore.yaml` exists because an IngressRoute's `tls.secretName` only works from the route's *own* namespace, and the cert lives in `traefik` while app routes live in app namespaces. The one cluster-wide `TLSStore` named `default` hands the wildcard to any route that enables TLS with an empty `tls: {}` — one setting covers every current and future `*.in` app.
+- `ingressroute-internal.yaml` is whoami's second front door (`websecure` entrypoint, `Host(\`whoami.in.neovara.uk\`)`, `tls: {}`) — the public twin `ingressroute.yaml` is untouched.
+
+Then one manual, one-time DNS step in Cloudflare (DNS-only / grey-cloud, **not** proxied — Cloudflare must never sit in this path):
+
+```
+*.in.neovara.uk  CNAME  traefik-internal.<your-tailnet>.ts.net
+```
+
+Counterintuitively, that CNAME target does *not* need to exist in public DNS — and in practice it doesn't (the public ts.net record is NXDOMAIN). It works anyway because a tailnet device resolves through Tailscale's quad-100 resolver, which forwards the query upstream, gets back a CNAME pointing at a MagicDNS name it *itself* owns, and fills in the A record from its own live state. That's better than a hardcoded A record: quad-100 always knows the proxy's current IP (see [[Platform Concepts]] and ADR-0029).
+
+**Verify** from a tailnet device: `curl -v https://whoami.in.neovara.uk` — expect resolution to the proxy's `100.x` IP, `subject: CN=*.in.neovara.uk` with "SSL certificate verify ok" (no `-k`), and a 200 with `X-Forwarded-Proto: https`. Then the negative test: disconnect Tailscale and curl again — it must fail with `Could not resolve host`. Off-tailnet, internal names aren't just unreachable, they're *invisible*.
+
+**Rebuild note:** if the `traefik-internal` Service (or the cluster) is ever recreated, delete the stale `traefik-internal` device in the Tailscale admin console first — otherwise the new proxy joins name-suffixed (`traefik-internal-1`) and the CNAME breaks. The `tailscale.com/hostname` annotation keeps the name (and therefore DNS) valid across rebuilds; the new device's new IP heals automatically via quad-100.
+
 ---
 
 ## Phase 13 — End-to-end validation

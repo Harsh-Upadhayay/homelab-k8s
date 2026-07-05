@@ -1,0 +1,19 @@
+# Wires the cert-manager wildcard cert into Traefik as the default serving
+# certificate. Without this, the cert just sits in the internal-wildcard-tls
+# Secret and nothing serves it.
+#
+# Why a TLSStore instead of tls.secretName on each IngressRoute: Traefik only
+# accepts a secretName from the IngressRoute's OWN namespace, and app routes
+# live in their app namespaces (whoami → default) while the cert lives here in
+# traefik. The TLSStore named "default" (Traefik supports exactly one,
+# cluster-wide) hands the wildcard to ANY IngressRoute that enables TLS with
+# an empty `tls: {}` — since *.in.neovara.uk covers every internal name, one
+# store setting serves all current and future internal apps, no per-app certs.
+apiVersion: traefik.io/v1alpha1
+kind: TLSStore
+metadata:
+  name: default
+  namespace: traefik
+spec:
+  defaultCertificate:
+    secretName: internal-wildcard-tls
