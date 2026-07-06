@@ -1,0 +1,54 @@
+# Child Application: kube-prometheus-stack — the biggest chart on the
+# platform + two companions (the internal-only Grafana and Prometheus
+# IngressRoutes, ADR-0036). Same three-source bundled shape as longhorn /
+# cert-manager. Left for last in the migration order because it's the
+# largest rendered output (most objects to adopt in one diff) and because
+# its companions reach across to other apps — the Grafana IngressRoute
+# targets the `grafana` Service this chart pins via fullnameOverride
+# (ADR-0035), and Loki (a separate Application) is wired in as a Grafana
+# datasource from this chart's values.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kube-prometheus-stack
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: kube-prometheus-stack
+      targetRevision: 87.10.1 # matches the version live since the monitoring phase
+      helm:
+        # skipCrds: ArgoCD renders a chart's crds/ dir by DEFAULT (unlike the
+        # `helm template` CLI, which omits it) — so without this, this app
+        # would try to adopt all 10 monitoring.coreos.com CRDs. We skip them
+        # deliberately, for the same reasons as three separate things already
+        # decided on this platform:
+        #  (1) the CRDs carry full embedded OpenAPI schemas — large enough to
+        #      hit the client-side-apply 256KB ceiling (the same reason
+        #      Traefik's CRDs need server-side apply; see Kubernetes Concepts).
+        #  (2) this chart already ships its OWN CRD-upgrade mechanism (a
+        #      Helm-hook Job, gated by crds.enabled) — Helm's answer to "can't
+        #      upgrade CRDs." Letting Argo also manage them = two owners
+        #      fighting over 10 cluster-scoped schemas.
+        #  (3) repo philosophy (from Traefik): manage CRDs explicitly, OUT of
+        #      the chart's GitOps lifecycle. Same choice here for consistency.
+        # Effect: the 10 CRDs are never in Argo's rendered set → no tracking-id
+        # → immune to prune, invisible to diffs (same safety model as an
+        # unmanaged Secret). They stay live, upgraded out-of-band. The other
+        # ~115 objects migrate normally.
+        skipCrds: true
+        valueFiles:
+          - $values/k8s/monitoring/values-kube-prometheus-stack.yaml
+    - repoURL: https://github.com/Harsh-Upadhayay/homelab-k8s.git
+      targetRevision: main
+      ref: values
+    - repoURL: https://github.com/Harsh-Upadhayay/homelab-k8s.git
+      targetRevision: main
+      path: k8s/monitoring/manifests
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=false
