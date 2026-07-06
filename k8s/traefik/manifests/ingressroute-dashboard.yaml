@@ -22,7 +22,7 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`traefik.in.neovara.uk`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
+    - match: Host(`traefik.in.neovara.uk`)
       kind: Rule
       services:
         - name: api@internal
