@@ -1,0 +1,33 @@
+# Child Application: Longhorn — chart + three companions bundled. The
+# companions (k8s/longhorn/manifests/) are: the hand-written 2-copy
+# `longhorn-replicated` StorageClass (ADR-0030), the internal-only UI
+# IngressRoute (ADR-0033), and the Grafana dashboard ConfigMap (ADR-0041).
+# All three already exist in-cluster from when Longhorn was installed
+# manually — first sync adopts them (tracking-annotation-only diff), same
+# as the Traefik chart adoption was.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: longhorn
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://charts.longhorn.io
+      chart: longhorn
+      targetRevision: 1.12.0 # matches the version live since the storage phase
+      helm:
+        valueFiles:
+          - $values/k8s/longhorn/values.yaml
+    - repoURL: https://github.com/Harsh-Upadhayay/homelab-k8s.git
+      targetRevision: main
+      ref: values
+    - repoURL: https://github.com/Harsh-Upadhayay/homelab-k8s.git
+      targetRevision: main
+      path: k8s/longhorn/manifests
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: longhorn-system
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=false
