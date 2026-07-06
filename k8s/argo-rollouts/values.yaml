@@ -8,6 +8,16 @@
 
 controller:
   replicas: 1
+  # Argo Rollouts' Traefik integration defaults to querying the legacy
+  # traefik.containo.us CRD group (Traefik v2). This cluster runs Traefik
+  # v3, which only registers traefik.io — the RBAC covers both groups, but
+  # the controller's *default* still had to be told which one to actually
+  # use, or every reconcile 404s before touching anything (confirmed via
+  # controller logs: "Reconciling TrafficRouting with type 'Traefik'" /
+  # "the server could not find the requested resource", repeating for every
+  # sync). Source: cmd/rollouts-controller/main.go's --traefik-api-group flag.
+  extraArgs:
+    - --traefik-api-group=traefik.io
   resources:
     requests:
       cpu: 50m
