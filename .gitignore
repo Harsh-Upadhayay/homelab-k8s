@@ -16,3 +16,7 @@ kubeconfig
 # Stray shell redirect artifacts at repo root (caught one holding a live
 # OAuth client secret - never intentional, never meant to be tracked)
 /*.log
+
+# Claude Code worktrees (EnterWorktree) - local scratch checkouts, never meant
+# to be tracked as gitlinks in the main repo's history
+.claude/worktrees/
