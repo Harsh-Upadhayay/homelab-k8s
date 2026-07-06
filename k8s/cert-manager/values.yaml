@@ -1,0 +1,13 @@
+# cert-manager Helm chart values.
+# Until this file existed, cert-manager was installed with a bare
+# `--set crds.enabled=true` and no committed values file at all — the only
+# override that mattered. Promoted to a real file now that the install is
+# moving under GitOps (k8s/argocd/apps/cert-manager.yaml), so the chart
+# renders identically from Git as it does from the live Helm release.
+#
+# CRDs kept inside the chart (gated by this flag) rather than applied
+# separately the way Traefik's are — a per-maintainer convention; see
+# Kubernetes Concepts.md "Two charts, two opposite conventions for the same
+# CRD-lifecycle problem."
+crds:
+  enabled: true

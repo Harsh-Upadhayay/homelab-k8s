@@ -1,0 +1,54 @@
+# Child Application: cert-manager — chart + companions bundled together,
+# with a sync-wave ladder because the companions have a real ordering
+# dependency (unlike cloudflared/loki/alloy, which were order-independent).
+#
+# The dependency chain: chart CRDs + controller (wave 0, the chart's default
+# — it ships no sync-wave annotations) → ClusterIssuers (wave 1, need the
+# CRD stored + the controller running to become Ready) → the wildcard
+# Certificate (wave 2, its issuerRef must resolve against an Issuer). Argo
+# applies wave 0 → waits healthy → wave 1 → waits → wave 2, so by the time
+# the Certificate lands its Issuer is guaranteed to exist. The waves are on
+# the companion manifests themselves (k8s/cert-manager/manifests/), since
+# those are the files we control — the chart's CRDs/controller just ride the
+# default wave 0. (Live today this is an adoption, so the waves matter for a
+# future green-field rebuild and for determinism, not for this first sync.)
+#
+# Cross-namespace: the Certificate's manifest sets namespace: traefik (the
+# cert has to live where Traefik mounts it), even though this Application's
+# destination.namespace is cert-manager. Argo respects an explicit namespace
+# in a manifest over the destination default — so one Application spans two
+# namespaces here, by design.
+#
+# The cloudflare-api-token Secret the Issuers reference is NOT in Git
+# (created imperatively, deferred-secrets policy ADR-0003) — Argo never
+# applied it, so it carries no tracking-id and is immune to pruning, same as
+# cloudflared's tunnel token. The Issuers just reference it.
+#
+# Sync policy is MANUAL for the first sync (adoption review), same as the
+# other migrations — flip to automated once the diff is confirmed clean.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cert-manager
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://charts.jetstack.io
+      chart: cert-manager
+      targetRevision: v1.20.3 # matches the version live since Phase 10 (ADR-0002)
+      helm:
+        valueFiles:
+          - $values/k8s/cert-manager/values.yaml
+    - repoURL: https://github.com/Harsh-Upadhayay/homelab-k8s.git
+      targetRevision: main
+      ref: values # makes $values/... resolvable by the chart source above
+    - repoURL: https://github.com/Harsh-Upadhayay/homelab-k8s.git
+      targetRevision: main
+      path: k8s/cert-manager/manifests # companion objects (ClusterIssuer, Certificate)
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cert-manager
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=false # cert-manager ns already exists

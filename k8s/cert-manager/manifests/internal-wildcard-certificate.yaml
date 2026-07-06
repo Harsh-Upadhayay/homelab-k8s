@@ -14,6 +14,8 @@ kind: Certificate
 metadata:
   name: internal-wildcard-tls
   namespace: traefik
+  annotations:
+    argocd.argoproj.io/sync-wave: "2" # after the ClusterIssuers (wave 1) — its issuerRef must resolve before this is acted on
 spec:
   secretName: internal-wildcard-tls
   issuerRef:

@@ -9,6 +9,8 @@ apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
 metadata:
   name: letsencrypt-staging
+  annotations:
+    argocd.argoproj.io/sync-wave: "1" # after the chart's CRDs + controller (wave 0) — needs both to become Ready
 spec:
   acme:
     server: https://acme-staging-v02.api.letsencrypt.org/directory
@@ -26,6 +28,8 @@ apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
 metadata:
   name: letsencrypt-prod
+  annotations:
+    argocd.argoproj.io/sync-wave: "1" # same wave as staging — both Issuers can be created together, after the controller
 spec:
   acme:
     server: https://acme-v02.api.letsencrypt.org/directory
