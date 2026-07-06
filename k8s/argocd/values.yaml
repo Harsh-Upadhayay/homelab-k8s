@@ -43,7 +43,13 @@ controller:
       cpu: 100m
       memory: 128Mi
     limits:
-      memory: 512Mi
+      # Was 512Mi — the application-controller OOMKilled on a ~hourly loop
+      # (~20 restarts in 22h) once the cluster grew past a few apps; this is
+      # the component that reconciles every Application's live state, so it
+      # spikes on big syncs (kube-prometheus-stack is ~115 objects). 1Gi gives
+      # ~2x headroom; worker-1 (where it schedules) has ~6Gi free, so it's
+      # cheap here. Bump again if it resumes OOMing.
+      memory: 1Gi
   # Feeds the ArgoCD Grafana dashboard (values-kube-prometheus-stack.yaml,
   # gnetId 14584) — no release-label matching needed on the ServiceMonitor
   # side, since Prometheus's selectors are already unset/empty cluster-wide
