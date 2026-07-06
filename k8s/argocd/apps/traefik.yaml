@@ -1,11 +1,11 @@
-# Child Application: the first non-ArgoCD component migrated to GitOps
-# management (proof-of-concept for the wider migration tracked in issue
-# #14). Same multi-source split as apps/argocd.yaml. Sync policy is
-# deliberately manual, not automated — this is the first real diff anyone
-# will watch ArgoCD compute against a chart that's been running since Phase
-# 9, and it should be reviewed by hand once before trusting auto-sync here.
-# Flip to automated (prune+selfHeal, matching apps/argocd.yaml) once that
-# first sync is confirmed clean.
+# Child Application: Traefik — chart + companions bundled. Originally
+# migrated as chart-only (the first proof-of-concept adoption, ADR-0044);
+# the four hand-written companion objects in k8s/traefik/manifests/ (the
+# default TLSStore, the dashboard Service, the tailscale loadBalancer
+# Service, the Grafana dashboard ConfigMap) were left on manual kubectl
+# apply at that time. This third source brings them under the same
+# Application now — they already exist live, so first sync adopts them with
+# a tracking-annotation-only diff, exactly like the chart itself was adopted.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -23,6 +23,9 @@ spec:
     - repoURL: https://github.com/Harsh-Upadhayay/homelab-k8s.git
       targetRevision: main
       ref: values
+    - repoURL: https://github.com/Harsh-Upadhayay/homelab-k8s.git
+      targetRevision: main
+      path: k8s/traefik/manifests # companion objects (TLSStore, Services, dashboard ConfigMap)
   destination:
     server: https://kubernetes.default.svc
     namespace: traefik
