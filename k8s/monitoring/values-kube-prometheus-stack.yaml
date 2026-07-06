@@ -70,6 +70,16 @@ grafana:
   # a post-install `kubectl get svc` lookup to fill in, on this cluster or a
   # rebuilt one.
   fullnameOverride: grafana
+  # Admin credentials pinned to an externally-managed Secret instead of the
+  # chart's default (a random password generated once, then left alone —
+  # which ArgoCD and Helm each think they own, fighting every sync). Secret
+  # created imperatively (`kubectl create secret`), never committed, per this
+  # repo's secrets convention. Setting existingSecret makes the chart skip
+  # rendering Secret/grafana entirely, so there's nothing left to drift.
+  admin:
+    existingSecret: grafana-admin-secret
+    userKey: admin-user
+    passwordKey: admin-password
   persistence:
     enabled: true
     storageClassName: longhorn
