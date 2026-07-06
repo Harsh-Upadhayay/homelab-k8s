@@ -1,0 +1,29 @@
+# Child Application: Alloy — chart only, no companions. Same shape as loki.
+# Alloy depends on Loki at runtime (it pushes logs to the `loki` Service),
+# but that's a runtime dependency, not a GitOps/sync-order one — neither app
+# needs the other to exist before it syncs. Argo doesn't order syncs across
+# Applications by default; if it ever did matter, that's what sync-waves
+# (annotations) are for, not needed here.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: alloy
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://grafana.github.io/helm-charts
+      chart: alloy
+      targetRevision: 1.10.0 # matches the version live since the monitoring phase
+      helm:
+        valueFiles:
+          - $values/k8s/monitoring/values-alloy.yaml
+    - repoURL: https://github.com/Harsh-Upadhayay/homelab-k8s.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=false
