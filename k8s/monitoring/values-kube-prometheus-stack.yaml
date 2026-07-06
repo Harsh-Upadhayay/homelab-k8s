@@ -116,6 +116,12 @@ grafana:
   additionalDataSources:
     - name: Loki
       type: loki
+      # Pinned uid (default is Grafana-generated, e.g. P8E80F9AEF21F6940) so
+      # the mixin dashboards below can substitute a known, stable value into
+      # their {type, uid} datasource fields — see the loki/alloy dashboard
+      # notes. The kube-prometheus-stack Prometheus datasource uses uid
+      # "prometheus" the same way (its own provisioning ConfigMap).
+      uid: loki
       access: proxy
       url: http://loki:3100 # the pinned Service name from values-loki.yaml
       isDefault: false
@@ -191,11 +197,14 @@ grafana:
         # This is the real upstream source: the "Operational" dashboard from
         # Loki's own mixin, compiled and committed straight to the loki repo,
         # pinned to the exact appVersion live (values-loki.yaml, chart 7.0.0
-        # -> appVersion 3.6.7). Flat `"datasource": "$datasource"` /
-        # `"$loki_datasource"` schema (Grafana Labs' standard mixin
-        # convention — same shape Alloy's mixin uses below), so this is
-        # name-based like the four Prometheus-only dashboards above, just
-        # with two names to substitute instead of one.
+        # -> appVersion 3.6.7). The two `datasource`-typed template variables
+        # ($datasource, $loki_datasource) carry {type, uid} objects, so the
+        # substituted `value` has to be each datasource's real UID
+        # (lowercase "prometheus"; "loki" — the uid pinned on the Loki
+        # datasource above), NOT its display name. An earlier pass used the
+        # display names ("Prometheus"/"Loki") here and every panel read "No
+        # data" — Grafana had no datasource with uid "Prometheus". Same
+        # lesson as cert-manager/cloudflared.
         # ~15 of its 106 panels (percentile latency) depend on recording
         # rules this platform doesn't install (monitoring.rules in
         # values-loki.yaml stays off — that's alerting-policy scope, not
@@ -203,9 +212,9 @@ grafana:
         url: https://raw.githubusercontent.com/grafana/loki/v3.6.7/production/loki-mixin-compiled/dashboards/loki-operational.json
         datasource:
           - name: datasource
-            value: Prometheus
+            value: prometheus
           - name: loki_datasource
-            value: Loki
+            value: loki
       alloy:
         # Same situation as Loki above: no grafana.com gnetId, real upstream
         # is the alloy-mixin compiled straight into grafana/alloy's own repo.
@@ -213,17 +222,22 @@ grafana:
         # (alloy-cluster-overview.json) — this platform runs one Alloy
         # Deployment replica with clustering not configured, so there's no
         # cluster to overview. Pinned to the exact appVersion live
-        # (values-alloy.yaml, chart 1.10.0 -> appVersion v1.17.0). One
-        # panel (the "filters" ad-hoc variable) uses the newer {type, uid}
-        # object form and won't resolve (its uid ends up "Prometheus", not
-        # the real lowercase "prometheus") — harmless, it's an optional
-        # ad-hoc filter dropdown, not a data panel.
+        # (values-alloy.yaml, chart 1.10.0 -> appVersion v1.17.0). Its
+        # $datasource / $loki_datasource template variables carry {type, uid}
+        # objects, so `value` must be the real lowercase UID ("prometheus";
+        # "loki") not the display name — an earlier pass used "Prometheus"
+        # here and every panel read "No data" (no datasource has uid
+        # "Prometheus"). Same lesson as cert-manager/cloudflared/loki. The
+        # "filters" ad-hoc variable is the one exception that stays broken:
+        # it hardcodes uid "${datasource}" inside its own {type, uid} object
+        # which the value-substitution doesn't reach — harmless, it's an
+        # optional filter dropdown, not a data panel.
         url: https://raw.githubusercontent.com/grafana/alloy/v1.17.0/operations/alloy-mixin/rendered/dashboards/alloy-resources.json
         datasource:
           - name: datasource
-            value: Prometheus
+            value: prometheus
           - name: loki_datasource
-            value: Loki
+            value: loki
       cloudflared:
         # https://grafana.com/grafana/dashboards/24874-cloudflare-tunnel/
         # Newer {type, uid} schema like cert-manager above — value is the
