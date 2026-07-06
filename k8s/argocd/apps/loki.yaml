@@ -1,0 +1,28 @@
+# Child Application: Loki — chart only, no companions. Same two-source shape
+# as the original traefik.yaml (chart + values-ref), the simplest chart-based
+# migration. Loki writes nothing that needs a hand-written companion object
+# (its IngressRoute lives with kube-prometheus-stack's companions, since it's
+# Grafana that consumes Loki, not the other way round).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: loki
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://grafana.github.io/helm-charts
+      chart: loki
+      targetRevision: 7.0.0 # matches the version live since the monitoring phase
+      helm:
+        valueFiles:
+          - $values/k8s/monitoring/values-loki.yaml
+    - repoURL: https://github.com/Harsh-Upadhayay/homelab-k8s.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=false
