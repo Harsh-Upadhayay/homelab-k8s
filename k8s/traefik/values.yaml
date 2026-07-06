@@ -39,7 +39,10 @@ providers:
 
 ingressRoute:
   dashboard:
-    enabled: false     # dashboard IngressRoute not needed — reached via Tailscale instead, see Phase 12
+    enabled: false     # chart's built-in dashboard IngressRoute stays off — we use a
+                       # hand-written one (manifests/ingressroute-dashboard.yaml) on
+                       # traefik.in.neovara.uk, matching every other internal dashboard's
+                       # pattern, reached through the traefik-internal front door
 
 resources:
   requests:

@@ -1,0 +1,30 @@
+# Internal-ONLY route for the Traefik dashboard — same shape as every other
+# operator dashboard on this platform (Grafana, Longhorn, ArgoCD): websecure
+# entrypoint, *.in name, default TLSStore wildcard cert, reachable only
+# through the traefik-internal Tailscale Service. Replaces the earlier
+# standalone `traefik-dashboard` tailscale LoadBalancer (a separate tailnet
+# device) — which was written but never actually applied — folding the
+# dashboard into the one consistent internal front door instead.
+#
+# The target is `api@internal`, NOT a normal Service: with api.insecure:false
+# (see values.yaml) Traefik does not serve the dashboard as raw HTTP on any
+# port — it's only reachable via a route referencing Traefik's own synthetic
+# api@internal service. `kind: TraefikService` is how an IngressRoute names
+# that internal service. The matchRule mirrors the Traefik chart's own
+# default dashboard route (PathPrefix /dashboard + /api), so both the UI and
+# the API it calls are served under the one host.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: traefik-dashboard-internal
+  namespace: traefik
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`traefik.in.neovara.uk`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
+      kind: Rule
+      services:
+        - name: api@internal
+          kind: TraefikService
+  tls: {} # empty = enable TLS, serve the default TLSStore cert (*.in.neovara.uk)
