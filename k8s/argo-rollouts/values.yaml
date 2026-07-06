@@ -1,0 +1,37 @@
+# argo-rollouts Helm chart values.
+# Controller + CRDs (Rollout, AnalysisTemplate, AnalysisRun, Experiment).
+# No Rollout object exists yet to canary, since no real app is deployed
+# beyond the throwaway whoami example — the canary/blue-green example (a
+# Rollout + TraefikService, weighted steps) is deferred to whenever the
+# first real app lands (issue #26); Traefik's integration needs no plugin,
+# just the TraefikService CRD Traefik already ships (native support).
+
+controller:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+
+dashboard:
+  enabled: true
+  # Full (read-write) access, deliberately: readonly:false keeps the
+  # promote/abort/retry buttons live in the UI, matching every other
+  # operator dashboard on this platform (Grafana, Longhorn, ArgoCD) which
+  # are all full-access behind the same gate. That gate is network position,
+  # not the app's own auth: the dashboard ships with NO authentication of its
+  # own (same as Longhorn's UI, ADR-0033), and is reachable ONLY through the
+  # traefik-internal Tailscale front door via manifests/ingressroute.yaml —
+  # off-tailnet the name doesn't even resolve. If the tailnet is ever shared
+  # with other users, revisit (readonly:true, or real auth), same caveat as
+  # ADR-0033.
+  readonly: false
+  createClusterRole: true # dashboard needs cluster-wide read RBAC to see Rollouts in every namespace
+  resources:
+    requests:
+      cpu: 25m
+      memory: 32Mi
+    limits:
+      memory: 128Mi

@@ -1,0 +1,41 @@
+# Child Application: Argo Rollouts controller + CRDs + dashboard, with the
+# dashboard's internal IngressRoute companion. Unlike argocd.yaml
+# (self-management, had to bootstrap first) and traefik.yaml (adopting an
+# already-live release), this component has no bootstrap paradox and
+# nothing pre-existing to adopt — it goes straight into GitOps management
+# from the first commit. CreateNamespace=true because, for the first time,
+# there's no manually-applied namespace.yaml preceding this Application;
+# root's automated sync creates everything, including the namespace itself.
+#
+# Three sources: the chart, this repo's values (ref), and this repo's
+# manifests/ dir (the dashboard IngressRoute — a companion the chart doesn't
+# render, same path-source pattern as traefik/longhorn/cert-manager).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argo-rollouts
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://argoproj.github.io/argo-helm
+      chart: argo-rollouts
+      targetRevision: 2.41.0 # pinned per ADR-0002, current stable per Artifact Hub
+      helm:
+        valueFiles:
+          - $values/k8s/argo-rollouts/values.yaml
+    - repoURL: https://github.com/Harsh-Upadhayay/homelab-k8s.git
+      targetRevision: main
+      ref: values
+    - repoURL: https://github.com/Harsh-Upadhayay/homelab-k8s.git
+      targetRevision: main
+      path: k8s/argo-rollouts/manifests # dashboard IngressRoute
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argo-rollouts
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
