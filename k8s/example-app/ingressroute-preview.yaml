@@ -1,0 +1,20 @@
+# Direct, internal-only route to the blueGreen preview Service (issue #26)
+# — lets you inspect the new version at full replica count before promoting,
+# instead of guessing from a blended weighted stream like canary's model.
+# Same shape as ingressroute-internal.yaml, but a distinct host and pointed
+# at whoami-canary (the previewService) instead of whoami-stable (active).
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: whoami-preview
+  namespace: default
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`whoami-preview.in.neovara.uk`)
+      kind: Rule
+      services:
+        - name: whoami-canary
+          port: 80
+  tls: {}   # empty = enable TLS, serve the default TLSStore cert (*.in.neovara.uk)

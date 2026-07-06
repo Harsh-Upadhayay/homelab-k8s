@@ -1,7 +1,27 @@
+# Services for the whoami Rollout (issue #26) — names are historical (created
+# during the canary experiment), now serving blueGreen's active/preview roles
+# (see rollout.yaml). The Rollout controller owns these selectors at runtime —
+# it injects a rollouts-pod-template-hash label on each one so whoami-stable
+# (active) always tracks the last-promoted ReplicaSet and whoami-canary
+# (preview) the one awaiting promotion. `app: whoami` below is just the base
+# selector; don't hand-edit it once the Rollout exists.
 apiVersion: v1
 kind: Service
 metadata:
-  name: whoami
+  name: whoami-stable
+  namespace: default
+spec:
+  type: ClusterIP
+  selector:
+    app: whoami
+  ports:
+    - port: 80
+      targetPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: whoami-canary
   namespace: default
 spec:
   type: ClusterIP

@@ -16,6 +16,6 @@ spec:
     - match: Host(`whoami.in.neovara.uk`)
       kind: Rule
       services:
-        - name: whoami
+        - name: whoami-stable
           port: 80
   tls: {}   # empty = enable TLS, serve the default TLSStore cert (*.in.neovara.uk)

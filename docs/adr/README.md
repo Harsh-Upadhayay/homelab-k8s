@@ -12,7 +12,7 @@ The Ansible/Terraform/Kubernetes/platform *mechanics* these decisions rely on li
 - [[v0.2 - Cluster Bootstrap]] — ADR-0008 … ADR-0012
 - [[v0.3 - Ingress and TLS]] — ADR-0013 … ADR-0015, ADR-0027
 - [[v0.4 - Public and Private Access]] — ADR-0016 … ADR-0018, ADR-0025 … ADR-0026, ADR-0028 … ADR-0029
-- [[v2.0 - Operability]] — ADR-0030 … ADR-0046
+- [[v2.0 - Operability]] — ADR-0030 … ADR-0047
 
 (0019–0021 live in the v0.1 log despite the number gap: 0019 was burned by a tried-and-reverted refactor and is reinstated as Rejected rather than reused, and the decisions themselves belong to Foundation's provisioning scope.)
 
@@ -68,3 +68,4 @@ v1.0 has no log — it produced no architecture decisions of its own, only valid
 | 0044 | Existing apps migrate to ArgoCD one at a time, via multi-source Applications, manual sync before automated | Accepted | [[v2.0 - Operability]] |
 | 0045 | Argo Rollouts added as a GitOps-native app; no bootstrap paradox, nothing to adopt | Accepted | [[v2.0 - Operability]] |
 | 0046 | Complete the GitOps migration: all remaining apps + companions, one at a time; tailscale-operator deferred on secrets policy | Accepted | [[v2.0 - Operability]] |
+| 0047 | whoami repurposed as the Rollout exercise app; Traefik API group pinned; canary swapped for blueGreen | Accepted | [[v2.0 - Operability]] |

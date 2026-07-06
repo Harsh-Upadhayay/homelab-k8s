@@ -1,8 +1,12 @@
-# Minimal known-good app for proving the whole path works before you
-# deploy anything real. traefik/whoami just echoes request headers back —
-# useful for confirming routing, not meant to stay deployed long-term.
-apiVersion: apps/v1
-kind: Deployment
+# Rollout: blueGreen strategy — full cutover model, swapped in from canary
+# (issue #26) specifically to get a direct, un-weighted preview endpoint.
+# The new revision scales to its FULL replica count behind previewService
+# before any traffic decision is made; activeService keeps 100% of real
+# traffic untouched until an explicit promote, which is an instant selector
+# flip (not a gradual shift like canary's). No TraefikService/weighted
+# valve needed — blueGreen only ever swaps a plain Service's selector.
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
 metadata:
   name: whoami
   namespace: default
@@ -21,3 +25,14 @@ spec:
           image: traefik/whoami
           ports:
             - containerPort: 80
+  strategy:
+    blueGreen:
+      # Service names are historical (created during the canary experiment);
+      # roles are reassigned here rather than renaming the objects.
+      # whoami-stable = active (100% of real traffic).
+      # whoami-canary = preview (full-scale, inspect directly before
+      # promoting — see ingressroute-preview.yaml).
+      activeService: whoami-stable
+      previewService: whoami-canary
+      autoPromotionEnabled: false
+      scaleDownDelaySeconds: 30

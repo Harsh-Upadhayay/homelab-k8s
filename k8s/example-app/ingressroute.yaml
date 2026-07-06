@@ -3,6 +3,11 @@
 # Traefik watches for objects like this one; nothing else needs to change
 # when you add app #2, #3, etc. — just another IngressRoute pointing at
 # another Service.
+#
+# Points at whoami-stable — the Rollout's activeService (issue #26,
+# blueGreen strategy). No TraefikService valve needed here: blueGreen
+# doesn't blend traffic by weight, it swaps this Service's selector
+# entirely on promote, so a plain Service is the right target again.
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
@@ -15,5 +20,5 @@ spec:
     - match: Host(`whoami.neovara.uk`)   # first-level: covered by Cloudflare's free Universal SSL (*.neovara.uk); a specific record overrides the legacy wildcard for just this name
       kind: Rule
       services:
-        - name: whoami
+        - name: whoami-stable
           port: 80
