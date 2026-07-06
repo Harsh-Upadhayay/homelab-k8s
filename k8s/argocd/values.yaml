@@ -24,6 +24,10 @@ server:
   # Grafana/Longhorn/Prometheus (ADR-0033, ADR-0036).
   ingress:
     enabled: false
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
 
 redis:
   resources:
@@ -40,6 +44,14 @@ controller:
       memory: 128Mi
     limits:
       memory: 512Mi
+  # Feeds the ArgoCD Grafana dashboard (values-kube-prometheus-stack.yaml,
+  # gnetId 14584) — no release-label matching needed on the ServiceMonitor
+  # side, since Prometheus's selectors are already unset/empty cluster-wide
+  # (see serviceMonitorSelectorNilUsesHelmValues in that same file).
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
 
 repoServer:
   resources:
@@ -48,3 +60,13 @@ repoServer:
       memory: 64Mi
     limits:
       memory: 256Mi
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+
+applicationSet:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
