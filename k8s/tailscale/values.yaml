@@ -1,0 +1,23 @@
+# Tailscale Kubernetes Operator — Helm values (chart tailscale/tailscale-operator).
+# Consumed by k8s/argocd/apps/tailscale.yaml as $values/k8s/tailscale/values.yaml.
+# See GUIDE.md Phase 12 for the OAuth client + ACL tag setup this depends on.
+#
+# OAuth is deliberately ABSENT here (deferred-secrets policy, ADR-0003): the
+# chart only templates its own operator-oauth Secret when oauth.clientSecret is
+# set — with it omitted the chart templates no Secret and the operator Pod just
+# mounts a pre-existing `operator-oauth` Secret (keys client_id/client_secret)
+# by name. That Secret was created imperatively (`kubectl create secret`), carries
+# no Argo tracking-id, and is therefore immune to pruning — same shape as
+# cloudflared's tunnel token and cert-manager's cloudflare-api-token.
+
+apiServerProxyConfig:
+  # Lets you reach the Kubernetes API server over the tailnet without ever
+  # exposing 6443 publicly or needing a separate subnet-router route just
+  # for the API. `tailscale configure kubeconfig <operator-magicdns-name>`
+  # from any device on your tailnet is all that's needed afterward.
+  mode: "true"
+
+operatorConfig:
+  # Reasonable default; bump to "debug" temporarily if something's not
+  # joining the tailnet as expected.
+  logging: info

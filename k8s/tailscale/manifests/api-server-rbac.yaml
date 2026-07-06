@@ -12,6 +12,11 @@
 # homelab (no other tailnet users), so there's no meaningful distinction
 # between "the owner" and "an admin" here — matches the same reasoning
 # already applied to Longhorn's replicas=1 and the no-HA decisions.
+#
+# GitOps: managed by the `tailscale` Application (k8s/argocd/apps/tailscale.yaml).
+# This binding has no ProxyClass/CRD dependency, so it rides the default sync
+# wave 0 alongside the chart. On first sync Argo adopts the already-live object
+# with a tracking-annotation-only diff.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:

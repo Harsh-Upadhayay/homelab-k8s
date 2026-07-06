@@ -9,23 +9,22 @@
 #
 # Scope: this only instruments the ONE proxy that references it (the
 # traefik-internal LoadBalancer's tailscale device) — not the operator
-# control-plane pod itself (operator-bd7788cb7-... in this namespace), which
-# has no native Prometheus endpoint of its own. Upstream marks this feature
+# control-plane pod itself (operator-... in this namespace), which has no
+# native Prometheus endpoint of its own. Upstream marks this feature
 # "currently unstable, recommended for debugging purposes" (ProxyClass CRD
 # description) — single-stack cluster here (10.42.0.0/24 etc, confirmed via
 # `kubectl get nodes -o jsonpath='{.spec.podCIDRs}'`), so the known dual-stack
 # ProxyClass-metrics bug (tailscale/tailscale#15467) doesn't apply.
 #
-# NOT wired into GitOps: the Tailscale operator itself is still a manual
-# `helm upgrade -f operator-values.yaml` install (no k8s/argocd/apps/
-# tailscale.yaml exists), so this manifest needs `kubectl apply -f` by hand,
-# same as the rest of k8s/tailscale/. Apply this before (or alongside) the
-# traefik app's next sync — if the annotation lands first, the operator just
-# waits for the ProxyClass to appear rather than erroring.
+# GitOps: managed by the `tailscale` Application (k8s/argocd/apps/tailscale.yaml)
+# as a sync-wave-1 companion — the chart installs the ProxyClass CRD at wave 0,
+# so this custom resource lands only after its CRD is stored.
 apiVersion: tailscale.com/v1alpha1
 kind: ProxyClass
 metadata:
   name: monitoring
+  annotations:
+    argocd.argoproj.io/sync-wave: "1" # after the chart's CRDs (wave 0)
 spec:
   metrics:
     enable: true

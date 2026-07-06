@@ -1,0 +1,56 @@
+# Child Application: Tailscale Operator — chart + companions bundled, the last
+# manually-installed component brought under GitOps. The operator was a hand-run
+# `helm upgrade -f operator-values.yaml` install (chart tailscale-operator,
+# release name `tailscale-operator`, ADR-0025/0026, Phase 12 Part B); this
+# Application adopts that exact release plus the two hand-applied companion
+# objects in k8s/tailscale/manifests/ (the monitoring ProxyClass and the
+# api-server-proxy ClusterRoleBinding).
+#
+# Release name MUST stay `tailscale-operator`: the chart names its ClusterRole
+# and ClusterRoleBinding after the release, so a rename would orphan the live
+# RBAC. Argo derives the Helm release name from metadata.name of this
+# Application (`tailscale`) unless told otherwise — so releaseName is pinned
+# explicitly below to match what's already installed and keep first sync a
+# tracking-annotation-only no-op diff.
+#
+# OAuth secret is NOT in Git (deferred-secrets policy, ADR-0003): the live
+# `operator-oauth` Secret (keys client_id/client_secret) was created
+# imperatively and the chart mounts it by name. With oauth.* omitted from
+# values.yaml the chart templates no Secret of its own, so Argo never manages
+# it and never prunes it — same pattern as cloudflared's tunnel token.
+#
+# Sync-wave ordering (same rationale as cert-manager): the chart's CRDs +
+# operator ride the default wave 0; the ClusterRoleBinding also rides wave 0
+# (no CRD dependency); the ProxyClass is annotated wave 1 so it applies only
+# after its proxyclasses.tailscale.com CRD is stored. Live today this is an
+# adoption so the wave matters mainly for a future green-field rebuild.
+#
+# Sync policy is MANUAL for the first sync (adoption review), same as the other
+# migrations — flip to automated once the diff is confirmed clean.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tailscale
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://pkgs.tailscale.com/helmcharts
+      chart: tailscale-operator
+      targetRevision: 1.98.4 # matches the version already live (Phase 12 Part B) — first sync should be a no-op diff
+      helm:
+        releaseName: tailscale-operator # pin to the existing release name (chart names RBAC after it)
+        valueFiles:
+          - $values/k8s/tailscale/values.yaml
+    - repoURL: https://github.com/Harsh-Upadhayay/homelab-k8s.git
+      targetRevision: main
+      ref: values # makes $values/... resolvable by the chart source above
+    - repoURL: https://github.com/Harsh-Upadhayay/homelab-k8s.git
+      targetRevision: main
+      path: k8s/tailscale/manifests # companion objects (ProxyClass, ClusterRoleBinding)
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: tailscale
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=false # tailscale ns already exists
