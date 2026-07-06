@@ -1,0 +1,34 @@
+# Child Application: cloudflared — the simplest possible GitOps shape.
+# Unlike every other app here, cloudflared has NO Helm chart: it's three
+# plain manifests (namespace, deployment, networkpolicy) written by hand
+# and applied with kubectl since Phase 11. So this Application has a single
+# source — a directory path, no chart, no values file. This is the shape to
+# reach for for anything hand-written (the cert-manager companion objects
+# and every IngressRoute follow the same model, just bundled with a chart).
+#
+# The TUNNEL_TOKEN Secret (cloudflared-tunnel-token) is deliberately NOT
+# here: it's created imperatively (kubectl create secret) and stays out of
+# Git per the deferred-secrets policy (ADR-0003). Argo never owns it, so
+# prune/selfHeal can't touch it — the Deployment just references it via
+# secretKeyRef, same as Traefik references the wildcard cert Secret.
+#
+# No values.yaml in k8s/cloudflared/, so the path source can point at the
+# directory directly — no manifests/ subdir needed (unlike the chart apps,
+# where values.yaml would otherwise be parsed as a manifest and choke).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cloudflared
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://github.com/Harsh-Upadhayay/homelab-k8s.git
+      targetRevision: main
+      path: k8s/cloudflared
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cloudflare
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=false # cloudflare ns already exists
