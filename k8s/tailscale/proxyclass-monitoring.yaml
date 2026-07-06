@@ -1,0 +1,33 @@
+# Opts the traefik-internal proxy (k8s/traefik/manifests/tailscale-service.yaml,
+# annotated tailscale.com/proxy-class: monitoring) into the operator's native
+# Tailscale client metrics: :9002/metrics on the proxy pod, plus a
+# <statefulset>-metrics Service in the tailscale namespace that
+# kube-prometheus-stack's Prometheus picks up automatically via the
+# ServiceMonitor below (empty selectors, cluster-wide — same as every other
+# ServiceMonitor on this platform). Feeds the "Tailscale / Machine" Grafana
+# dashboard (gnetId 24178, values-kube-prometheus-stack.yaml).
+#
+# Scope: this only instruments the ONE proxy that references it (the
+# traefik-internal LoadBalancer's tailscale device) — not the operator
+# control-plane pod itself (operator-bd7788cb7-... in this namespace), which
+# has no native Prometheus endpoint of its own. Upstream marks this feature
+# "currently unstable, recommended for debugging purposes" (ProxyClass CRD
+# description) — single-stack cluster here (10.42.0.0/24 etc, confirmed via
+# `kubectl get nodes -o jsonpath='{.spec.podCIDRs}'`), so the known dual-stack
+# ProxyClass-metrics bug (tailscale/tailscale#15467) doesn't apply.
+#
+# NOT wired into GitOps: the Tailscale operator itself is still a manual
+# `helm upgrade -f operator-values.yaml` install (no k8s/argocd/apps/
+# tailscale.yaml exists), so this manifest needs `kubectl apply -f` by hand,
+# same as the rest of k8s/tailscale/. Apply this before (or alongside) the
+# traefik app's next sync — if the annotation lands first, the operator just
+# waits for the ProxyClass to appear rather than erroring.
+apiVersion: tailscale.com/v1alpha1
+kind: ProxyClass
+metadata:
+  name: monitoring
+spec:
+  metrics:
+    enable: true
+    serviceMonitor:
+      enable: true

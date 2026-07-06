@@ -146,6 +146,108 @@ grafana:
         gnetId: 14584
         revision: 1
         datasource: Prometheus
+      cert-manager:
+        # https://grafana.com/grafana/dashboards/20850-cert-manager/
+        # Newer dashboard schema (schemaVersion 39): datasource is a
+        # {type, uid} object, not the flat string the four dashboards above
+        # use — so the plain `datasource: Prometheus` mechanism (a blunt
+        # `"datasource":.*,` -> literal-string replace, confirmed against
+        # this chart's own download script) never matches it, and the *value*
+        # has to be the datasource's real uid ("prometheus", lowercase — see
+        # kube-prometheus-stack-grafana-datasource ConfigMap) rather than its
+        # display name. List form does a plain `${name}` token replace
+        # instead, wherever it appears in the raw JSON.
+        gnetId: 20850
+        revision: 1
+        datasource:
+          - name: datasource
+            value: prometheus
+      argo-rollouts:
+        # Deliberately NOT grafana.com's "k8s-argo-rollout" (gnetId 15386,
+        # top hit by name) — its panels query istio_requests_total /
+        # istio_tcp_*_bytes_total, an Istio dashboard mislabeled with this
+        # project's name, caught only by reading its raw JSON rather than
+        # trusting the title. This is Argo Rollouts' own example dashboard
+        # from its GitHub repo (the real upstream source, not on grafana.com
+        # at all), pinned to the exact appVersion live (argo-rollouts
+        # values.yaml, chart 2.41.0 -> appVersion v1.9.0) — old-style flat
+        # `"datasource": "$datasource"` schema, same substitution mechanism
+        # as traefik/longhorn/argocd above.
+        url: https://raw.githubusercontent.com/argoproj/argo-rollouts/v1.9.0/examples/dashboard.json
+        datasource: Prometheus
+      loki:
+        # grafana.com has no official Loki gnetId upload (the marketplace
+        # results under "Loki" are all third-party log-viewer dashboards).
+        # This is the real upstream source: the "Operational" dashboard from
+        # Loki's own mixin, compiled and committed straight to the loki repo,
+        # pinned to the exact appVersion live (values-loki.yaml, chart 7.0.0
+        # -> appVersion 3.6.7). Flat `"datasource": "$datasource"` /
+        # `"$loki_datasource"` schema (Grafana Labs' standard mixin
+        # convention — same shape Alloy's mixin uses below), so this is
+        # name-based like the four Prometheus-only dashboards above, just
+        # with two names to substitute instead of one.
+        # ~15 of its 106 panels (percentile latency) depend on recording
+        # rules this platform doesn't install (monitoring.rules in
+        # values-loki.yaml stays off — that's alerting-policy scope, not
+        # metrics-enablement) and will read "No data" until/unless added.
+        url: https://raw.githubusercontent.com/grafana/loki/v3.6.7/production/loki-mixin-compiled/dashboards/loki-operational.json
+        datasource:
+          - name: datasource
+            value: Prometheus
+          - name: loki_datasource
+            value: Loki
+      alloy:
+        # Same situation as Loki above: no grafana.com gnetId, real upstream
+        # is the alloy-mixin compiled straight into grafana/alloy's own repo.
+        # "Resources" (CPU/memory/component health) rather than "Cluster"
+        # (alloy-cluster-overview.json) — this platform runs one Alloy
+        # Deployment replica with clustering not configured, so there's no
+        # cluster to overview. Pinned to the exact appVersion live
+        # (values-alloy.yaml, chart 1.10.0 -> appVersion v1.17.0). One
+        # panel (the "filters" ad-hoc variable) uses the newer {type, uid}
+        # object form and won't resolve (its uid ends up "Prometheus", not
+        # the real lowercase "prometheus") — harmless, it's an optional
+        # ad-hoc filter dropdown, not a data panel.
+        url: https://raw.githubusercontent.com/grafana/alloy/v1.17.0/operations/alloy-mixin/rendered/dashboards/alloy-resources.json
+        datasource:
+          - name: datasource
+            value: Prometheus
+          - name: loki_datasource
+            value: Loki
+      cloudflared:
+        # https://grafana.com/grafana/dashboards/24874-cloudflare-tunnel/
+        # Newer {type, uid} schema like cert-manager above — value is the
+        # real lowercase datasource uid, not the display name.
+        gnetId: 24874
+        revision: 4
+        datasource:
+          - name: DS_PROMETHEUS
+            value: prometheus
+      tailscale:
+        # https://grafana.com/grafana/dashboards/24178-tailscale-machine/
+        # Feeds off the ProxyClass in k8s/tailscale/proxyclass-monitoring.yaml
+        # — only the traefik-internal proxy is instrumented, so this dashboard
+        # has a fleet of one. Its $cluster filter variable lists no options:
+        # this single-cluster stack has no "cluster" label anywhere
+        # (kube-prometheus-stack doesn't relabel one in — that's a Thanos /
+        # Grafana Cloud remote-write convention, not a local one). The
+        # dashboard filters with EXACT equality (cluster="$cluster"), not
+        # regex — verified by reading its raw JSON, all 28 panels. That still
+        # resolves: with no options the variable is empty, and PromQL
+        # cluster="" matches series where the label is absent entirely, so
+        # panels populate. Same {type, uid} schema as cert-manager/cloudflared.
+        # CAVEAT: the ProxyClass metrics path is upstream-"unstable" (see
+        # proxyclass-monitoring.yaml) and brand-new here, so confirm these
+        # panels actually render after the first apply. If a variable
+        # defaults to $__all instead of empty (a literal-string mismatch that
+        # reads "No data"), the fix is a relabel_configs on the operator-
+        # generated ServiceMonitor adding a cluster label — NOT a dashboard
+        # swap.
+        gnetId: 24178
+        revision: 4
+        datasource:
+          - name: datasource
+            value: prometheus
 
 kubeStateMetrics:
   resources:

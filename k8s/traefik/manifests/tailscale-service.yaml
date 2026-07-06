@@ -13,6 +13,11 @@
 # proxy re-creation. Note: a cluster rebuild creates a NEW tailnet device —
 # delete the stale "traefik-internal" device in the admin console first, or
 # the new one comes up name-suffixed (traefik-internal-1) and DNS breaks.
+#
+# tailscale.com/proxy-class opts this proxy into the ProxyClass in
+# k8s/tailscale/proxyclass-monitoring.yaml (client metrics + ServiceMonitor)
+# — see that file for the full reasoning. Requires the ProxyClass to exist
+# first (applied by hand; the tailscale operator isn't GitOps-managed yet).
 apiVersion: v1
 kind: Service
 metadata:
@@ -20,6 +25,7 @@ metadata:
   namespace: traefik
   annotations:
     tailscale.com/hostname: "traefik-internal"
+    tailscale.com/proxy-class: "monitoring"
 spec:
   type: LoadBalancer
   loadBalancerClass: tailscale

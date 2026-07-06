@@ -14,6 +14,17 @@ controller:
       memory: 64Mi
     limits:
       memory: 256Mi
+  # Chart default is false (no metrics Service, no ServiceMonitor). Prometheus
+  # already watches cluster-wide (empty selectors, values-kube-prometheus-
+  # stack.yaml), so flipping both on is enough to feed the Grafana dashboard
+  # (the project's own examples/dashboard.json, values-kube-prometheus-
+  # stack.yaml — NOT grafana.com's "k8s-argo-rollout" gnetId 15386, which
+  # turned out to be a mislabeled Istio dashboard, verified against its raw
+  # JSON, not just its title).
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
 
 dashboard:
   enabled: true

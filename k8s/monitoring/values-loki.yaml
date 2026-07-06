@@ -101,3 +101,16 @@ gateway:
 
 test:
   enabled: false
+
+# Chart default is false (no ServiceMonitor for Loki's own /metrics).
+# Prometheus already watches cluster-wide (empty selectors, values-kube-
+# prometheus-stack.yaml), so this is the only change needed. monitoring.rules
+# (recording rules the upstream "Loki Operational" dashboard's latency panels
+# expect) stays off deliberately — that's alerting-policy territory, not a
+# metrics-enablement change; ~15 of the dashboard's 106 panels (percentile
+# latency) will read "No data" until/unless those rules are added later.
+# monitoring.selfMonitoring stays off too — deprecated, needs the (also
+# deprecated) Grafana Agent Operator CRDs.
+monitoring:
+  serviceMonitor:
+    enabled: true

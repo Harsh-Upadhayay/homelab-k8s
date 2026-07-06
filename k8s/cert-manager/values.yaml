@@ -11,3 +11,15 @@
 # CRD-lifecycle problem."
 crds:
   enabled: true
+
+# Prometheus metrics were already on by default (chart default:
+# prometheus.enabled: true, controller/webhook serving on their http-metrics
+# port) — confirmed via `helm show values` for this exact pinned version.
+# What was missing is a ServiceMonitor to actually scrape it; kube-prometheus-
+# stack's Prometheus already watches cluster-wide (empty selectors), so this
+# is the only change needed. Feeds the Grafana dashboard (gnetId 20850,
+# values-kube-prometheus-stack.yaml).
+prometheus:
+  enabled: true
+  servicemonitor:
+    enabled: true

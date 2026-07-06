@@ -31,6 +31,17 @@ controller:
   type: deployment
   replicas: 1
 
+# Chart default is false. service.enabled is already true by chart default
+# (a ClusterIP Service exposing Alloy's own :12345 HTTP/metrics listener), so
+# a ServiceMonitor is the only thing missing for Prometheus (already
+# cluster-wide, empty selectors) to scrape Alloy's own component/pipeline
+# health metrics. Feeds the "Alloy Resources" dashboard (values-kube-
+# prometheus-stack.yaml) — fetched by url, not gnetId: it's part of the
+# alloy-mixin shipped in grafana/alloy's own repo, not uploaded to
+# grafana.com's marketplace.
+serviceMonitor:
+  enabled: true
+
 # loki.source.kubernetes streams logs via the API (apiserver -> kubelet), so
 # the pod's ServiceAccount needs get/list/watch on pods AND pods/log. Verified
 # against the rendered ClusterRole: the chart's default RBAC already grants

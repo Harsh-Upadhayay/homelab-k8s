@@ -1,0 +1,18 @@
+# Feeds the Grafana dashboard (gnetId 24874, values-kube-prometheus-
+# stack.yaml). No release-label matching needed here — Prometheus's
+# selectors are already unset/empty cluster-wide (serviceMonitorSelectorNil
+# UsesHelmValues: false in that same file), same as every other hand-rolled
+# ServiceMonitor on this platform (Longhorn, Traefik).
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: cloudflared
+  namespace: cloudflare
+spec:
+  selector:
+    matchLabels:
+      app: cloudflared
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
