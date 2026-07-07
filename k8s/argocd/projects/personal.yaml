@@ -1,0 +1,50 @@
+# AppProject: 'personal' — the SECURITY BOUNDARY for dev-owned code (kiroku,
+# jobhunt, later a friend's shared project). Their manifests live in THEIR OWN
+# repos under deploy/; this cluster repo holds only a pointer Application
+# (k8s/argocd/apps/<app>.yaml) per app. See docs/Migration Plan.md
+# ("Repo boundaries — hybrid by ownership") for why: push access to a
+# GitOps-watched repo is deploy access to the cluster, so dev repos are
+# fenced off here rather than trusted like this repo is.
+#
+# This project is deliberately the mirror image of homelab.yaml:
+#   - sourceRepos  : the external PROJECT repos only — NEVER this cluster repo.
+#   - destinations : only that app's own single namespace.
+#   - clusterResourceWhitelist: EMPTY — a personal app can create NO cluster-scoped
+#     object (no ClusterRole/Binding, no CRD, no PV), so it can't self-escalate.
+#     Namespace creation is handled on this repo's side by the pointer
+#     Application's CreateNamespace=true (runs as ArgoCD, not the dev repo).
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: personal
+  namespace: argocd
+spec:
+  description: Dev-owned apps from external repos; least-privilege, per-namespace.
+
+  # Allow-list of the dev-owned project repos. Each entry is added/confirmed when
+  # that app's pointer Application lands (kiroku → M2, jobhunt → M4). This list
+  # must NEVER include https://github.com/Harsh-Upadhayay/homelab-k8s.git —
+  # that would collapse the whole Option E boundary.
+  # TODO(M2): confirm exact kiroku repo URL before first sync.
+  # TODO(M4): confirm exact jobhunt repo URL before first sync.
+  sourceRepos:
+    - https://github.com/Harsh-Upadhayay/kiroku.git
+    - https://github.com/Harsh-Upadhayay/jobhunt.git
+
+  # One namespace per app, in-cluster only. Extended per app as they land.
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: kiroku
+    - server: https://kubernetes.default.svc
+      namespace: jobhunt
+
+  # Deny ALL cluster-scoped resources — the core of the lockdown.
+  # (Empty whitelist = nothing cluster-scoped is permitted.)
+  clusterResourceWhitelist: []
+
+  # Namespaced kinds are unrestricted, but that blast radius is already bounded
+  # to the single namespace above. A dev app can freely define its Deployments,
+  # Services, PVCs, ConfigMaps, Secrets, IngressRoutes — just nowhere else.
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"

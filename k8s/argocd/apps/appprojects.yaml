@@ -1,0 +1,31 @@
+# app-of-projects: syncs every AppProject under k8s/argocd/projects/.
+# The root Application watches k8s/argocd/apps/ only (recurse: false), so the
+# AppProject manifests need their own registration to come under GitOps — this
+# is it. Same pattern as any other child Application, but its payload is
+# AppProjects rather than a workload.
+#
+# Itself lives in the 'default' AppProject (it must — it's what CREATES the
+# other projects; a bootstrap ordering, like argocd.yaml self-management).
+# Destination namespace is argocd, where AppProject objects live.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: appprojects
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Harsh-Upadhayay/homelab-k8s.git
+    targetRevision: main
+    path: k8s/argocd/projects
+    directory:
+      recurse: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true # deleting a projects/*.yaml removes that AppProject
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false # argocd namespace already exists

@@ -1,0 +1,46 @@
+# AppProject: 'homelab' — the group for OFF-THE-SHELF workloads (homepage,
+# nextcloud, audiobookshelf, immich) whose manifests live in THIS repo under
+# k8s/apps/homelab/. These are platform-operator-owned, so the project is
+# scoped but not paranoid: it deploys only from this repo, only into the
+# homelab app namespaces, and may create the one cluster-scoped kind these
+# apps legitimately need — their own Namespace (CreateNamespace / namespace.yaml).
+#
+# Contrast with projects/personal.yaml, which is the locked-down boundary for
+# dev-owned code arriving from external repos. See docs/Migration Plan.md
+# ("Repo boundaries — hybrid by ownership").
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: homelab
+  namespace: argocd
+spec:
+  description: Off-the-shelf homelab workloads, manifests owned in this repo.
+
+  # Only this repo may be a source for homelab apps.
+  sourceRepos:
+    - https://github.com/Harsh-Upadhayay/homelab-k8s.git
+
+  # Only the homelab app namespaces on the in-cluster API server.
+  # Extended as each app lands (M1 homepage → M3 abs → M5 nextcloud → M6 immich).
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: homepage
+    - server: https://kubernetes.default.svc
+      namespace: nextcloud
+    - server: https://kubernetes.default.svc
+      namespace: audiobookshelf
+    - server: https://kubernetes.default.svc
+      namespace: immich
+
+  # Cluster-scoped kinds these apps may manage: just their own Namespace.
+  # (CreateNamespace=true / namespace.yaml both create a Namespace object.)
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+
+  # Namespaced kinds: unrestricted — inside their own namespace, off-the-shelf
+  # charts/manifests legitimately need Deployments, Services, PVCs, IngressRoutes,
+  # ConfigMaps, CronJobs, etc.
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"
