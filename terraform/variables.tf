@@ -1,5 +1,5 @@
 variable "proxmox_endpoint" {
-  description = "Proxmox API endpoint, e.g. https://192.168.1.10:8006/"
+  description = "Proxmox API endpoint. Prefer a Tailscale MagicDNS name (e.g. https://pve-dell.<tailnet>.ts.net:8006/) over a LAN IP so applies work off-LAN; provider.tf's insecure=true covers the cert mismatch."
   type        = string
 }
 
