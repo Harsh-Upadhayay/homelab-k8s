@@ -408,7 +408,8 @@ Files: `k8s/tailscale/`. This is the admin front door — private, never public,
 
 | Target | Lives where | Reached via |
 |---|---|---|
-| Proxmox web UI, node SSH | on the hypervisor itself | tailscaled installed directly on the Proxmox host |
+| Proxmox web UI, hypervisor SSH | on the hypervisor itself | tailscaled installed directly on the Proxmox host |
+| k3s node SSH | on each k3s VM | tailscaled installed directly on each node (Part A, extended) |
 | Kubernetes API (`kubectl`) | the k3s control plane | the Operator's built-in API server proxy — no separate route needed |
 | In-cluster dashboards (Traefik now; Grafana/Argo CD later) | inside the cluster | the Operator claiming a Service via `loadBalancerClass: tailscale` |
 
@@ -422,6 +423,32 @@ ansible-playbook proxmox-host.yml --tags tailscale --extra-vars "tailscale_auth_
 Same pattern as the k3s join token in Phase 4–6: passed at runtime via `--extra-vars`, never written to a file in this repo. The role installs `tailscale` from its official apt repo, enables `tailscaled`, and runs `tailscale up` non-interactively — idempotent, so rerunning it is a no-op once the host is already joined.
 
 The Proxmox UI is now reachable at `https://<tailscale-ip-or-magicdns-name>:8006` from any device on your tailnet — never from the public internet.
+
+**Part A (extended) — tailscaled on the k3s nodes themselves.** The host-level join above covers SSH to the *hypervisor*, but not to the three k3s VMs — and those are exactly what you need to reach for etcd snapshots, `journalctl`, and node-level debugging once a LAN-connected workstation is no longer in the picture. So the same mechanism is extended onto the nodes via the `common` role (tag `tailscale`), sharing one parameterised task file with the host — `ansible/tasks/tailscale.yml`, told `ubuntu`/`{{ ubuntu_codename }}` for the nodes vs `debian`/`{{ debian_codename }}` for the host. It's tagged `[never, tailscale]` so a bare `ansible-playbook site.yml` never trips over the missing auth key; it only runs when asked for explicitly.
+
+Generate a **reusable** auth key this time (one run joins all three nodes, so a one-time-use key would fail after the first) — still **not** ephemeral, since these VMs are permanent and an ephemeral node gets pruned from the tailnet shortly after it goes offline (a reboot could then cost you access). Run it from a host that still has LAN reachability to `192.168.1.2x` (the inventory is still LAN-IP-pinned — see #29):
+```bash
+cd ansible
+ansible-playbook site.yml --tags tailscale --extra-vars "tailscale_auth_key=<paste a reusable auth key>"
+```
+Confirm all three joined, then note their tailnet IPs:
+```bash
+ansible k3s_cluster -m command -a "tailscale ip -4"
+```
+
+**SSH into a node over the tailnet.** Nothing about auth changes — the nodes still trust exactly the key cloud-init baked in at clone time (Phase 3: `terraform.tfvars`'s `ssh_public_key`, the `homelab-admin`/`id_ed25519` pair, for user `harsh`). You just target the tailnet address instead of the LAN IP:
+```bash
+ssh -i ~/.ssh/id_ed25519 harsh@k3s-server-1.<your-tailnet>.ts.net   # or the 100.x IP
+```
+
+**Two distinct SSH identities — don't cross them.** The host and the nodes were provisioned by different mechanisms, so they trust different keys. Using the Proxmox key against a node (or vice versa) fails with `Permission denied (publickey)` — that's expected, not a misconfiguration:
+
+| Target | User | Private key | How its public key got there |
+|---|---|---|---|
+| Proxmox host (`pve-dell`) | `root` | `~/.ssh/proxmox_ed25519` | manual `ssh-copy-id` (Phase 1 bootstrap) |
+| k3s nodes | `harsh` | `~/.ssh/id_ed25519` | Terraform cloud-init at clone time (Phase 3) |
+
+Both key *pairs* live only where you generated them. If you're migrating off a LAN workstation onto another machine, copy the private keys across first (e.g. `scp` them over the tailnet under whatever names you like — only the private half is needed to connect, since the public key is embedded in it) or you'll lock yourself out the moment the old box is gone.
 
 **Part B — the Tailscale Kubernetes Operator** (covers the API server + in-cluster dashboards):
 

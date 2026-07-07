@@ -11,7 +11,10 @@
   tags: [repos]
 
 - name: Join the tailnet (Phase 12 Part A)
-  ansible.builtin.import_tasks: tailscale.yml
+  ansible.builtin.import_tasks: ../../../tasks/tailscale.yml
+  vars:
+    tailscale_apt_distro: "debian"
+    tailscale_apt_codename: "{{ debian_codename }}"
   tags: [tailscale]
 
 - name: Bootstrap the terraform@pve API token (Phase 3 prerequisite)

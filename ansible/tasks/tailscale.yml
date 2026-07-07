@@ -1,11 +1,19 @@
 ---
-# Phase 12 Part A — tailscaled directly on the Proxmox host (UI + node-level
-# access). Separate mechanism from the in-cluster Tailscale Operator in
-# k8s/tailscale/ — see claude.md, don't conflate the two.
+# Shared by roles/proxmox_host and roles/common (Phase 12 Part A, the latter
+# extended to the k3s nodes) — installs tailscale from the official apt repo
+# and joins the tailnet. The only thing that differs between a Proxmox host
+# (Debian) and a k3s node (Ubuntu) is which repo tree to point at, so callers
+# pass that in rather than this file being copy-pasted per OS:
+#   tailscale_apt_distro:   "debian" or "ubuntu"
+#   tailscale_apt_codename: the matching codename var (debian_codename /
+#                            ubuntu_codename from the relevant group_vars file)
+#
+# Separate mechanism from the in-cluster Tailscale Operator in k8s/tailscale/
+# — see claude.md, don't conflate the two.
 
 - name: Add Tailscale's package signing key
   ansible.builtin.get_url:
-    url: "https://pkgs.tailscale.com/stable/debian/{{ debian_codename }}.noarmor.gpg"
+    url: "https://pkgs.tailscale.com/stable/{{ tailscale_apt_distro }}/{{ tailscale_apt_codename }}.noarmor.gpg"
     dest: /usr/share/keyrings/tailscale-archive-keyring.gpg
     mode: "0644"
 
@@ -14,8 +22,8 @@
     dest: /etc/apt/sources.list.d/tailscale.sources
     content: |
       Types: deb
-      URIs: https://pkgs.tailscale.com/stable/debian
-      Suites: {{ debian_codename }}
+      URIs: https://pkgs.tailscale.com/stable/{{ tailscale_apt_distro }}
+      Suites: {{ tailscale_apt_codename }}
       Components: main
       Signed-By: /usr/share/keyrings/tailscale-archive-keyring.gpg
     mode: "0644"
