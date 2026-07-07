@@ -3,7 +3,9 @@ terraform/.terraform/
 terraform/.terraform.lock.hcl
 terraform/terraform.tfstate
 terraform/terraform.tfstate.backup
-terraform/terraform.tfvars
+# terraform.tfvars is intentionally NOT ignored — it holds no secrets (the API
+# token comes from PROXMOX_VE_API_TOKEN at runtime), so it's committed as the
+# source of truth for this host.
 
 # Ansible
 ansible/*.retry

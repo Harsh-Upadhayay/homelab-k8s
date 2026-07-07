@@ -3,11 +3,9 @@ variable "proxmox_endpoint" {
   type        = string
 }
 
-variable "proxmox_api_token" {
-  description = "Proxmox API token in the form user@realm!tokenid=secret. Create with pveum (see GUIDE.md Phase 3)."
-  type        = string
-  sensitive   = true
-}
+# The Proxmox API token is NOT a Terraform variable — it's the one secret, so
+# the provider reads it straight from PROXMOX_VE_API_TOKEN at runtime (see
+# provider.tf). Create the token with pveum (GUIDE.md Phase 3).
 
 variable "proxmox_node" {
   description = "Name of the target Proxmox node (hostname shown in the web UI, often 'pve')"

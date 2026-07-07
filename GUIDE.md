@@ -155,8 +155,11 @@ ansible-playbook proxmox-host.yml --tags terraform-token
 **Set up and apply:**
 ```bash
 cd terraform
-cp terraform.tfvars.example terraform.tfvars
-# edit terraform.tfvars with your real endpoint, token, SSH key, IPs
+# terraform.tfvars is committed (it holds no secrets — endpoint, node, IPs,
+# specs). Edit it for your environment if you're not rebuilding this exact host.
+# The one secret, the Proxmox API token, is passed at runtime via env var —
+# never written to a file (same pattern as K3S_TOKEN, ADR-0003):
+export PROXMOX_VE_API_TOKEN='terraform@pve!tf=<the token from the step above>'
 
 terraform init
 terraform plan    # review — should show 3 resources to add
@@ -594,7 +597,7 @@ homelab-k8s/
 ├── .gitignore
 ├── terraform/
 │   ├── versions.tf / provider.tf / variables.tf / main.tf / outputs.tf
-│   └── terraform.tfvars.example
+│   └── terraform.tfvars   (committed — no secrets; API token comes from $PROXMOX_VE_API_TOKEN)
 ├── ansible/
 │   ├── ansible.cfg / inventory.ini / site.yml / proxmox-host.yml / requirements.yml
 │   ├── group_vars/{all.yml, proxmox_hosts.yml}
@@ -607,4 +610,4 @@ homelab-k8s/
     └── example-app/       deployment.yaml, service.yaml, ingressroute.yaml
 ```
 
-Push this to Git now, before you forget — everything except `terraform.tfvars` and `kubeconfig` (both already gitignored) is meant to live there.
+Push this to Git now, before you forget — everything except `kubeconfig` and Terraform's local state/lock (all gitignored) is meant to live there. `terraform.tfvars` **is** committed: it holds no secrets now that the API token comes from `$PROXMOX_VE_API_TOKEN`.
