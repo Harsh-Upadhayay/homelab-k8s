@@ -18,8 +18,12 @@ spec:
     repoURL: https://github.com/Harsh-Upadhayay/homelab-k8s.git
     targetRevision: main
     path: k8s/argocd/projects
-    directory:
-      recurse: false
+    # No `directory.recurse` block: false is already the default, and setting
+    # it explicitly caused permanent OutOfSync drift. The CRD field is
+    # `recurse,omitempty`, so a value of `false` (the bool zero value) is
+    # stripped when the object is written to the cluster — the live resource
+    # comes back without it, while the target manifest still carries it, so
+    # ArgoCD forever diffs "add recurse: false" and selfHeal can never converge.
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
