@@ -55,3 +55,5 @@ subjects:
   - kind: ServiceAccount
     name: deployer
     namespace: kiroku
+  - kind: User
+    name: "tailnet-collaborators"
