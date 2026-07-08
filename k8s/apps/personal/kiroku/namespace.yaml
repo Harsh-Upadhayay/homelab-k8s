@@ -1,0 +1,15 @@
+# Namespace for the dev-owned 'kiroku' app. PLATFORM-OWNED (this repo), not the
+# kiroku repo — the namespace + its guardrails (quota, limitrange, deployer RBAC
+# in this dir) are applied by ArgoCD from here; kiroku's OWN repo only supplies
+# the workload manifests (deploy/), brought in by the pointer Application
+# k8s/argocd/apps/kiroku.yaml. See docs/Migration Plan.md (Option E).
+#
+# First instance of the reusable 'personal namespace' scaffold established in M0;
+# copy this dir to k8s/apps/personal/<app>/ for each future dev app (jobhunt, a
+# friend's project), swapping the name.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kiroku
+  labels:
+    group: personal # the namespace-label grouping convention (M0)

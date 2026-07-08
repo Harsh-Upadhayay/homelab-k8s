@@ -91,13 +91,27 @@ k8s/argocd/apps/<app>.yaml        # the Application registering the above
 k8s/argocd/projects/homelab.yaml  # AppProject (created once per group)
 ```
 
-**Dev-owned app** — same manifest set, but it lives in the project's repo under `deploy/`;
-this repo carries only:
+**Dev-owned app** — the *workloads* live in the project's repo under `deploy/`, but the
+namespace's **guardrails are platform-owned and stay in this repo** (a dev must not be able
+to raise their own quota or grant themselves RBAC). So this repo carries:
 
 ```
-k8s/argocd/apps/<app>.yaml         # pointer Application: repoURL = project repo, path = deploy/
-k8s/argocd/projects/personal.yaml  # locked-down AppProject (sourceRepos/destinations restricted)
+k8s/apps/personal/<app>/           # PLATFORM-OWNED guardrails (this repo)
+├── namespace.yaml                 # ns + group: personal label
+├── resourcequota.yaml             # aggregate "how much" ceiling
+├── limitrange.yaml                # per-container defaults/bounds (pairs with the quota)
+└── rbac.yaml                      # least-privilege deployer SA+Role+RoleBinding (no secrets)
+k8s/argocd/apps/<app>-namespace.yaml  # Application applying the guardrail bundle above (default project)
+k8s/argocd/apps/<app>.yaml            # pointer Application: repoURL = project repo, path = deploy/ (personal project)
+k8s/argocd/projects/personal.yaml     # locked-down AppProject (shared by all personal apps)
 ```
+
+The reusable scaffold (`k8s/apps/personal/kiroku/`, the four guardrail files) is established
+in M0; each new dev app copies that dir. The two Applications are added when the app lands
+(M2 for kiroku). The guardrail Application sits in the trusted `default` project (it creates a
+Namespace + RBAC — cluster/namespaced admin the `personal` project deliberately forbids); the
+pointer Application sits in `personal` and, with the namespace already made, uses
+`CreateNamespace=false`.
 
 Secrets are created imperatively and documented (name + keys, no values) in each app's dir,
 never committed.

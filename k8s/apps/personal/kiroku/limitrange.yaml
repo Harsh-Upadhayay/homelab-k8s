@@ -1,0 +1,28 @@
+# Per-container defaults + bounds, applied at admission to every pod in kiroku.
+# Two jobs:
+#   1. defaultRequest/default -> inject requests/limits into any container that
+#      omits them, so the ResourceQuota (which makes requests/limits MANDATORY)
+#      still admits a bare 'image: x' pod. LimitRange mutates, then quota validates.
+#   2. min/max -> reject a single container asking below the floor or above the
+#      ceiling, so no one pod can eat the whole namespace quota in one shot.
+# The injected requests-vs-limits also set each pod's QoS class (eviction order).
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: kiroku-limits
+  namespace: kiroku
+spec:
+  limits:
+    - type: Container
+      defaultRequest: # becomes 'requests' when a container specifies none
+        cpu: 50m
+        memory: 64Mi
+      default: # becomes 'limits' when a container specifies none
+        cpu: 250m
+        memory: 256Mi
+      min: # a container may not request below this
+        cpu: 10m
+        memory: 16Mi
+      max: # a container may not set limits above this
+        cpu: "1"
+        memory: 1Gi

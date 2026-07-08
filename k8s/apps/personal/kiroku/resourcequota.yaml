@@ -1,0 +1,24 @@
+# Aggregate resource ceiling for the whole kiroku namespace — the "how much"
+# fence (alongside RBAC "who" and the AppProject "what/where"). Bounds a runaway
+# dev app so it can't starve homelab workloads on a never-overcommitted cluster
+# (ADR-0020). Sized for a small two-container app; tune as the app grows.
+#
+# NOTE: once this quota constrains a compute resource, EVERY pod in the namespace
+# must declare requests+limits or it's rejected — the paired limitrange.yaml
+# supplies defaults so bare pods still admit. (See Kubernetes Concepts.md,
+# "Resource governance: ResourceQuota and LimitRange".)
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: kiroku-quota
+  namespace: kiroku
+spec:
+  hard:
+    requests.cpu: "1"
+    requests.memory: 1Gi
+    limits.cpu: "2"
+    limits.memory: 2Gi
+    pods: "15"
+    services: "10"
+    persistentvolumeclaims: "4"
+    requests.storage: 10Gi
