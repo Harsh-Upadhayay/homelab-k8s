@@ -17,7 +17,9 @@ spec:
     requests.cpu: "1"
     requests.memory: 1Gi
     limits.cpu: "2"
-    limits.memory: 2Gi
+    limits.memory: 3Gi # bumped 2Gi -> 3Gi: RollingUpdate briefly needs OLD pod's limit
+    # AND the new pod's limit at once (surge), which the 2Gi cap rejected outright
+    # when kiroku-api's limit was raised (2026-07-09) -- see limitrange.yaml, api.yaml
     pods: "15"
     services: "10"
     persistentvolumeclaims: "4"
