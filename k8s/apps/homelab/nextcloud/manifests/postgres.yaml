@@ -1,0 +1,117 @@
+# Postgres 16 — Nextcloud's authoritative store (file index, shares, users, app
+# state). The file blobs in the data PVC are meaningless without these oc_* tables,
+# so THIS is the source of truth and is migrated LOGICALLY (pg_dump -> psql), never
+# by copying the data directory. See docs/migrations/nextcloud.md.
+#
+# strategy: Recreate — the DB owns one RWO PVC. A default RollingUpdate would briefly
+# run old+new pods together; for a database that's not just a Multi-Attach error
+# (RWO = one node) but a correctness disaster (two postgres on one data dir). Recreate
+# tears the old pod down FULLY before creating the new one — zero overlap. (StatefulSet
+# would be the choice for a *replicated* DB cluster; a single-replica DB is correctly a
+# Deployment + Recreate — simpler, same safety. See Kubernetes Concepts.md.)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nextcloud-db
+  namespace: nextcloud
+  labels:
+    app: nextcloud-db
+    app.kubernetes.io/part-of: nextcloud
+  annotations:
+    argocd.argoproj.io/sync-wave: "0" # data tier comes up before the app (wave 1)
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: nextcloud-db
+  template:
+    metadata:
+      labels:
+        app: nextcloud-db
+    spec:
+      # postgres:alpine runs its processes as uid/gid 70. fsGroup 70 makes the
+      # Longhorn volume group-owned by 70 so initdb/postgres can write it.
+      securityContext:
+        fsGroup: 70
+      containers:
+        - name: postgres
+          image: postgres:16-alpine # matches the source (16.10); minor floats, fine for same-major restore
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: nextcloud
+            - name: POSTGRES_USER
+              value: nextcloud
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nextcloud-db
+                  key: POSTGRES_PASSWORD
+            # PGDATA in a SUBDIR of the mount: a fresh Longhorn volume can carry a
+            # lost+found, and initdb refuses a non-empty data dir — the subdir is
+            # always clean. Standard postgres-on-k8s practice.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "nextcloud", "-d", "nextcloud"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "nextcloud", "-d", "nextcloud"]
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+          # Platform app: memory limit only, NO cpu limit (ADR-0020 — cpu limits
+          # fence dev-owned personal namespaces, not trusted first-party apps).
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: nextcloud-db
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nextcloud-db # config.php's dbhost is "nextcloud-db" (from Compose) — keep the name so it resolves unchanged
+  namespace: nextcloud
+  labels:
+    app: nextcloud-db
+spec:
+  type: ClusterIP
+  selector:
+    app: nextcloud-db
+  ports:
+    - port: 5432
+      targetPort: 5432
+---
+# Relational DB = truly needs durability, so longhorn-replicated (2 copies) not
+# single-replica longhorn. NOTE reclaimPolicy: Delete on both Longhorn tiers —
+# deleting this PVC/namespace destroys the data. The old-lab /storage copy is the
+# fallback until the workstation-as-node conversion; revisit Retain/longhorn-static
+# before that teardown (same open caveat as kiroku). See docs/migrations/nextcloud.md.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nextcloud-db
+  namespace: nextcloud
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn-replicated
+  resources:
+    requests:
+      storage: 5Gi # live DB ~99Mi; ample headroom

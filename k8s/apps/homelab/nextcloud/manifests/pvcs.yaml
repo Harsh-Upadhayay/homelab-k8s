@@ -1,0 +1,43 @@
+# The two Nextcloud data volumes, pre-created here (companion manifests) and handed
+# to the Helm chart via persistence.existingClaim / persistence.nextcloudData.existingClaim
+# (see ../values.yaml). We own them rather than letting the chart provision them so
+# the storageClass (longhorn-replicated) and migration lifecycle are explicit and
+# so a `helm uninstall`/Application prune never reaps the data.
+#
+# The chart mounts the MAIN claim by SUBPATH — root/, html/, config/, custom_apps/,
+# themes/, tmp/ each mount into their place under /var/www. The DATA claim holds the
+# user files (mounted at /var/www/html/data). Both RWO; both longhorn-replicated
+# (2 copies) as authoritative personal data.
+#
+# reclaimPolicy is Delete on every Longhorn tier — deleting these PVCs (or the ns)
+# destroys the data. The old-lab /storage copy is the fallback until the
+# workstation-as-node conversion; revisit Retain/longhorn-static before that teardown.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nextcloud-main # chart persistence.existingClaim — code + config + custom_apps
+  namespace: nextcloud
+  labels:
+    app.kubernetes.io/part-of: nextcloud
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn-replicated
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nextcloud-data # chart persistence.nextcloudData.existingClaim — user files
+  namespace: nextcloud
+  labels:
+    app.kubernetes.io/part-of: nextcloud
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn-replicated
+  resources:
+    requests:
+      storage: 20Gi

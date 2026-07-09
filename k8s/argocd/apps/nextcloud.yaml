@@ -1,0 +1,42 @@
+# Child Application: nextcloud (M5) — off-the-shelf HOMELAB workload, deployed the
+# MANAGED way: the community nextcloud Helm chart + a values.yaml, in the same
+# three-source shape as k8s/argocd/apps/traefik.yaml (chart · $values · companion
+# manifests). Chart owns the app Deployment, the cron CronJob, config wiring, probes;
+# the companion manifests/ dir supplies what the chart can't do idiomatically —
+# our OWN Postgres + Redis (official images, NOT the chart's dead bitnamilegacy
+# subcharts) and the Traefik IngressRoute/Middlewares (chart only makes a vanilla
+# Ingress). See docs/migrations/nextcloud.md for the full decision record.
+#
+# project: homelab — its AppProject allow-lists this repo AND the nextcloud helm repo
+# as sources, the nextcloud namespace as the only destination, and Namespace as the
+# only cluster-scoped kind. Secrets (nextcloud-db, nextcloud-admin) are imperative and
+# out of Git (SECRETS.md); Argo never owns them.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nextcloud
+  namespace: argocd
+spec:
+  project: homelab
+  sources:
+    - repoURL: https://nextcloud.github.io/helm
+      chart: nextcloud
+      targetRevision: 9.2.0 # chart 9.2.0 (appVersion 34.0.1); we pin image.tag to 31.0.8 for the migration
+      helm:
+        valueFiles:
+          - $values/k8s/apps/homelab/nextcloud/values.yaml
+    - repoURL: https://github.com/Harsh-Upadhayay/homelab-k8s.git
+      targetRevision: main
+      ref: values
+    - repoURL: https://github.com/Harsh-Upadhayay/homelab-k8s.git
+      targetRevision: main
+      path: k8s/apps/homelab/nextcloud/manifests # namespace, own postgres/redis, PVCs, Traefik routing
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: nextcloud
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false # manifests/namespace.yaml creates it

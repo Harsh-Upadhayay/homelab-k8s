@@ -1,0 +1,10 @@
+# The nextcloud namespace. Unlike the personal/ apps (kiroku), platform/homelab
+# workloads are operator-owned and TRUSTED, so there is deliberately NO
+# ResourceQuota/LimitRange here (ADR-0020: quota/limitrange fence dev apps, not
+# first-party platform apps on a never-overcommitted cluster). Just the boundary.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nextcloud
+  labels:
+    app.kubernetes.io/part-of: nextcloud

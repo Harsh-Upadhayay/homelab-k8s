@@ -1,0 +1,56 @@
+# Routing for Nextcloud. The Helm chart's own `ingress` produces a vanilla
+# networking.k8s.io Ingress; this platform routes with Traefik's IngressRoute CRD,
+# so ingress.enabled=false in values.yaml and we supply the CRDs here (companion
+# manifests, same split as k8s/traefik/manifests/).
+#
+# INTERNAL-FIRST (per the migration mandate): reachable only over Tailscale at
+# nextcloud.in.neovara.uk via the `websecure` entrypoint, TLS terminated by Traefik
+# from the cert-manager wildcard (empty tls: {} → default TLSStore, *.in.neovara.uk).
+# Public cutover to nextcloud.neovara.uk (web entrypoint, cloudflared edge) is a
+# later, separate step once validated.
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: secure-headers
+  namespace: nextcloud
+spec:
+  headers:
+    browserXssFilter: true
+    contentTypeNosniff: true
+    frameDeny: true
+    stsSeconds: 31536000
+    stsIncludeSubdomains: true
+    stsPreload: true
+    referrerPolicy: strict-origin-when-cross-origin
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: nextcloud-uploads
+  namespace: nextcloud
+spec:
+  # 10 GiB request-body buffer so large uploads aren't capped by the proxy
+  # (mirrors the old Compose buffering.maxRequestBodyBytes middleware).
+  buffering:
+    maxRequestBodyBytes: 10737418240
+    memRequestBodyBytes: 10737418240
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: nextcloud
+  namespace: nextcloud
+spec:
+  entryPoints:
+    - websecure # Tailscale-only; TLS terminated by Traefik (internal wildcard cert)
+  routes:
+    - match: Host(`nextcloud.in.neovara.uk`)
+      kind: Rule
+      services:
+        - name: nextcloud # the chart's Service (named after the release: "nextcloud")
+          port: 8080
+      middlewares:
+        - name: secure-headers
+        - name: nextcloud-uploads
+  tls: {} # empty = serve the default TLSStore cert (*.in.neovara.uk)

@@ -16,9 +16,13 @@ metadata:
 spec:
   description: Off-the-shelf homelab workloads, manifests owned in this repo.
 
-  # Only this repo may be a source for homelab apps.
+  # This repo (hand-authored manifests + values) plus the upstream Helm repos the
+  # off-the-shelf apps are packaged as. nextcloud (M5) is deployed via the community
+  # nextcloud chart, so its repo is allow-listed here; add further chart repos as
+  # each managed app lands.
   sourceRepos:
     - https://github.com/Harsh-Upadhayay/homelab-k8s.git
+    - https://nextcloud.github.io/helm
 
   # Only the homelab app namespaces on the in-cluster API server.
   # Extended as each app lands (M1 homepage → M3 abs → M5 nextcloud → M6 immich).

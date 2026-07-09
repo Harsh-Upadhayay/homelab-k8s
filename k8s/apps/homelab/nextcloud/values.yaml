@@ -1,0 +1,114 @@
+# Values for the community nextcloud Helm chart (nextcloud/helm), consumed by the
+# multi-source ArgoCD Application (k8s/argocd/apps/nextcloud.yaml) exactly like
+# k8s/traefik uses chart + $values. This is the MANAGED path — we let the chart own
+# the app Deployment, the cron CronJob, config wiring and probes; we hand-write only
+# what the chart can't do idiomatically (own Postgres/Redis + Traefik IngressRoute).
+#
+# WHY NOT the chart's bundled DB/cache: the chart's postgresql/redis subcharts pin
+# `bitnamilegacy/*` images — the dead Bitnami public catalog (Broadcom moved them to
+# an unmaintained "legacy" repo in Aug 2025). So we run our OWN Postgres/Redis on
+# official images (manifests/postgres.yaml, manifests/redis.yaml) and point the chart
+# at them via externalDatabase / externalRedis. This is the documented community fix.
+#
+# MIGRATION NOTE: admin username/password are intentionally EMPTY so the image does
+# NOT auto-install a fresh instance. It only lays the v31.0.8 code into the PVC
+# subPaths; the real instance identity (config.php with secret/passwordsalt/instanceid)
+# and data are injected afterward, and the Postgres dump is restored — see
+# docs/migrations/nextcloud.md.
+
+fullnameOverride: nextcloud # deterministic resource names (Service "nextcloud", etc.)
+
+image:
+  repository: library/nextcloud
+  tag: "31.0.8" # -> docker.io/nextcloud:31.0.8 (apache). Pinned to the SOURCE version for the migration;
+  # the sequential major upgrades (31->32->33->34) happen AFTER the data is validated (never skip a major).
+  pullPolicy: IfNotPresent
+
+nginx:
+  enabled: false # apache flavor serves directly; also makes the chart default the pod fsGroup to 33 (www-data)
+
+replicaCount: 1
+
+nextcloud:
+  host: nextcloud.in.neovara.uk
+  # Admin creds come from a stable existing Secret whose username key is EMPTY -> the image
+  # sees no admin user and does NOT auto-install (see MIGRATION NOTE). Using an existingSecret
+  # (rather than chart-generated) avoids the chart re-randomising the password every render,
+  # which would show as perpetual ArgoCD drift. The real accounts arrive in the Postgres
+  # restore; the operator password is set via occ afterward.
+  existingSecret:
+    enabled: true
+    secretName: nextcloud-admin
+    usernameKey: nextcloud-username
+    passwordKey: nextcloud-password
+  trustedDomains:
+    - nextcloud.in.neovara.uk
+  configs: {} # inject nothing: migrated config.php is authoritative; occ sets trusted_proxies/overwrite post-restore
+  # Container securityContext MUST stay empty: the apache image's master runs as root.
+  securityContext: {}
+  # Pod securityContext left to the chart default (fsGroup 33 for the apache/no-nginx path).
+  podSecurityContext: {}
+
+internalDatabase:
+  enabled: false
+
+externalDatabase:
+  enabled: true
+  type: postgresql
+  host: nextcloud-db # the companion Postgres Service (manifests/postgres.yaml)
+  database: nextcloud
+  existingSecret:
+    enabled: true
+    secretName: nextcloud-db
+    usernameKey: db-username
+    passwordKey: POSTGRES_PASSWORD
+
+# Bundled Bitnami subcharts OFF (dead images) — external instead.
+redis:
+  enabled: false
+externalRedis:
+  enabled: true
+  host: nextcloud-redis # companion Redis Service (manifests/redis.yaml), no auth
+  port: "6379"
+
+cronjob:
+  enabled: true
+  type: cronjob # native Kubernetes CronJob (not the crond sidecar)
+  cronjob:
+    schedule: "*/5 * * * *"
+    # cron.php needs the same RWO PVCs the app pod holds. RWO binds to one NODE (not one
+    # pod), so co-locating the cron Job onto the app's node lets them share the volume.
+    affinity:
+      podAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values: [nextcloud]
+                - key: app.kubernetes.io/component
+                  operator: In
+                  values: [app]
+            topologyKey: kubernetes.io/hostname
+
+persistence:
+  enabled: true
+  existingClaim: nextcloud-main # code + config + custom_apps (chart mounts by subPath)
+  nextcloudData:
+    enabled: true
+    existingClaim: nextcloud-data # user files
+
+ingress:
+  enabled: false # Traefik IngressRoute is supplied via manifests/routing.yaml (chart makes a vanilla Ingress)
+
+service:
+  type: ClusterIP
+  port: 8080
+
+# Platform app: memory limit only, no cpu limit (ADR-0020).
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 1Gi
