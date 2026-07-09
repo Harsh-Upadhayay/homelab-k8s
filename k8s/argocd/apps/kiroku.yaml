@@ -1,0 +1,37 @@
+# Pointer Application: kiroku's WORKLOADS, sourced from the app's OWN public repo
+# (deploy/) — NOT this repo. First realization of the Option E dev-owned pattern:
+# this cluster repo holds only this pointer; the manifests live next to the code.
+#
+# In the locked-down `personal` project: sourceRepos allow-lists only the kiroku
+# repo, destinations only the kiroku namespace, and cluster-scoped resources are
+# denied. So a push to the kiroku repo can only ever affect the kiroku namespace.
+#
+# sync-wave "1": after the governance bundle (wave 0) has created the namespace
+# + quota + limitrange + deployer RBAC.
+#
+# targetRevision: main tracks the deploy/ manifests on the kiroku repo's main
+# branch. The image is pinned to an immutable sha- tag INSIDE deploy/, so new
+# code pushes do NOT auto-deploy — deploying a new version means bumping that tag
+# in deploy/ and committing (the GitOps-correct, reviewable path).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kiroku
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: personal
+  source:
+    repoURL: https://github.com/Harsh-Upadhayay/kiroku.git
+    targetRevision: main
+    path: deploy
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kiroku
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false # the governance Application (wave 0) created it

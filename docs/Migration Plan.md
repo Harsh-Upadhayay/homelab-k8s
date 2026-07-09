@@ -101,7 +101,7 @@ k8s/apps/personal/<app>/           # PLATFORM-OWNED guardrails (this repo)
 ├── resourcequota.yaml             # aggregate "how much" ceiling
 ├── limitrange.yaml                # per-container defaults/bounds (pairs with the quota)
 └── rbac.yaml                      # least-privilege deployer SA+Role+RoleBinding (no secrets)
-k8s/argocd/apps/<app>-namespace.yaml  # Application applying the guardrail bundle above (default project)
+k8s/argocd/apps/<app>-governance.yaml # Application applying the guardrail bundle above (default project)
 k8s/argocd/apps/<app>.yaml            # pointer Application: repoURL = project repo, path = deploy/ (personal project)
 k8s/argocd/projects/personal.yaml     # locked-down AppProject (shared by all personal apps)
 ```
