@@ -112,3 +112,14 @@ resources:
     memory: 256Mi
   limits:
     memory: 1Gi
+
+# startupProbe gates liveness/readiness during the slow first boot: the image copies
+# ~1 GiB of code onto the (replicated Longhorn) PVC before Apache serves. Without this
+# the 40s liveness window SIGKILLs the pod mid-copy and it restarts forever. The same
+# guard covers the schema-migration pause on each major upgrade (31->32->33->34).
+startupProbe:
+  enabled: true
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 60 # up to ~10 min before giving up
