@@ -25,4 +25,5 @@ spec:
         memory: 16Mi
       max: # a container may not set limits above this
         cpu: "1"
-        memory: 1Gi
+        memory: 2Gi # bumped 1Gi -> 2Gi (matches the ResourceQuota ceiling) after kiroku-api's
+        # real cold sync-pull needed 1.5Gi (2026-07-09 OOMKill incident, see api.yaml)
