@@ -1,6 +1,6 @@
 # Migration record — kiroku (first dev-owned app)
 
-**Date:** 2026-07-09 · **Status:** deployed + data migrated (internal-only); **public cutover pending.**
+**Date:** 2026-07-09 · **Status:** ✅ migration complete — live in production on `kiroku.neovara.uk`.
 
 kiroku = a custom two-tier app (Next.js frontend `kiroku` :3000 + Go API `kiroku-api` :8080,
 SQLite/WAL store + tesseract OCR). Own public repo `github.com/Harsh-Upadhayay/kiroku`
@@ -17,7 +17,10 @@ Option E dev-owned pattern + the M0 host→PVC mover.
 - Image pinned to immutable `sha-6c43b70` (CI publishes `type=sha,prefix=sha-`).
 - Resources sized from 3 days of Prometheus data; CPU limits **kept** (personal-ns blast-radius
   policy, unlike trusted platform apps). Quota fits with wide headroom.
-- Exposed **internal-first**: `kiroku.in.neovara.uk` (websecure, Tailscale-only). Public route deferred.
+- Exposed **internal-first** (`kiroku.in.neovara.uk`, Tailscale-only) for smoke-testing, then cut over
+  to **public-only** at `kiroku.neovara.uk` (`web` entrypoint, cloudflared edge TLS) once verified — the
+  internal route and the legacy `myanki.neovara.uk` alias were both retired (nothing else depends on
+  either, since the old lab's DNS is decommissioned).
 
 ## Data migration — decisions
 
@@ -45,16 +48,38 @@ Source: `/storage/kiroku/data` on this workstation (which *is* the old-lab host)
 
 - `kiroku-api` `1/1 Running`, logs show live `/api/sync/*` requests against the DB.
 - `/app/data`: `kiroku.db` 84M, `db.json`, `media/` (13,912 files), `uploads/`, owned `appuser`.
-- ResourceQuota `Used` matches the sized requests/limits.
-- **Pending:** owner smoke-test at `kiroku.in.neovara.uk` with the real account (vocab decks present).
+- Owner login confirmed working (real account, password reset — see incident below) and real vocab
+  data confirmed synced correctly after the resource-sizing fix.
+- Public cutover confirmed working at `kiroku.neovara.uk`.
+
+## Incident: forgotten password, then an OOMKill on first real sync
+
+**Password reset.** No self-service reset/change-password flow exists in kiroku (only register/login,
+bcrypt cost 10 hashes in a `users` table). Reset by hand: scaled `kiroku-api` → 0, ran a throwaway
+`alpine` pod mounting the live PVC, `sqlite3 UPDATE users SET password_hash=... WHERE email=...` with a
+freshly bcrypt-hashed value, scaled back up. Real gap worth fixing in the app itself eventually (no
+issue filed yet — low priority, single-operator homelab).
+
+**OOMKilled on the first real login.** `kiroku-api`'s memory limit (512Mi, sized from a 3-day
+Prometheus sample) was based on a near-empty test DB and only captured a small OCR burst — the first
+real `sync/pull` against the actual ~14k-media-file library needed far more memory and got OOMKilled
+(exit 137). Symptom in the browser was misleading: Safari reported the resulting connection drop as
+"due to access control checks" (its generic wrapper for a network failure it can't detail), which read
+like a CORS bug — direct `curl` with real Host/Origin headers proved routing was never broken.
+
+Fix cascaded through three guardrails, each hit in turn once the previous was raised:
+1. `kiroku-api` memory limit 512Mi → **1.5Gi** (real fix — the actual working-set need).
+2. M0's per-namespace `LimitRange` `max.memory` 1Gi → **2Gi** (the 1.5Gi limit exceeded the old ceiling).
+3. `ResourceQuota` `limits.memory` 2Gi → **3Gi** (default `RollingUpdate` briefly needs *both* the old
+   and new pod's limits counted at once — 640Mi + 1536Mi = 2176Mi blew the old 2Gi cap, so the rollout
+   was rejected on every retry until the quota itself was raised).
+
+All three are permanent fixes (not migration-only artifacts) — see `docs/concepts/Kubernetes
+Concepts.md` for the generalized lessons (QoS/eviction, the RollingUpdate⨯ResourceQuota surge collision,
+the Safari network-error quirk).
 
 ## Rollback / safety
 
-- Old Compose stack **stopped, not deleted**; `/storage/kiroku/data` is **untouched** — `docker start
-  kiroku kiroku-api` restores the old instance. Keep until public cutover is verified.
-
-## Remaining (public cutover)
-
-1. Add a **public IngressRoute** (`web` entrypoint, `kiroku.neovara.uk` + legacy `myanki.neovara.uk`).
-2. Repoint Cloudflare DNS/tunnel for those hostnames from the old lab → this cluster's tunnel.
-3. Smoke-test public, then decommission the old kiroku for good.
+- Old Compose stack was **stopped, not deleted**, and `/storage/kiroku/data` was **never touched** by
+  the migration (only read from) — `docker start kiroku kiroku-api` would restore the old instance if
+  ever needed. Now that public cutover is verified working, the old stack is ready for decommission.
