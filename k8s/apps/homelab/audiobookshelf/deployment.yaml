@@ -34,7 +34,7 @@ spec:
         - name: audiobookshelf
           # Upgrade checkpoints are applied one at a time with a built-in
           # backup and four matching Longhorn snapshots before each change.
-          image: ghcr.io/advplyr/audiobookshelf:2.17.2
+          image: ghcr.io/advplyr/audiobookshelf:2.25.1
           imagePullPolicy: IfNotPresent
           env:
             - name: TZ
