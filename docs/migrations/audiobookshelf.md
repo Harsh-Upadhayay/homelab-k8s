@@ -163,7 +163,11 @@ resumable rsync. Full-speed writes to a 2-replica Longhorn volume caused brief A
 unrelated probe failures, so the copy was resumed with `--bwlimit=6000`. The API returned Ready
 after throttling. At the operator's direction the limit was later removed because the cluster had
 no active users; the transfer then sustained about 12.8 MiB/s at the workstation link's practical
-maximum, with both attached media volumes still Healthy. Do not remove the temporary SSH
+maximum. At 13:44 UTC both replicas faulted, Longhorn auto-salvaged/rebuilt the volume, and the
+existing mover mount remained read-only; rsync stopped with code 11. A full mover detach/remount
+restored a clean read-write ext4 mount, retained 23.4 GiB/354 files of partial data, and passed a
+synced write/delete check. The resumable copy then restarted with `--bwlimit=5000`, sustaining
+about 4.9 MiB/s while both volumes and the API remained Healthy/Ready. Do not remove the temporary SSH
 authorization until rsync completes and its final verification pass succeeds.
 
 While the bulk copy ran, an isolated `emptyDir` smoke pod validated the exact 2.10.1 image and
