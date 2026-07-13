@@ -30,7 +30,7 @@ nginx:
 replicaCount: 1
 
 nextcloud:
-  host: nextcloud.in.neovara.uk
+  host: nextcloud.neovara.uk
   # Admin creds come from a stable existing Secret whose username key is EMPTY -> the image
   # sees no admin user and does NOT auto-install (see MIGRATION NOTE). Using an existingSecret
   # (rather than chart-generated) avoids the chart re-randomising the password every render,
@@ -42,7 +42,7 @@ nextcloud:
     usernameKey: nextcloud-username
     passwordKey: nextcloud-password
   trustedDomains:
-    - nextcloud.in.neovara.uk
+    - nextcloud.neovara.uk
   configs: {} # inject nothing: migrated config.php is authoritative; occ sets trusted_proxies/overwrite post-restore
   # Container securityContext MUST stay empty: the apache image's master runs as root.
   securityContext: {}
