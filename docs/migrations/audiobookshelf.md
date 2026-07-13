@@ -90,6 +90,10 @@ Keep four separate RWO claims so the upstream mount boundaries stay explicit:
 | `audiobookshelf-audiobooks` | `longhorn-replicated` | 70 Gi | 49.7 GiB now, about 40% growth headroom |
 | `audiobookshelf-podcasts` | `longhorn-replicated` | 5 Gi | Empty now, ready for future downloads |
 
+Each application mount uses the claim's `data` subdirectory. This keeps Longhorn's ext4
+`lost+found` directory outside Audiobookshelf's library/config paths; the mover creates `data`
+before the zero-replica Deployment is enabled.
+
 Longhorn currently reports about 259 GiB and 268 GiB available on the two workers. Scheduling
 78 GiB on each worker for these 2-copy claims fits with substantial headroom. Both replicas still
 live on one physical external SSD, so this protects against a worker-VM failure, not physical-disk

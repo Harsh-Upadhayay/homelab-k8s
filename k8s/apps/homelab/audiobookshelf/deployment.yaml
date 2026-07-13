@@ -76,12 +76,16 @@ spec:
           volumeMounts:
             - name: config
               mountPath: /config
+              subPath: data
             - name: metadata
               mountPath: /metadata
+              subPath: data
             - name: audiobooks
               mountPath: /audiobooks
+              subPath: data
             - name: podcasts
               mountPath: /podcasts
+              subPath: data
       volumes:
         - name: config
           persistentVolumeClaim:
