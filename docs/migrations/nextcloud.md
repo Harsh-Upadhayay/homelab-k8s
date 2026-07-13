@@ -1,8 +1,8 @@
 # Migration record — nextcloud (M5, first platform/off-the-shelf app)
 
-**Date:** 2026-07-09 · **Status:** ✅ migrated & validated on **v31.0.8** at `nextcloud.in.neovara.uk`
-(internal/Tailscale); sequential upgrade to latest (v34) **in progress / auto-resuming after a
-mid-upgrade cluster outage** — see "Upgrade to latest" and "Incident" below.
+**Date:** 2026-07-09 (migrated) → 2026-07-13 (upgraded to latest) · **Status:** ✅ **complete — live in
+production on v34.0.1 (latest) at `nextcloud.in.neovara.uk`** (internal/Tailscale). ArgoCD app
+`Synced/Healthy`; login + data + cron + external path all verified at v34.
 
 This migration was executed **autonomously** (operator AFK) with a standing mandate: use managed/Helm
 tooling as much as possible, deploy internally first, migrate all data, validate by logging in as the
@@ -94,9 +94,10 @@ read — `docker compose up` + `occ maintenance:mode --off` restores the old ins
 ## Upgrade to latest (v34)
 
 Path: **31.0.8 → 32.0.12 → 33.0.6 → 34.0.1** (chart 9.2.0 appVersion), one major per commit; each bump
-triggers the image's automatic `occ upgrade` on boot (startupProbe covers the migration pause).
-The 31→32 bump was pushed and rolling when the cluster outage hit (below). Remaining hops resume once
-the cluster is back.
+triggers the image's automatic `occ upgrade` on boot (startupProbe covers the migration pause). All four
+states verified `needsDbUpgrade:false` + `maintenance:false` before moving on; post-upgrade
+`db:add-missing-*` and `maintenance:repair` ran at v34. **Final: v34.0.1, ArgoCD `Synced/Healthy`,
+status.php + /login = HTTP 200 over the tailnet path.**
 
 ## Incidents (autonomous run)
 
@@ -109,11 +110,14 @@ the cluster is back.
    `dbpassword`→the new role's password (env config, not the sacred secret/salt/instanceid).
 4. **Login 401 despite a valid hash** — traced to a stale password value passed via a temp file, not the
    account (a freshly `occ`-created probe user authenticated fine). Re-set the password inline; login OK.
-5. **⚠️ Mid-upgrade cluster outage (open):** during the 31→32 rollout all k3s nodes dropped off both
-   Tailscale and the LAN simultaneously (Proxmox VMs / their network — unrelated to the migration; a pod
-   upgrade cannot drop the hypervisor). All migration state is persisted (Longhorn PVCs, restored DB,
-   pushed git incl. the 32.0.12 bump), so the instance returns intact on recovery and ArgoCD reconciles
-   to 32.0.12. The 32→33→34 hops + a final re-validation are pending cluster recovery.
+5. **Mid-upgrade cluster outage:** during the 31→32 rollout all k3s nodes dropped off both Tailscale and
+   the LAN simultaneously (Proxmox VMs / their network — unrelated to the migration; a pod upgrade cannot
+   drop the hypervisor). All state was persisted (Longhorn PVCs, restored DB, pushed git incl. the 32.0.12
+   bump). On recovery ArgoCD reconciled to 32.0.12 and the upgrade chain resumed and completed to v34.
+6. **CronJob in Error → Argo `Degraded`:** the chart's CronJob container defaults to **root (uid 0)**,
+   but Nextcloud refuses `cron.php` from any uid other than `config.php`'s owner (33). Fixed by setting
+   `cronjob.cronjob.securityContext.runAsUser: 33` (the chart documents exactly this). Manual `create job
+   --from=cronjob` then succeeded; app health returned to `Healthy`.
 
 ## Credential
 
