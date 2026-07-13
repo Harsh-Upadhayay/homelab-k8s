@@ -20,7 +20,7 @@ fullnameOverride: nextcloud # deterministic resource names (Service "nextcloud",
 
 image:
   repository: library/nextcloud
-  tag: "33.0.6" # migrated in at 31.0.8, then upgraded one major at a time (31->32->33->34) post-validation.
+  tag: "34.0.1" # migrated in at 31.0.8, then upgraded one major at a time (31->32->33->34) post-validation.
   # Nextcloud forbids skipping a major; each bump triggers the image's automatic `occ upgrade` on boot.
   pullPolicy: IfNotPresent
 
