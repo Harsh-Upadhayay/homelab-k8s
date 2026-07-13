@@ -161,7 +161,9 @@ three intentionally excluded control-plane Endpoints, so that known state was wa
 In progress 2026-07-13: the mover is pulling over a temporary restricted SSH authorization with
 resumable rsync. Full-speed writes to a 2-replica Longhorn volume caused brief API/etcd latency and
 unrelated probe failures, so the copy was resumed with `--bwlimit=6000`. The API returned Ready
-after throttling, and both attached media volumes report Healthy. Do not remove the temporary SSH
+after throttling. At the operator's direction the limit was later removed because the cluster had
+no active users; the transfer then sustained about 12.8 MiB/s at the workstation link's practical
+maximum, with both attached media volumes still Healthy. Do not remove the temporary SSH
 authorization until rsync completes and its final verification pass succeeds.
 
 While the bulk copy ran, an isolated `emptyDir` smoke pod validated the exact 2.10.1 image and
