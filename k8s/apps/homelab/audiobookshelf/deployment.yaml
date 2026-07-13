@@ -13,10 +13,9 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "1"
 spec:
-  # Migration safety: Argo creates/binds the PVCs, but the application must not
-  # initialize a blank /config before the source data is copied. Changed to 1
-  # only after the final quiesced copy passes SQLite integrity checks.
-  replicas: 0
+  # Enabled only after the online source backup was restored offline and the
+  # copied SQLite database passed both quick_check and integrity_check.
+  replicas: 1
   strategy:
     type: Recreate
   selector:
