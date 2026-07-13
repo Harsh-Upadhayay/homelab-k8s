@@ -1,0 +1,11 @@
+# Dedicated boundary for the off-the-shelf Audiobookshelf workload. Unlike a
+# dev-owned personal namespace, this trusted operator-owned app deliberately has
+# no ResourceQuota/LimitRange (same policy as Nextcloud).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: audiobookshelf
+  labels:
+    group: homelab
+    app.kubernetes.io/name: audiobookshelf
+    app.kubernetes.io/part-of: audiobookshelf

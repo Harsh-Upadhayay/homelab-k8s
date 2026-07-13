@@ -1,0 +1,97 @@
+# One process owns one SQLite database, so this is deliberately a one-replica
+# Deployment with Recreate strategy. RollingUpdate could overlap two writers on
+# the same-node RWO mount; Kubernetes allowing the mount would not make SQLite
+# concurrency safe.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: audiobookshelf
+  namespace: audiobookshelf
+  labels:
+    app.kubernetes.io/name: audiobookshelf
+    app.kubernetes.io/part-of: audiobookshelf
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  # Migration safety: Argo creates/binds the PVCs, but the application must not
+  # initialize a blank /config before the source data is copied. Changed to 1
+  # only after the final quiesced copy passes SQLite integrity checks.
+  replicas: 0
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: audiobookshelf
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: audiobookshelf
+        app.kubernetes.io/part-of: audiobookshelf
+    spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: audiobookshelf
+          # Match the Compose source exactly for data validation. Upgrade only
+          # after this version is healthy against the migrated state.
+          image: ghcr.io/advplyr/audiobookshelf:2.10.1
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: TZ
+              value: Asia/Tokyo
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+              # The source image runs as root and listens on privileged port 80.
+              add: [NET_BIND_SERVICE]
+          # Upstream's GET / is a stable readiness signal. Omit liveness for the
+          # migration: a slow scan/database migration must not become a restart
+          # loop. startupProbe gates readiness during first open of the copied DB.
+          startupProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: metadata
+              mountPath: /metadata
+            - name: audiobooks
+              mountPath: /audiobooks
+            - name: podcasts
+              mountPath: /podcasts
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: audiobookshelf-config
+        - name: metadata
+          persistentVolumeClaim:
+            claimName: audiobookshelf-metadata
+        - name: audiobooks
+          persistentVolumeClaim:
+            claimName: audiobookshelf-audiobooks
+        - name: podcasts
+          persistentVolumeClaim:
+            claimName: audiobookshelf-podcasts

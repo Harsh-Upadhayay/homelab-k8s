@@ -1,0 +1,67 @@
+# Preserve upstream's four independent mount boundaries. In particular,
+# /config contains the SQLite database and must stay on an RWO block filesystem
+# (never RWX/NFS/SMB). All four use the prod 2-copy tier because they make up one
+# restorable application state; the old /storage copy remains the rollback copy.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: audiobookshelf-config
+  namespace: audiobookshelf
+  labels:
+    app.kubernetes.io/name: audiobookshelf
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: longhorn-replicated
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: audiobookshelf-metadata
+  namespace: audiobookshelf
+  labels:
+    app.kubernetes.io/name: audiobookshelf
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: longhorn-replicated
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: audiobookshelf-audiobooks
+  namespace: audiobookshelf
+  labels:
+    app.kubernetes.io/name: audiobookshelf
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: longhorn-replicated
+  resources:
+    requests:
+      storage: 70Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: audiobookshelf-podcasts
+  namespace: audiobookshelf
+  labels:
+    app.kubernetes.io/name: audiobookshelf
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: longhorn-replicated
+  resources:
+    requests:
+      storage: 5Gi

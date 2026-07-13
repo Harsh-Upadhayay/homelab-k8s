@@ -1,0 +1,23 @@
+# Off-the-shelf homelab workload, fully hand-authored because Audiobookshelf
+# publishes no official Helm chart. Automated sync is safe initially because
+# the Deployment is deliberately inert (replicas: 0) until migration completes.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: audiobookshelf
+  namespace: argocd
+spec:
+  project: homelab
+  source:
+    repoURL: https://github.com/Harsh-Upadhayay/homelab-k8s.git
+    targetRevision: main
+    path: k8s/apps/homelab/audiobookshelf
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: audiobookshelf
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false # namespace.yaml owns the boundary explicitly

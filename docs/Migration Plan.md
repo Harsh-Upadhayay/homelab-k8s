@@ -26,13 +26,13 @@ exists here:
 
 - **GPU workloads deferred.** The old lab was bare metal with an NVIDIA GPU; this cluster is
   Proxmox VMs with no GPU passthrough (yet). Anything that *requires* the GPU stays off-cluster
-  for now. **Immich is the exception** — it is migrated **CPU-only** (Immich supports a fully
-  CPU-native ML + transcoding path; we simply don't apply the CUDA/NVENC config).
+  for now. **Immich is also deferred**: its 321 GB library, storage/workstation lifecycle, and
+  v2.7.3 pgvecto-rs → v3 VectorChord transition make it a separate blocked project.
 - **Authelia + LLDAP removed entirely.** They gave finicky, never-quite-one-click integration and
   are not worth porting. New auth model:
   - **Internal apps → Tailscale reachability *is* the auth.** Not on the tailnet = the hostname
     doesn't even resolve. Strip each app's own login where the app allows it.
-  - **Public apps → their own built-in login** (Nextcloud, Immich, Audiobookshelf each have one).
+  - **Public apps → their own built-in login** (Nextcloud and Audiobookshelf each have one).
   - No ForwardAuth middleware, no in-cluster OIDC provider.
 - **Watchtower dropped** — GitOps/ArgoCD is the update mechanism now.
 
@@ -40,9 +40,9 @@ exists here:
 
 | Verdict | Services | Group |
 | --- | --- | --- |
-| ✅ **Migrate** | homepage, nextcloud, audiobookshelf, immich (CPU-only) | `homelab` |
+| ✅ **Migrate** | homepage, nextcloud, audiobookshelf | `homelab` |
 | ✅ **Migrate** | kiroku (+ kiroku-api), jobhunt | `personal` |
-| 🧊 **Defer + preserve data** | ollama, openclaw, mediaserver (gluetun, qbittorrent, flaresolverr, prowlarr, sonarr, radarr, jellyseerr, jellyfin) | (migrated later, by hand) |
+| 🧊 **Defer + preserve data** | immich, ollama, openclaw, mediaserver (gluetun, qbittorrent, flaresolverr, prowlarr, sonarr, radarr, jellyseerr, jellyfin) | (migrated later, by hand) |
 | 🗑️ **Drop** | watchtower, authelia, lldap, portfolio (stays on GitHub Pages), openvscode-server, jenkins (→ GitHub Actions) | — |
 | ✔️ **Already replaced** | traefik, cloudflared, prometheus/grafana/node-exporter/cadvisor | — |
 
@@ -51,7 +51,7 @@ exists here:
 This repo's scope widens from "infra provisioning" to **cluster repo**: everything the
 platform operator owns. That's three layers — **infra** (`terraform/`, `ansible/`),
 **platform** (Traefik, cert-manager, Longhorn, monitoring, ArgoCD itself), and
-**off-the-shelf workloads** (homepage, nextcloud, audiobookshelf, immich). Deploying
+**off-the-shelf workloads** (homepage, nextcloud, audiobookshelf). Deploying
 third-party software is platform-adjacent config — the same kind of artifact as Grafana
 values, so it belongs here.
 
@@ -131,7 +131,7 @@ Old state lives on the old host under `/storage/...`. For each stateful app:
 ## Data migration is its own track, decoupled from service migration
 
 The cluster and the source data are on the **same LAN** (workstation/old host ↔ k3s nodes on
-`192.168.1.0/24`). So user data (Nextcloud files, Immich library, the media tree) is migrated
+`192.168.1.0/24`). So in-scope user data (Nextcloud and Audiobookshelf) is migrated
 as a **standalone workstream, ahead of the services that consume it** — staged into pre-created
 PVCs so a service pod, whenever it lands, just mounts an already-populated volume.
 
@@ -139,22 +139,24 @@ Mechanism (same-LAN, efficient):
 - Pre-create the target PVC(s), then run a **mover Job** that mounts the PVC and pulls data over
   the LAN via `rsync` over SSH (or an NFS mount of the source). No public path, no cloudflared —
   node-to-source directly over GbE.
-- Bulk data (the Immich library especially) is copied **once, up front**; a final incremental
+- Bulk data (the Audiobookshelf library) is copied **once, up front**; a final incremental
   `rsync --delete` at cutover catches the delta, keeping the service's downtime window tiny.
 - The `longhorn-static` StorageClass is available for binding pre-provisioned volumes to a
   known PVC name, which suits this "populate the volume before the app exists" flow.
 
-### ⚠️ Capacity: everything-but-media fits Longhorn now; media waits for a future node
+### Capacity: Audiobookshelf fits now; Immich and the media stack remain deferred
 
-Longhorn reports **~541 GiB schedulable** across the two worker disks (both on the one external
-USB SSD — ADR-0022: the internal NVMe stays off-limits). The "one physical SSD" caveat affects
-*durability* (two replicas on one disk isn't real redundancy — already noted in the ROADMAP),
-**not** schedulable capacity.
+On 2026-07-13 Longhorn reports about **259 GiB / 268 GiB available per worker** (both workers
+still sit on the one external USB SSD — ADR-0022: the internal NVMe stays off-limits). A
+2-replica volume must fit on **each** worker; summing both disks is misleading for replicated
+capacity. Audiobookshelf's 49.7 GiB library fits comfortably in a 70 GiB
+`longhorn-replicated` claim, alongside its small config/metadata claims.
 
-- **Everything in scope except the media stack fits in ~541 GiB** — Nextcloud data, the Immich
-  library, kiroku/jobhunt DBs, audiobookshelf config all stage into Longhorn PVCs directly.
-  Budget `longhorn-replicated` (2 copies) only for what truly needs it; single-replica `longhorn`
-  for the rest to stretch the pool.
+- **Audiobookshelf fits now** — all four source mount boundaries stage into explicit replicated
+  Longhorn PVCs. See `docs/migrations/audiobookshelf.md`.
+- **Immich does not belong in this capacity claim** — its measured library is 321 GB before
+  accounting for database/metadata or replication, larger than either current Longhorn disk. It
+  remains on the source workstation with its data intact until separately planned.
 - **Media tree (mediaserver, ~TB-scale) does NOT go into this pool** — and doesn't need an NFS/NAS
   workaround. Plan: once the in-scope services are migrated, **this workstation (currently hosting
   the old lab + the 1.4 TB `/storage` disk) is converted into a k3s node**, its 1.4 TB disk added
@@ -162,8 +164,8 @@ USB SSD — ADR-0022: the internal NVMe stays off-limits). The "one physical SSD
   capacity growth (add a node/disk — never touch the internal NVMe), owned by the user, off this
   milestone's critical path.
 
-So there is **no open storage-tier decision** and no NFS dependency: in-scope data → Longhorn now;
-media → future workstation-as-node, user-migrated.
+Current in-scope data goes to Longhorn now; Immich and the media tree stay intact on the source
+disk pending future hardware and their own migration plans.
 
 ## Phased sequence (one new concept per phase)
 
@@ -175,15 +177,15 @@ media → future workstation-as-node, user-migrated.
 | **M3** | audiobookshelf | First **real data migration** from old `/storage`; app with a media library; own login | homelab / public |
 | **M4** | jobhunt | Pointer Application again; multi-tier app: StatefulSet (MySQL) + Redis + Deployments (django/celery×2/frontend) + a migration **Job** + nginx front | personal / public |
 | **M5** | nextcloud | The heavy one: Postgres + Redis + app, large PVCs, `pg_dump` restore, trusted-proxy, upload-buffering middleware, cron → **CronJob** | homelab / public |
-| **M6** | immich (CPU-only) | Heaviest: server + ML(CPU) + pgvecto-rs vector DB + redis, large library PVC, DB restore, **explicitly no GPU** | homelab / public |
+| **M6** | immich — **deferred** | No deployment in the current sequence; preserve Compose + data and plan separately | — |
 | **M7** | old-lab decommission | **Backup/restore drill** + preserve deferred-app data (ollama models, mediaserver media tree + *arr configs, openclaw config/workspace), then power down the old lab | — |
 
-Ordering climbs the difficulty curve deliberately: stateless → small stateful → media library →
-multi-tier → heavy relational DB → vector DB + ML.
+The current execution focus is Audiobookshelf: a single-writer SQLite app with a 49.7 GiB media
+library. Immich is no longer a step in this run.
 
 ## Deferred-app data preservation (M7)
 
-`ollama`, `openclaw`, and the whole `mediaserver` tree stay on Compose and get migrated later by
+`immich`, `ollama`, `openclaw`, and the whole `mediaserver` tree stay on Compose and get migrated later by
 hand. The old host is deprecated, but its 1.4 TB `/storage` disk is **not** wiped — it's the
 storage that gets folded back in when the workstation becomes a k3s node (see the capacity
 section). So preservation is mostly "don't destroy the disk," plus a safety backup for the
@@ -191,6 +193,8 @@ small stuff:
 
 - **Media tree** → stays on the 1.4 TB disk in place; migrated by the user after the
   workstation-as-node conversion adds that disk to Longhorn. No copy needed.
+- **Immich** → keep `/storage/immich` and its Compose database/library untouched. Its 321 GB
+  library and database/vector upgrade are not folded into the generic media-tree step.
 - **`ollama/data` (models), `openclaw/{config,workspace}`, `mediaserver` per-service `state/*/config`**
   → small enough to also take a **verified backup copy** (restic/tar) before the host is repurposed,
   as insurance against the reformat that the node conversion implies.
@@ -216,7 +220,7 @@ copy-paste).
 | **M3** | Storage | The whole 10% domain in one phase: **PV/PVC binding, access modes, reclaim policies, StorageClasses, dynamic vs static provisioning** — `longhorn-static` pre-provisioned binding is literally the exam's "create a PV, bind a PVC to it" task. Plus **securityContext** (`runAsUser`/`fsGroup`) to satisfy the old UID/GID contracts. |
 | **M4** | Workloads · Troubleshooting | **StatefulSet vs Deployment** (stable identity, one-PVC-per-replica via `volumeClaimTemplates`), **headless Services**, **Job** semantics (`backoffLimit`, `restartPolicy`), init containers. A 6-workload app is a triage playground — deliberate break-and-fix drills. |
 | **M5** | Workloads & Scheduling | **CronJob** (schedule syntax, `concurrencyPolicy`, history limits); **Secrets**: types, `envFrom` vs volume mounts, and why a ConfigMap/Secret change doesn't restart pods by itself. |
-| **M6** | Workloads (autoscaling) · Troubleshooting | **HPA** on the CPU-bound ML service (workload autoscaling is in the current CKA curriculum); **OOMKilled, node-pressure eviction, QoS-ordered eviction** — tuning real memory-hungry workloads on RAM-bounded nodes. |
+| **M6** | Deferred | Immich/HPA work is outside the current migration; study HPA separately until that project resumes. |
 | **M7** | Cluster Architecture · Troubleshooting | **etcd snapshot & restore drill** (embedded etcd — the exam's `etcdctl`/restore task, k3s-flavored); **node lifecycle**: `cordon`/`drain`/`uncordon`; joining a new node (workstation → k3s agent ≈ the kubeadm-join concept); node `NotReady` triage. |
 | **every phase** | Troubleshooting (30%) | The acceptance checks below are run as triage practice, not checklist theatre: `kubectl describe`/`logs --previous`/`get events --sort-by`, `kubectl debug`, DNS + Service-endpoint checks. At least one deliberate break-then-fix per phase. |
 
