@@ -76,6 +76,12 @@ cronjob:
   type: cronjob # native Kubernetes CronJob (not the crond sidecar)
   cronjob:
     schedule: "*/5 * * * *"
+    # Run cron.php AS www-data (33): Nextcloud refuses to run cron from any uid other than
+    # the owner of config/config.php (33), and the chart's CronJob container defaults to root.
+    securityContext:
+      runAsUser: 33
+      runAsGroup: 33
+      runAsNonRoot: true
     # cron.php needs the same RWO PVCs the app pod holds. RWO binds to one NODE (not one
     # pod), so co-locating the cron Job onto the app's node lets them share the volume.
     affinity:
