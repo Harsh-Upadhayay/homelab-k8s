@@ -1,11 +1,27 @@
 # Migration plan — Audiobookshelf (M3)
 
-**Date:** 2026-07-13 · **Status:** in progress; pre-flight passed · **Exposure:** internal-first, then
-public at `audiobookshelf.neovara.uk`.
+**Date:** 2026-07-13 · **Status:** ready for user verification; public cutover pending ·
+**Exposure:** internal at `audiobookshelf.in.neovara.uk`; Compose remains public at
+`audiobookshelf.neovara.uk`.
 
 This is the next Compose → Kubernetes migration. Immich is explicitly outside this run: its
 321 GB library, database/vector-version transition, and workstation-storage lifecycle remain a
 separate blocked project. Nothing in this plan changes, copies, or deletes Immich data.
+
+## Verification handoff
+
+- Kubernetes runs **2.35.1** at `https://audiobookshelf.in.neovara.uk`; ArgoCD is
+  `Synced/Healthy`, and all four Longhorn volumes are `Healthy`.
+- Compose still runs **2.10.1** at `https://audiobookshelf.neovara.uk` and was never stopped.
+- Snapshot state matches the source at `2026-07-14T0149`: 3 users, 1 library, 60 items/books,
+  12 media-progress rows, and 338 playback sessions. Source/target hashes matched for libraries,
+  folders, items, books, progress, and playback sessions before application upgrades.
+- Media matches at 1,105 relative paths and 53,314,562,645 bytes, including integer mtimes.
+- The most active non-root account, `harsh`, has a Kubernetes-only password stored temporarily in
+  Secret `audiobookshelf-migration-login`; its source password was not changed.
+- Automated checks passed: SQLite `quick_check`, login, authenticated byte-range playback (HTTP
+  206), internal HTTPS (200), WebSocket upgrade (101), and two PVC detach/reattach pod reschedules.
+- Public routing/cutover is deliberately not performed. User verification is the remaining gate.
 
 ## Source assessment
 
@@ -158,7 +174,7 @@ three intentionally excluded control-plane Endpoints, so that known state was wa
 5. Ask users not to upload, merge, embed metadata, or reorganize books between the bulk copy and
    cutover. Playback is safe; library mutations are not.
 
-In progress 2026-07-13: the mover is pulling over a temporary restricted SSH authorization with
+Completed 2026-07-13: the mover pulled over a temporary restricted SSH authorization with
 resumable rsync. Full-speed writes to a 2-replica Longhorn volume caused brief API/etcd latency and
 unrelated probe failures, so the copy was resumed with `--bwlimit=6000`. The API returned Ready
 after throttling. At the operator's direction the limit was later removed because the cluster had
@@ -167,8 +183,10 @@ maximum. At 13:44 UTC both replicas faulted, Longhorn auto-salvaged/rebuilt the 
 existing mover mount remained read-only; rsync stopped with code 11. A full mover detach/remount
 restored a clean read-write ext4 mount, retained 23.4 GiB/354 files of partial data, and passed a
 synced write/delete check. The resumable copy then restarted with `--bwlimit=5000`, sustaining
-about 4.9 MiB/s while both volumes and the API remained Healthy/Ready. Do not remove the temporary SSH
-authorization until rsync completes and its final verification pass succeeds.
+about 4.9 MiB/s while both volumes and the API remained Healthy/Ready. Two late SSH protocol resets
+made rsync's final pass unreliable, so source/target manifests were compared directly; all real
+files matched and five abandoned dot-prefixed partial files were removed. The temporary SSH
+authorization and mover resources were removed after verification.
 
 While the bulk copy ran, an isolated `emptyDir` smoke pod validated the exact 2.10.1 image and
 proposed security/probe configuration without mounting any migration PVC. A 145 MiB single-file
@@ -177,16 +195,18 @@ playback returned HTTP 206 with the requested 1,024 bytes. The temporary Traefik
 HTTPS 200 with the secure headers, and its Socket.IO WebSocket upgraded with HTTP 101. All smoke
 resources were deleted afterward.
 
-### 3. Quiesce and take the final consistent copy
+### 3. Take the final consistent online snapshot
 
-1. Start the maintenance window and stop the old `audiobookshelf` Compose container cleanly.
-2. Re-run the media `rsync --delete` to catch the delta.
-3. Copy `/config` and `/metadata` only now, with the writer stopped. Preserve root ownership and
-   modes. Copying a live SQLite file is not an accepted shortcut.
-4. Run SQLite `quick_check` against the PVC copy and compare the baseline row counts.
-5. Remove the mover pod so no second process holds the RWO claims.
+The operator required Compose to remain running. Instead of copying its live SQLite file, the run
+used Audiobookshelf's own online-backup API, which calls SQLite's backup interface. Fresh backup
+`2026-07-14T0149.audiobookshelf` supplied the authoritative database plus item/author metadata;
+non-database config and remaining metadata were staged separately. The restored PVC database passed
+both `quick_check` and full `integrity_check` before the application started. Compose stayed online.
 
 ### 4. Validate the migrated source version internally
+
+Completed on 2.10.1: login, 60-item library, range playback, TLS/headers, WebSocket, exact core-table
+hashes, and a pod reschedule all passed. The source remained HTTP 200 throughout.
 
 1. Commit `replicas: 1` while keeping image `2.10.1` and only the internal route enabled.
 2. Wait for the startup/readiness probes, then verify clean database initialization/migration logs.
@@ -202,6 +222,11 @@ resources were deleted afterward.
    intact state.
 
 ### 5. Upgrade through the real compatibility boundaries
+
+Completed successfully through **2.17.2 → 2.25.1 → 2.26.3 → 2.35.1**. Every boundary had a fresh
+built-in backup plus same-name snapshots across all four Longhorn volumes. The 2.26 checkpoint
+confirmed the intended new access-token/refresh-cookie flow; core state remained 3 users, 60 items,
+12 progress rows, and 338 playback sessions at every checkpoint.
 
 Audiobookshelf runs database migrations automatically in version order. We still separate the old
 host migration from the application upgrade and checkpoint the two historically important
@@ -220,6 +245,9 @@ first failed checkpoint; do not stack another version change onto an unexplained
 
 ### 6. Public cutover
 
+**Pending and user-owned.** None of the steps below were performed; the public hostname still serves
+Compose exactly as requested.
+
 1. In Cloudflare Tunnel, create the specific public hostname `audiobookshelf.neovara.uk` pointing
    to `http://traefik.traefik.svc.cluster.local:80`. A specific record overrides the old wildcard
    route without moving any other service.
@@ -232,7 +260,8 @@ first failed checkpoint; do not stack another version change onto an unexplained
 
 ### 7. Close-out
 
-1. Keep the old Compose container stopped, not deleted. Keep all four source directories untouched.
+1. Keep the old Compose container running until the user performs public cutover. Keep all four
+   source directories untouched.
 2. Record final versions, counts, PVCs, incidents, and rollback evidence in this file; change status
    to complete only after public validation.
 3. Mark Audiobookshelf migrated in the checklist. Immich remains deferred and its source data stays
