@@ -4,6 +4,8 @@
 #   --tags tailscale         Phase 12 Part A — join the tailnet (needs an auth key)
 #   --tags terraform-token   Phase 3 prerequisite — bootstrap the terraform@pve API token
 #   --tags laptop            laptop-as-server hardening — never suspend on lid close (ADR-0022)
+#   --tags e1000e            stop the Intel I219-LM NIC TX-hang (offloads off, no reboot)
+#   --tags e1000e-aspm       deeper half — disable PCIe ASPM via GRUB (needs a reboot)
 # Run with no --tags to do all of them.
 
 - name: Repo housekeeping + apt upgrade (Phase 1)
@@ -24,3 +26,11 @@
 - name: Laptop-as-server hardening (ADR-0022)
   ansible.builtin.import_tasks: laptop.yml
   tags: [laptop]
+
+- name: Stop the Intel I219-LM NIC TX-hang (offloads off, no reboot)
+  ansible.builtin.import_tasks: e1000e_fix.yml
+  tags: [e1000e]
+
+# - name: Deeper fix — disable PCIe ASPM via GRUB (needs reboot)
+#   ansible.builtin.import_tasks: e1000e_aspm.yml
+#   tags: [e1000e-aspm]

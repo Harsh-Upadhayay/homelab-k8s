@@ -1,0 +1,38 @@
+---
+# Deeper, opt-in half of the e1000e hang fix: disable PCIe ASPM.
+#
+# The I219-LM also has a documented TX-hang errata triggered by PCIe ASPM
+# L0s/L1 low-power transitions during idle TX windows — which is why the hang
+# consistently first appears a few minutes after boot. `pcie_aspm=off` removes
+# that second trigger.
+#
+# Kept separate from e1000e_fix.yml on purpose: this one needs a REBOOT and
+# touches GRUB, so it gets its own tag and you run it at a time you choose.
+#
+# Run with:  ansible-playbook proxmox-host.yml --tags e1000e-aspm
+# Then reboot the host for it to take effect.
+
+- name: Read current GRUB cmdline
+  ansible.builtin.command: grep -E '^GRUB_CMDLINE_LINUX_DEFAULT=' /etc/default/grub
+  changed_when: false
+  register: e1000e_grub_line
+
+# Backrefs so we append rather than replace: "quiet" -> "quiet pcie_aspm=off".
+# Skipped entirely once pcie_aspm is already present, so it's safe to re-run.
+- name: Disable PCIe ASPM in GRUB cmdline (needs reboot to apply)
+  ansible.builtin.lineinfile:
+    path: /etc/default/grub
+    regexp: '^(GRUB_CMDLINE_LINUX_DEFAULT=")(.*)(")$'
+    line: '\1\2 pcie_aspm=off\3'
+    backrefs: true
+  when: "'pcie_aspm' not in e1000e_grub_line.stdout"
+  register: e1000e_grub_changed
+
+- name: Regenerate GRUB config if the cmdline changed
+  ansible.builtin.command: update-grub
+  when: e1000e_grub_changed.changed | default(false)
+
+- name: Reminder to reboot for the ASPM change to take effect
+  ansible.builtin.debug:
+    msg: "pcie_aspm=off staged in GRUB. Reboot pve-dell when convenient to activate it."
+  when: e1000e_grub_changed.changed | default(false)
