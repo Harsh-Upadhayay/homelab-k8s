@@ -184,8 +184,8 @@ disk pending future hardware and their own migration plans.
 Audiobookshelf M3 is complete: Kubernetes runs 2.35.1 at `audiobookshelf.neovara.uk` with exact
 migrated state and the 49.7 GiB library on a one-replica Longhorn claim. Public login, API state,
 byte-range playback, secure headers, and WebSockets passed. The old Compose deployment remains
-running but is no longer on the public route; its data and the detached old PVC remain rollback
-copies. Immich is no longer a step in this run.
+running but is no longer on the public route; its data remains the rollback copy. The detached old
+PVC was released after acceptance. Immich is no longer a step in this run.
 
 ## Deferred-app data preservation (M7)
 

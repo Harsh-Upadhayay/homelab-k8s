@@ -8,8 +8,8 @@ Check off apps as they're migrated to k8s or eliminated outright.
 - [x] kiroku — live on `kiroku.neovara.uk`. Old containers stopped, not yet removed.
 - [x] audiobookshelf — Kubernetes 2.35.1 is live at `audiobookshelf.neovara.uk`. Exact state and
   all 1,105 media files are migrated; bulk media is on the one-replica Longhorn tier, with the
-  former claim retained as rollback. Compose is intentionally still running but is no longer on
-  the public route. Plan/runbook: `docs/migrations/audiobookshelf.md`.
+  former claim released after acceptance. Compose is intentionally still running as rollback but
+  is no longer on the public route. Plan/runbook: `docs/migrations/audiobookshelf.md`.
 - [x] nextcloud + nextcloud-db + nextcloud-redis — file storage/sync, real personal data.
 
 ## Deferred because of blockers

@@ -1,6 +1,6 @@
 # Off-the-shelf homelab workload, fully hand-authored because Audiobookshelf
-# publishes no official Helm chart. The migrated Deployment is live; Recreate
-# strategy and explicit rollback-PVC pruning protection keep automated sync safe.
+# publishes no official Helm chart. The migrated Deployment is live; its
+# single-writer Recreate strategy keeps automated sync safe.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

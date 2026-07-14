@@ -18,10 +18,10 @@ remain a separate blocked project. Nothing in this plan changes, copies, or dele
   folders, items, books, progress, and playback sessions before application upgrades.
 - Media matches at 1,105 relative paths and 53,314,562,645 bytes, including integer mtimes.
 - The live `/audiobooks` mount is the 70 GiB, one-replica `longhorn` claim
-  `audiobookshelf-audiobooks-single`. The former claim remains bound but detached as a protected
-  rollback copy; its Longhorn replica count was reduced to one after the switch.
-- The most active non-root account, `harsh`, has a Kubernetes-only password stored temporarily in
-  Secret `audiobookshelf-migration-login`; its source password was not changed.
+  `audiobookshelf-audiobooks-single`. The former claim was released after public acceptance; the
+  untouched Compose source remains the rollback copy.
+- The most active non-root account, `harsh`, has a Kubernetes-only password. The temporary Secret
+  used to hand it off was deleted after cutover; its source password was not changed.
 - Automated checks passed: SQLite `quick_check`, local login, one library/60 items, authenticated
   byte-range playback (HTTP 206, 1,024 requested bytes), public HTTPS (200), secure response
   headers, WebSocket upgrade (101), and two PVC detach/reattach pod reschedules.
@@ -111,10 +111,10 @@ Keep four separate RWO claims so the upstream mount boundaries stay explicit:
 | `audiobookshelf-audiobooks-single` | `longhorn` | 70 Gi | 49.7 GiB reproducible bulk media; one replica avoids another 70 GiB allocation |
 | `audiobookshelf-podcasts` | `longhorn-replicated` | 5 Gi | Empty now, ready for future downloads |
 
-The original `audiobookshelf-audiobooks` 70 GiB claim is retained in Git as a rollback object with
-ArgoCD pruning disabled. It is no longer mounted by the Deployment. A bound PVC's StorageClass is
-immutable, which is why the one-replica target required the new
-`audiobookshelf-audiobooks-single` claim rather than an in-place class change.
+The original `audiobookshelf-audiobooks` 70 GiB claim was retained through public acceptance, then
+removed from Git and released. A bound PVC's StorageClass is immutable, which is why the
+one-replica target required the new `audiobookshelf-audiobooks-single` claim rather than an
+in-place class change.
 
 Each application mount uses the claim's `data` subdirectory. This keeps Longhorn's ext4
 `lost+found` directory outside Audiobookshelf's library/config paths; the mover creates `data`
@@ -123,8 +123,8 @@ before the zero-replica Deployment is enabled.
 Longhorn currently reports about 259 GiB and 268 GiB available on the two workers. Config,
 metadata, and podcasts retain two replicas; the 70 GiB audiobook claim intentionally uses one.
 Both workers still live on one physical external SSD, so a second replica would not protect this
-bulk media from physical-disk failure. The old replicated claim and untouched Compose source remain
-rollback copies until the new claim is verified and the user approves their removal.
+bulk media from physical-disk failure. The untouched Compose source remains the rollback copy after
+the temporary old claim was released.
 
 The upstream warning against putting `/config` on SMB/NFS is satisfied: a Longhorn RWO claim is
 presented to the pod as a locally mounted ext4 block device through CSI/iSCSI. It is not a shared
@@ -271,8 +271,7 @@ and integer mtime: 1,105 files and 53,314,562,645 bytes.
 After the switch, the application was Ready on worker 2; login, library/item counts, sample media
 readability, internal target HTTP, public Compose HTTP, and ArgoCD `Synced/Healthy` passed.
 Temporary mover Jobs, SSH credentials/authorization, and Proxmox I/O caps were removed. The old
-claim remains detached as rollback; do not delete it until the user explicitly accepts the new
-storage copy.
+claim was retained as rollback through public acceptance and then released during final cleanup.
 
 ### 6. Public cutover
 
@@ -291,9 +290,10 @@ removed in the same GitOps change, leaving the final public-only shape used by k
 
 1. Keep the old Compose container running and all four source directories untouched as requested;
    the public hostname no longer routes to it.
-2. Keep `audiobookshelf-audiobooks` detached and protected from ArgoCD pruning until the user
-   explicitly approves deletion of the rollback claim.
-3. Final versions, counts, PVCs, incidents, and rollback evidence are recorded in this file.
+2. The detached `audiobookshelf-audiobooks` rollback claim and temporary migration login Secret
+   were deleted after explicit approval; mover resources and temporary credentials were already
+   absent.
+3. Final versions, counts, PVCs, incidents, and cleanup evidence are recorded in this file.
 4. Audiobookshelf is marked migrated in the checklist. Immich remains deferred and its source data
    stays intact.
 
