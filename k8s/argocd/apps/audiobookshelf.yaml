@@ -1,6 +1,6 @@
 # Off-the-shelf homelab workload, fully hand-authored because Audiobookshelf
-# publishes no official Helm chart. Automated sync is safe initially because
-# the Deployment is deliberately inert (replicas: 0) until migration completes.
+# publishes no official Helm chart. The migrated Deployment is live; Recreate
+# strategy and explicit rollback-PVC pruning protection keep automated sync safe.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
