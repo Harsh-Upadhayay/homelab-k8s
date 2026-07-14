@@ -1,18 +1,18 @@
 # Migration plan — Audiobookshelf (M3)
 
-**Date:** 2026-07-14 · **Status:** internally verified by user; public cutover pending ·
-**Exposure:** internal at `audiobookshelf.in.neovara.uk`; Compose remains public at
-`audiobookshelf.neovara.uk`.
+**Date:** 2026-07-14 · **Status:** complete · **Exposure:** public at
+`audiobookshelf.neovara.uk` through Kubernetes.
 
-This is the next Compose → Kubernetes migration. Immich is explicitly outside this run: its
-321 GB library, database/vector-version transition, and workstation-storage lifecycle remain a
-separate blocked project. Nothing in this plan changes, copies, or deletes Immich data.
+This completes the Audiobookshelf Compose → Kubernetes migration. Immich is explicitly outside
+this run: its 321 GB library, database/vector-version transition, and workstation-storage lifecycle
+remain a separate blocked project. Nothing in this plan changes, copies, or deletes Immich data.
 
 ## Verification handoff
 
-- Kubernetes runs **2.35.1** at `https://audiobookshelf.in.neovara.uk`; ArgoCD is
+- Kubernetes runs **2.35.1** at `https://audiobookshelf.neovara.uk`; ArgoCD is
   `Synced/Healthy`, and the four mounted Longhorn volumes are `Healthy`.
-- Compose still runs **2.10.1** at `https://audiobookshelf.neovara.uk` and was never stopped.
+- Compose still runs **2.10.1** as an untouched rollback source and was never stopped, but the
+  public hostname now routes to Kubernetes.
 - Snapshot state matches the source at `2026-07-14T0149`: 3 users, 1 library, 60 items/books,
   12 media-progress rows, and 338 playback sessions. Source/target hashes matched for libraries,
   folders, items, books, progress, and playback sessions before application upgrades.
@@ -22,10 +22,11 @@ separate blocked project. Nothing in this plan changes, copies, or deletes Immic
   rollback copy; its Longhorn replica count was reduced to one after the switch.
 - The most active non-root account, `harsh`, has a Kubernetes-only password stored temporarily in
   Secret `audiobookshelf-migration-login`; its source password was not changed.
-- Automated checks passed: SQLite `quick_check`, login, authenticated byte-range playback (HTTP
-  206), internal HTTPS (200), WebSocket upgrade (101), and two PVC detach/reattach pod reschedules.
-- The user confirmed the internal deployment works. Public routing/cutover is deliberately not
-  performed and is the remaining gate.
+- Automated checks passed: SQLite `quick_check`, local login, one library/60 items, authenticated
+  byte-range playback (HTTP 206, 1,024 requested bytes), public HTTPS (200), secure response
+  headers, WebSocket upgrade (101), and two PVC detach/reattach pod reschedules.
+- The user confirmed the internal deployment, created the Cloudflare public hostname, and requested
+  completion. The temporary internal route is retired; the final route is public-only.
 
 ## Source assessment
 
@@ -42,8 +43,8 @@ Source: `../homelab/audiobookshelf/compose.yml`, running on this workstation.
 - Runtime: one root-run process, port 80, no restarts/OOM kills in the inspected run; current
   idle memory is about 163 MiB.
 - Filesystem: `/storage` is mergerfs over the workstation's ext4 `/dev/sdb1` data disk.
-- Public path: `https://audiobookshelf.neovara.uk` currently returns HTTP 200 through the old
-  Traefik/Cloudflare path.
+- Before cutover, `https://audiobookshelf.neovara.uk` returned HTTP 200 through the old
+  Traefik/Cloudflare path. It now reaches the Kubernetes deployment.
 - Database baseline: SQLite `quick_check=ok`; 3 users, 1 library, 1 library folder,
   60 library items/books, 12 media-progress rows, and 338 playback sessions after the pre-flight
   login. The stored library
@@ -135,10 +136,9 @@ any of these PVCs deletes the migrated data. No PVC/namespace deletion is part o
 ### Networking and authentication
 
 - `ClusterIP` Service on port 80.
-- First route: `audiobookshelf.in.neovara.uk` on `websecure` with `tls: {}` for validation over
-  Tailscale.
-- Public cutover route: `audiobookshelf.neovara.uk` on `web`, reached through the one cloudflared
-  route to Traefik. Traefik handles WebSockets without an app-specific setting.
+- The temporary `audiobookshelf.in.neovara.uk` validation route was retired after acceptance.
+- The final `audiobookshelf.neovara.uk` route uses `web`, reached through the one cloudflared route
+  to Traefik. Traefik handles WebSockets without an app-specific setting.
 - Carry the secure response headers but add no CORS middleware; upstream explicitly warns that
   Traefik CORS headers can break login.
 - Authelia/LLDAP do not move. The three existing Audiobookshelf users and password hashes move with
@@ -276,29 +276,26 @@ storage copy.
 
 ### 6. Public cutover
 
-**Pending and user-owned.** None of the steps below were performed; the public hostname still serves
-Compose exactly as requested.
+**Completed 2026-07-14.** The user created the specific Cloudflare Tunnel public hostname pointing
+to `http://traefik.traefik.svc.cluster.local:80`. Before the GitOps route landed, the hostname
+reached Cloudflare/Traefik and returned the expected Traefik 404, proving the tunnel path had
+refreshed.
 
-1. In Cloudflare Tunnel, create the specific public hostname `audiobookshelf.neovara.uk` pointing
-   to `http://traefik.traefik.svc.cluster.local:80`. A specific record overrides the old wildcard
-   route without moving any other service.
-2. Add the public `web` IngressRoute and confirm the live cloudflared config actually refreshed;
-   tunnel `Healthy` alone is not proof.
-3. Validate HTTP 200, login, WebSocket, playback, mobile-client reconnect, and upload-size behavior
-   over the real public path.
-4. After a stable observation window, remove the internal validation route so the final shape is
-   public-only, matching kiroku/Nextcloud's cutover convention.
+The public `web` IngressRoute then reconciled `Synced/Healthy`. Public HTTPS returned 200 with the
+expected secure headers; the `harsh` local login succeeded; the API returned one library and 60
+items; authenticated byte-range playback returned HTTP 206 and the requested 1,024 bytes; and the
+Socket.IO WebSocket endpoint upgraded with HTTP 101. The internal validation IngressRoute was
+removed in the same GitOps change, leaving the final public-only shape used by kiroku/Nextcloud.
 
 ### 7. Close-out
 
-1. Keep the old Compose container running until the user performs public cutover. Keep all four
-   source directories untouched.
+1. Keep the old Compose container running and all four source directories untouched as requested;
+   the public hostname no longer routes to it.
 2. Keep `audiobookshelf-audiobooks` detached and protected from ArgoCD pruning until the user
    explicitly approves deletion of the rollback claim.
-3. Record final versions, counts, PVCs, incidents, and rollback evidence in this file; change status
-   to complete only after public validation.
-4. Mark Audiobookshelf migrated in the checklist. Immich remains deferred and its source data stays
-   intact.
+3. Final versions, counts, PVCs, incidents, and rollback evidence are recorded in this file.
+4. Audiobookshelf is marked migrated in the checklist. Immich remains deferred and its source data
+   stays intact.
 
 ## Rollback
 

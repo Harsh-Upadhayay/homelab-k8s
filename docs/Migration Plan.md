@@ -175,16 +175,17 @@ disk pending future hardware and their own migration plans.
 | **M0** | — (groundwork) | App scaffold, AppProjects **as security boundaries**, namespace-label grouping, RBAC + ResourceQuota/LimitRange baseline for dev-owned namespaces, the host→PVC mover pattern, secret convention | — |
 | **M1** | homepage | Deployment + Service + IngressRoute + ConfigMap; first real app end-to-end on the public path | homelab / public |
 | **M2** | kiroku (+ kiroku-api) | **First pointer Application** (manifests in kiroku's own repo under `deploy/`), custom GHCR image, two-container app w/ internal Service DNS, first small PVC | personal / public |
-| **M3** | audiobookshelf | First **real data migration** from old `/storage`; app with a media library; own login | homelab / public |
+| **M3 (complete)** | audiobookshelf | First **real data migration** from old `/storage`; app with a media library; own login | homelab / public |
 | **M4** | jobhunt | Pointer Application again; multi-tier app: StatefulSet (MySQL) + Redis + Deployments (django/celery×2/frontend) + a migration **Job** + nginx front | personal / public |
 | **M5** | nextcloud | The heavy one: Postgres + Redis + app, large PVCs, `pg_dump` restore, trusted-proxy, upload-buffering middleware, cron → **CronJob** | homelab / public |
 | **M6** | immich — **deferred** | No deployment in the current sequence; preserve Compose + data and plan separately | — |
 | **M7** | old-lab decommission | **Backup/restore drill** + preserve deferred-app data (ollama models, mediaserver media tree + *arr configs, openclaw config/workspace), then power down the old lab | — |
 
-Audiobookshelf M3 is staged and verified internally: Kubernetes runs 2.35.1 with exact migrated
-state and the 49.7 GiB library on a one-replica Longhorn claim, and the user confirmed the internal
-deployment works. The old Compose deployment remains public and running; public cutover is the
-remaining M3 gate. Immich is no longer a step in this run.
+Audiobookshelf M3 is complete: Kubernetes runs 2.35.1 at `audiobookshelf.neovara.uk` with exact
+migrated state and the 49.7 GiB library on a one-replica Longhorn claim. Public login, API state,
+byte-range playback, secure headers, and WebSockets passed. The old Compose deployment remains
+running but is no longer on the public route; its data and the detached old PVC remain rollback
+copies. Immich is no longer a step in this run.
 
 ## Deferred-app data preservation (M7)
 
