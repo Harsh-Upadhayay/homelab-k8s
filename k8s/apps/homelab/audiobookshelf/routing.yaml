@@ -1,6 +1,6 @@
-# Internal-only validation route. Public traffic remains on the old Compose
-# instance until migrated state, login, playback, WebSockets and upgrades are
-# all verified. Empty tls:{} selects the platform's default *.in.neovara.uk cert.
+# PUBLIC (cutover complete): audiobookshelf.neovara.uk via cloudflared ->
+# Traefik's `web` entrypoint. TLS terminates at Cloudflare's edge. The temporary
+# audiobookshelf.in.neovara.uk validation route is retired after acceptance.
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
@@ -23,19 +23,18 @@ spec:
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
-  name: audiobookshelf-internal
+  name: audiobookshelf
   namespace: audiobookshelf
   annotations:
     argocd.argoproj.io/sync-wave: "2"
 spec:
   entryPoints:
-    - websecure
+    - web
   routes:
-    - match: Host(`audiobookshelf.in.neovara.uk`)
+    - match: Host(`audiobookshelf.neovara.uk`)
       kind: Rule
       services:
         - name: audiobookshelf
           port: 80
       middlewares:
         - name: secure-headers
-  tls: {}
