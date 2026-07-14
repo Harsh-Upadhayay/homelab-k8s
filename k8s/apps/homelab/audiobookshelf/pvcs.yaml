@@ -1,7 +1,8 @@
 # Preserve upstream's four independent mount boundaries. In particular,
 # /config contains the SQLite database and must stay on an RWO block filesystem
-# (never RWX/NFS/SMB). All four use the prod 2-copy tier because they make up one
-# restorable application state; the old /storage copy remains the rollback copy.
+# (never RWX/NFS/SMB). Config, metadata, and podcasts use the prod 2-copy tier.
+# Audiobooks are reproducible bulk media and use the 1-copy tier to avoid spending
+# another 70 GiB on a second replica; the old claim/source copy is the rollback.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -37,7 +38,28 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
+  # Retained temporarily as the pre-switch rollback copy. Prune is disabled so
+  # a later manifest cleanup cannot destroy it before explicit user approval.
   name: audiobookshelf-audiobooks
+  namespace: audiobookshelf
+  labels:
+    app.kubernetes.io/name: audiobookshelf
+    app.kubernetes.io/component: storage-rollback
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/sync-options: Prune=false
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: longhorn-replicated
+  resources:
+    requests:
+      storage: 70Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  # A new name is required because a bound PVC's storageClassName is immutable.
+  name: audiobookshelf-audiobooks-single
   namespace: audiobookshelf
   labels:
     app.kubernetes.io/name: audiobookshelf
@@ -45,7 +67,7 @@ metadata:
     argocd.argoproj.io/sync-wave: "0"
 spec:
   accessModes: [ReadWriteOnce]
-  storageClassName: longhorn-replicated
+  storageClassName: longhorn
   resources:
     requests:
       storage: 70Gi

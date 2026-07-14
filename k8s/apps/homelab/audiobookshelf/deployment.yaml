@@ -94,7 +94,7 @@ spec:
             claimName: audiobookshelf-metadata
         - name: audiobooks
           persistentVolumeClaim:
-            claimName: audiobookshelf-audiobooks
+            claimName: audiobookshelf-audiobooks-single
         - name: podcasts
           persistentVolumeClaim:
             claimName: audiobookshelf-podcasts

@@ -103,17 +103,18 @@ Keep four separate RWO claims so the upstream mount boundaries stay explicit:
 | --- | --- | --- | --- |
 | `audiobookshelf-config` | `longhorn-replicated` | 1 Gi | Authoritative SQLite/users/progress |
 | `audiobookshelf-metadata` | `longhorn-replicated` | 2 Gi | Covers, derived metadata, logs, built-in backups |
-| `audiobookshelf-audiobooks` | `longhorn-replicated` | 70 Gi | 49.7 GiB now, about 40% growth headroom |
+| `audiobookshelf-audiobooks-single` | `longhorn` | 70 Gi | 49.7 GiB reproducible bulk media; one replica avoids another 70 GiB allocation |
 | `audiobookshelf-podcasts` | `longhorn-replicated` | 5 Gi | Empty now, ready for future downloads |
 
 Each application mount uses the claim's `data` subdirectory. This keeps Longhorn's ext4
 `lost+found` directory outside Audiobookshelf's library/config paths; the mover creates `data`
 before the zero-replica Deployment is enabled.
 
-Longhorn currently reports about 259 GiB and 268 GiB available on the two workers. Scheduling
-78 GiB on each worker for these 2-copy claims fits with substantial headroom. Both replicas still
-live on one physical external SSD, so this protects against a worker-VM failure, not physical-disk
-failure. The untouched source copy remains the rollback copy until a real off-box backup exists.
+Longhorn currently reports about 259 GiB and 268 GiB available on the two workers. Config,
+metadata, and podcasts retain two replicas; the 70 GiB audiobook claim intentionally uses one.
+Both workers still live on one physical external SSD, so a second replica would not protect this
+bulk media from physical-disk failure. The old replicated claim and untouched Compose source remain
+rollback copies until the new claim is verified and the user approves their removal.
 
 The upstream warning against putting `/config` on SMB/NFS is satisfied: a Longhorn RWO claim is
 presented to the pod as a locally mounted ext4 block device through CSI/iSCSI. It is not a shared

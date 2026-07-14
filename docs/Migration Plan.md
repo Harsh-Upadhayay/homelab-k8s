@@ -149,11 +149,12 @@ Mechanism (same-LAN, efficient):
 On 2026-07-13 Longhorn reports about **259 GiB / 268 GiB available per worker** (both workers
 still sit on the one external USB SSD — ADR-0022: the internal NVMe stays off-limits). A
 2-replica volume must fit on **each** worker; summing both disks is misleading for replicated
-capacity. Audiobookshelf's 49.7 GiB library fits comfortably in a 70 GiB
-`longhorn-replicated` claim, alongside its small config/metadata claims.
+capacity. Audiobookshelf's authoritative config and metadata use replicated claims, while its
+49.7 GiB reproducible audiobook library uses a 70 GiB single-replica `longhorn` claim.
 
-- **Audiobookshelf fits now** — all four source mount boundaries stage into explicit replicated
-  Longhorn PVCs. See `docs/migrations/audiobookshelf.md`.
+- **Audiobookshelf fits now** — all four source mount boundaries stage into explicit Longhorn
+  PVCs; config/metadata/podcasts are replicated and bulk audiobook media is single-replica. See
+  `docs/migrations/audiobookshelf.md`.
 - **Immich does not belong in this capacity claim** — its measured library is 321 GB before
   accounting for database/metadata or replication, larger than either current Longhorn disk. It
   remains on the source workstation with its data intact until separately planned.
