@@ -1,6 +1,6 @@
 # Migration plan — Audiobookshelf (M3)
 
-**Date:** 2026-07-14 · **Status:** ready for user verification; public cutover pending ·
+**Date:** 2026-07-14 · **Status:** internally verified by user; public cutover pending ·
 **Exposure:** internal at `audiobookshelf.in.neovara.uk`; Compose remains public at
 `audiobookshelf.neovara.uk`.
 
@@ -24,7 +24,8 @@ separate blocked project. Nothing in this plan changes, copies, or deletes Immic
   Secret `audiobookshelf-migration-login`; its source password was not changed.
 - Automated checks passed: SQLite `quick_check`, login, authenticated byte-range playback (HTTP
   206), internal HTTPS (200), WebSocket upgrade (101), and two PVC detach/reattach pod reschedules.
-- Public routing/cutover is deliberately not performed. User verification is the remaining gate.
+- The user confirmed the internal deployment works. Public routing/cutover is deliberately not
+  performed and is the remaining gate.
 
 ## Source assessment
 

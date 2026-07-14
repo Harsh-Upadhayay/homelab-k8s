@@ -182,9 +182,9 @@ disk pending future hardware and their own migration plans.
 | **M7** | old-lab decommission | **Backup/restore drill** + preserve deferred-app data (ollama models, mediaserver media tree + *arr configs, openclaw config/workspace), then power down the old lab | — |
 
 Audiobookshelf M3 is staged and verified internally: Kubernetes runs 2.35.1 with exact migrated
-state and the 49.7 GiB library on a one-replica Longhorn claim. The old Compose deployment remains
-public and running; user verification and public cutover are the remaining M3 gates. Immich is no
-longer a step in this run.
+state and the 49.7 GiB library on a one-replica Longhorn claim, and the user confirmed the internal
+deployment works. The old Compose deployment remains public and running; public cutover is the
+remaining M3 gate. Immich is no longer a step in this run.
 
 ## Deferred-app data preservation (M7)
 
