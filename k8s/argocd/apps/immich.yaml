@@ -2,11 +2,9 @@
 # community chart in the immich-app GitHub organization; storage, PostgreSQL,
 # namespace, and Traefik routing remain explicit companion manifests owned here.
 #
-# This first adoption is deliberately MANUAL. The temporary migration runner
-# created Deployments with different immutable selectors, so the operator must
-# perform the documented workload-only handoff before the first sync. Once the
-# first sync and acceptance checks pass, add automated prune/selfHeal like the
-# other homelab Applications.
+# Adoption and the v3 acceptance checks are complete. Argo CD now owns the
+# workload and companion objects with the same automated policy as the other
+# homelab Applications.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -33,6 +31,9 @@ spec:
     server: https://kubernetes.default.svc
     namespace: immich
   syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
     syncOptions:
       - CreateNamespace=false
       - RespectIgnoreDifferences=true
