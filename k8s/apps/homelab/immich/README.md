@@ -39,6 +39,29 @@ The pre-adoption logical database dump is
 (92 MiB, SHA-256
 `913d31e4cc161809c611c921bb27acacaac30d131e8a7007f9214a3cfe5b992d`).
 
+## 2026-07-21 rollout incident
+
+The first chart sync pulled several new images onto `k3s-worker-migration` and
+crossed its SSD ephemeral-storage watermark. Kubelet evicted the Immich pods and
+the node's Longhorn manager/CSI pods; the library's only replica was temporarily
+marked failed while its engine detached. No media files or Longhorn data were
+deleted.
+
+Disposable workstation data was cleared to recover above the kubelet watermark:
+archived journals were vacuumed to 100 MiB, the APT cache was cleaned, disabled
+Firefox and Mesa Snap revisions were removed, stopped Docker JSON logs were
+truncated, and `/home/neovara/.cache` was cleared. Docker's 20 GiB volume store
+and 40 GiB image-layer store were not removed. DiskPressure cleared at 22:04
+JST; Longhorn's enabled auto-salvage then cleared the replica failure marker and
+reattached the healthy volume at 22:06 JST. The zero-missing-file validation was
+run after recovery and again after the v3 upgrade.
+
+The node was cordoned before the v3 rollout so application pods moved to the
+permanent workers without another image-pull eviction. A separate transient
+Tailscale Kubernetes API proxy 503 occurred from roughly 22:23 to 22:25 JST;
+the direct API server remained Ready, and the proxy recovered without a cluster
+restart or rollout change.
+
 ## Workstation rebuild boundary
 
 The library currently has one Longhorn replica on `k3s-worker-migration`; the
