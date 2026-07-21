@@ -1,0 +1,38 @@
+# Child Application: Immich. The application workloads come from the official
+# community chart in the immich-app GitHub organization; storage, PostgreSQL,
+# namespace, and Traefik routing remain explicit companion manifests owned here.
+#
+# This first adoption is deliberately MANUAL. The temporary migration runner
+# created Deployments with different immutable selectors, so the operator must
+# perform the documented workload-only handoff before the first sync. Once the
+# first sync and acceptance checks pass, add automated prune/selfHeal like the
+# other homelab Applications.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: immich
+  namespace: argocd
+spec:
+  project: homelab
+  sources:
+    # Argo CD 3.4 native OCI source. For an OCI Helm artifact, path must be `.`.
+    - repoURL: oci://ghcr.io/immich-app/immich-charts/immich
+      targetRevision: 0.13.1
+      path: .
+      helm:
+        releaseName: immich
+        valueFiles:
+          - $values/k8s/apps/homelab/immich/values.yaml
+    - repoURL: https://github.com/Harsh-Upadhayay/homelab-k8s.git
+      targetRevision: main
+      ref: values
+    - repoURL: https://github.com/Harsh-Upadhayay/homelab-k8s.git
+      targetRevision: main
+      path: k8s/apps/homelab/immich/manifests
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: immich
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=false
+      - RespectIgnoreDifferences=true

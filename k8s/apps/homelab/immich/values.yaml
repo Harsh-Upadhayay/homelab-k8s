@@ -1,0 +1,96 @@
+# Official immich-app community chart 0.13.1 defaults to Immich v3.0.0.
+# The restored database and library have only been accepted on v2.7.3, so both
+# server and CPU-only ML stay on that exact version during GitOps adoption.
+# VectorChord migration and the v3 application upgrade are separate checkpoints.
+controllers:
+  main:
+    containers:
+      main:
+        image:
+          tag: v2.7.3
+
+immich:
+  metrics:
+    enabled: false # Prometheus Operator is intentionally stopped by the operator.
+  persistence:
+    # The chart requires an independently-created library PVC.
+    library:
+      existingClaim: immich-library
+
+server:
+  controllers:
+    main:
+      # One server writes one RWO library. Recreate guarantees no overlapping
+      # writers and avoids a RollingUpdate Multi-Attach race.
+      strategy: Recreate
+      containers:
+        main:
+          env:
+            DB_HOSTNAME: immich-postgres
+            DB_PORT: "5432"
+            DB_USERNAME:
+              valueFrom:
+                secretKeyRef:
+                  name: immich-db
+                  key: DB_USERNAME
+            DB_PASSWORD:
+              valueFrom:
+                secretKeyRef:
+                  name: immich-db
+                  key: DB_PASSWORD
+            DB_DATABASE_NAME:
+              valueFrom:
+                secretKeyRef:
+                  name: immich-db
+                  key: DB_DATABASE_NAME
+            TZ: Asia/Tokyo
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              memory: 8Gi
+  persistence:
+    # Chart 0.13.1 mounts the claim at the upstream-standard /data. Every
+    # restored asset row still stores the historical /usr/src/app/upload prefix,
+    # so mount the SAME claim at that legacy path until the later upgrade and
+    # integrity-check checkpoint proves it can be removed.
+    legacy-library:
+      existingClaim: immich-library
+      globalMounts:
+        - path: /usr/src/app/upload
+
+machine-learning:
+  enabled: true
+  controllers:
+    main:
+      containers:
+        main:
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              memory: 12Gi
+  # CPU-only image; model cache is intentionally ephemeral for this transition.
+  persistence:
+    cache:
+      enabled: true
+      type: emptyDir
+
+valkey:
+  enabled: true
+  controllers:
+    main:
+      containers:
+        main:
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 512Mi
+  persistence:
+    data:
+      enabled: true
+      type: emptyDir

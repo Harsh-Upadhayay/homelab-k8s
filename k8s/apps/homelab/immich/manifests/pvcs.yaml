@@ -1,0 +1,39 @@
+# Existing migrated claims. Argo adopts their metadata and identical immutable
+# specs; it must never recreate them. Both backing PVs use reclaimPolicy Retain.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: immich-library
+  namespace: immich
+  labels:
+    app.kubernetes.io/name: immich
+    app.kubernetes.io/part-of: immich
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+    argocd.argoproj.io/sync-options: Prune=false
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn-immich-hdd-retain
+  resources:
+    requests:
+      storage: 350Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: immich-postgres
+  namespace: immich
+  labels:
+    app.kubernetes.io/name: immich
+    app.kubernetes.io/part-of: immich
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+    argocd.argoproj.io/sync-options: Prune=false
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn-immich-db-retain
+  resources:
+    requests:
+      storage: 10Gi

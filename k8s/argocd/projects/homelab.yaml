@@ -23,6 +23,9 @@ spec:
   sourceRepos:
     - https://github.com/Harsh-Upadhayay/homelab-k8s.git
     - https://nextcloud.github.io/helm
+    # Official Immich community chart. Argo CD 3.4 consumes the public OCI
+    # artifact directly; no repository credentials are required.
+    - oci://ghcr.io/immich-app/immich-charts/immich
 
   # Only the homelab app namespaces on the in-cluster API server.
   # Extended as each app lands (M1 homepage → M3 abs → M5 nextcloud → M6 immich).
