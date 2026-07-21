@@ -21,7 +21,7 @@ immutable selectors. At the adoption checkpoint:
    counts, and Immich's integrity report through `immich.in.neovara.uk`.
 7. Only after acceptance, enable automated prune/self-heal on the Application.
 
-Chart `0.13.1` normally runs Immich v3.0.0. `values.yaml` deliberately overrides
-the images to the already-validated v2.7.3. PostgreSQL first moves to Immich's
-official compatibility image containing pgvecto.rs, pgvector, and VectorChord;
-the database extension transition must complete on v2 before any v3 image bump.
+Chart `0.13.1` normally runs Immich v3.0.0. `values.yaml` deliberately pins the
+targeted v3.0.3 patch release. The GitOps adoption first ran v2.7.3 against
+Immich's official compatibility PostgreSQL image, rebuilt both vector indexes,
+dropped pgvecto.rs, and verified the VectorChord transition before this v3 bump.

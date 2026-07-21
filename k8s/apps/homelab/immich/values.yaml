@@ -1,13 +1,12 @@
-# Official immich-app community chart 0.13.1 defaults to Immich v3.0.0.
-# The restored database and library have only been accepted on v2.7.3, so both
-# server and CPU-only ML stay on that exact version during GitOps adoption.
-# VectorChord migration and the v3 application upgrade are separate checkpoints.
+# Official immich-app community chart 0.13.1 defaults to Immich v3.0.0. Pin
+# both the server and CPU-only ML images to the targeted v3.0.3 patch release.
+# The required v2.7.3 VectorChord migration completed before this image bump.
 controllers:
   main:
     containers:
       main:
         image:
-          tag: v2.7.3
+          tag: v3.0.3
 
 immich:
   metrics:
@@ -53,8 +52,8 @@ server:
   persistence:
     # Chart 0.13.1 mounts the claim at the upstream-standard /data. Every
     # restored asset row still stores the historical /usr/src/app/upload prefix,
-    # so mount the SAME claim at that legacy path until the later upgrade and
-    # integrity-check checkpoint proves it can be removed.
+    # so mount the SAME claim at that legacy path. The v3.0.3 acceptance check
+    # must pass before a separate path-normalization change can remove it.
     legacy-library:
       existingClaim: immich-library
       globalMounts:
