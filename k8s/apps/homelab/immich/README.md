@@ -82,10 +82,13 @@ node is cordoned after its SSD hit the kubelet ephemeral-storage watermark.
 Cordoning does not stop its Longhorn replica or prevent Immich from running on a
 permanent worker. Do not wipe or repartition the preserved HDD before recording
 the live Longhorn replica/disk state and completing the separate Proxmox
-recovery procedure. GitOps recreates Kubernetes objects, but it does not import
-an orphaned Longhorn replica from an arbitrary new node or disk path.
+recovery procedure. The existing Longhorn and Kubernetes CRs are being retained:
+when the passed-through disk returns on the new worker, Longhorn v1.12 uses its
+stored disk UUID to update the existing Replica CR's node and path. The worker
+name and mount path therefore do not need to match the temporary node.
 
 The application components are intentionally disabled in Git during this maintenance window;
 PostgreSQL remains online on its separate replicated claim. The complete disk identity, evidence
-bundle, `/dev/sdb1` preservation audit, shutdown procedure, and post-Proxmox orphan-replica
-recovery steps are recorded in `docs/migrations/immich.md`.
+bundle, `/dev/sdb1` preservation audit, shutdown procedure, and post-Proxmox disk-reassociation
+recovery steps are recorded in `docs/migrations/immich.md`. Orphan export is a fallback only if the
+retained control-plane metadata is lost or disk-UUID reassociation fails; it is not the normal path.

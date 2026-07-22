@@ -1,6 +1,6 @@
 # Homelab Kubernetes Platform
 
-A production-shaped Kubernetes platform on a single Proxmox host, built for hands-on operational learning — etcd internals, CNI networking, ingress, secure remote access — not just to get something running. Correctness and understanding are prioritized over the fastest path.
+A production-shaped Kubernetes platform whose current baseline runs on one Proxmox host, built for hands-on operational learning — etcd internals, CNI networking, ingress, secure remote access — not just to get something running. Correctness and understanding are prioritized over the fastest path. A second Proxmox host and worker VM are planned as part of the preserved Immich-disk recovery; they are not in Terraform or Ansible yet.
 
 The full phase-by-phase build is in **[GUIDE.md](./GUIDE.md)**. This README is the map; the guide is the territory.
 
@@ -9,7 +9,8 @@ The full phase-by-phase build is in **[GUIDE.md](./GUIDE.md)**. This README is t
 ```
 Proxmox host (pve-dell)
 ├── k3s-server-1   control plane, tainted (no app workloads), embedded etcd
-└── k3s-worker-1   application workloads
+├── k3s-worker-1   application workloads + Longhorn data disk
+└── k3s-worker-2   application workloads + Longhorn data disk
 ```
 
 | Layer | Choice | Why (short version — see GUIDE.md / wiki for the full reasoning) |
@@ -19,7 +20,7 @@ Proxmox host (pve-dell)
 | Cluster datastore | Embedded etcd (`cluster-init: true`) | Real etcd snapshot/restore/inspection, clean path to HA later |
 | CNI | Flannel + kube-proxy (defaults) | Simplest CNI first; Cilium deliberately deferred as its own rebuild-required project |
 | Ingress | Traefik (`ClusterIP` only) | No LoadBalancer/MetalLB needed — Cloudflare Tunnel reaches Traefik entirely inside the cluster |
-| Public entry | Cloudflare Tunnel (`cloudflared`) | Zero inbound ports on the router, no exposed home IP; one route → Traefik, Traefik does all per-app routing |
+| Public entry | Cloudflare Tunnel (`cloudflared`) | Zero inbound ports on the router or exposed home IP; current per-host tunnel entries all target Traefik, which performs the actual app routing |
 | Admin/private entry | Tailscale (two mechanisms: host-level `tailscaled` + in-cluster Operator) | Private access to the Proxmox UI, node SSH, `kubectl`, and dashboards — never public |
 | TLS | cert-manager + Cloudflare DNS-01 | Real certs for internal/Tailscale-only services (public path is already terminated at Cloudflare's edge) |
 
@@ -31,25 +32,30 @@ homelab-k8s/
 ├── CHANGELOG.md
 ├── ROADMAP.md
 ├── claude.md              context/decisions for AI-assisted work in this repo
-├── terraform/             provisions the two VMs on Proxmox
+├── terraform/             provisions the current three VMs on pve-dell
 ├── ansible/               configures the OS, installs k3s, and manages the Proxmox host itself
 │   └── roles/
 │       ├── proxmox_host/  host-level housekeeping (apt/repos) + joining the tailnet
-│       ├── common/        shared k3s prerequisites (both nodes)
+│       ├── common/        shared k3s prerequisites (all cluster nodes)
 │       ├── k3s_server/    control-plane bootstrap
 │       └── k3s_agent/     worker join
-└── k8s/                   manifests applied after the cluster is up
+└── k8s/                   GitOps-managed platform and application manifests
+    ├── argocd/             app-of-apps definitions and AppProjects
     ├── traefik/
     ├── cert-manager/
     ├── cloudflared/
     ├── tailscale/
+    ├── longhorn/
+    ├── monitoring/
+    ├── argo-rollouts/
+    ├── apps/
     └── example-app/
 ```
 
 ## Getting started
 
 1. Read [GUIDE.md](./GUIDE.md) start to finish once before running anything — it explains *why*, not just *what*.
-2. Prerequisites, versions pinned, and the one non-negotiable hardware constraint (NVMe for the control-plane VM) are all in GUIDE.md's Phase 0.
+2. Prerequisites, version pins, and the non-negotiable storage constraint (the internal NVMe is off-limits; this deployment uses the external USB SSD) are in GUIDE.md's Phase 0.
 3. Follow the phases in order — each one is additive and rebuild-safe except the CNI choice (flagged explicitly where it matters).
 
 ## Status

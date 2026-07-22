@@ -1,7 +1,11 @@
 # Homelab migration checklist
 
-Source: `../homelab` (docker compose, this workstation). Snapshot date: 2026-07-09.
-Check off apps as they're migrated to k8s or eliminated outright.
+Source: `../homelab` (Docker Compose on the workstation). Initial inventory: 2026-07-09.
+Last reconciled with Git and the live cluster: 2026-07-22 JST.
+
+The old Compose stack was brought back up for final manual comparison. A running source container
+does not mean it is still authoritative or required after the workstation rebuild; use the categories
+below and the per-app runbooks.
 
 ## Migrated
 
@@ -15,29 +19,42 @@ Check off apps as they're migrated to k8s or eliminated outright.
   VectorChord, upgraded from v2.7.3 to v3.0.3, and accepted through the internal route. The old
   Compose deployment was stopped after manual comparison on 2026-07-22 JST. The application is
   intentionally in GitOps maintenance while the workstation becomes a Proxmox host; preserve
-  both HDD partitions and follow `docs/migrations/immich.md`.
+  both HDD partitions and follow `docs/migrations/immich.md`. The normal recovery path reuses the
+  existing PVC/Longhorn volume by reassociating the preserved Longhorn disk UUID on the new worker;
+  it does not copy the 350 GiB library into a new PVC.
 
-## To preserve data, and migrate later, no active users so migration isnt' urgent, we can depricate this workstation without these apps live, but data is importatnt, whenever the k8s deployment is ready, the data should be restored exactly as it was on this host, and the k8s deployment should be able to pick up where this host left off.
+## Preserve data and migrate later
+
+These workloads do not block installing Proxmox because they do not need to remain live during the
+transition. Their source data is still important: keep the rollback/deferred-data partition intact
+until each later Kubernetes deployment has restored and verified it.
 
 - [ ] jobhunt — own project. `-django`, `-celery-beat`, `-celery-worker-1`, `-mysql`, `-redis`, `-frontend`, `-nginx`.
+- [ ] mediaserver stack — gluetun, qbittorrent, flaresolverr, prowlarr, sonarr, radarr, jellyseerr,
+  jellyfin. Preserve the media tree and per-service configuration; migrate later by hand.
+- [ ] ollama + ollama-openai-gateway — preserve model/config data; GPU enablement is a separate
+  later project.
+- [ ] openclaw — preserve config/workspace; clarify the target runtime before migrating.
 
-## To skip entirely
-- [ ] Mediaserver stack: not required :-0
-- [ ] homepage — serves root `neovara.uk`, reads host Prometheus. Needs Traefik cutover + rework.
-- [ ] traefik + traefik-errorpages — old-lab ingress. Needed until every subdomain is cut over.
-- [ ] cloudflared — public tunnel entrypoint. Needed until all public apps are migrated.
-- [ ] authelia + lldap — auth/identity provider for old-lab apps.
-- [ ] ollama + ollama-openai-gateway — GPU-dependent LLM inference.
-- [ ] jenkins + dind — CI/CD.
-- [ ] openvscode-server — remote dev IDE.
-- [ ] monitoring stack — prometheus, grafana, cadvisor, node-exporter, dcgm-exporter (GPU metrics).
-- [ ] watchtower — likely superseded by GitOps, not a real migration target.
-- [ ] portfolio — personal site, check if it shares homepage's "reads host state" pattern.
-- [ ] openclaw — permissions + gateway containers, purpose unclear, verify before deciding.
-- [ ] remote-desktop — bare-metal xrdp/GNOME setup, not a container. Goes away if this host becomes a headless worker.
+## Drop or already replaced
+
+- [x] homepage — not required after old-host retirement; its host-Prometheus dependency is not being ported.
+- [x] traefik + traefik-errorpages — replaced by the cluster's GitOps-managed Traefik.
+- [x] cloudflared — replaced by the cluster Deployment and tunnel path.
+- [x] authelia + lldap — intentionally removed; migrated apps use local login or tailnet reachability.
+- [x] jenkins + dind — superseded by GitHub Actions.
+- [x] openvscode-server — remote IDE not being migrated.
+- [x] old monitoring stack — replaced by kube-prometheus-stack, Loki, and Alloy in Kubernetes.
+- [x] watchtower — superseded by pinned versions plus GitOps reconciliation.
+- [x] portfolio — remains on GitHub Pages.
+- [x] remote-desktop — bare-metal xrdp/GNOME is removed when this workstation becomes a Proxmox host.
 
 ## Notes
 
 - Immich machine learning is CPU-only. The workstation GPU (GTX 1660 SUPER) is not carried into
   the cluster as part of this migration.
-- `gluetun` reporting unhealthy as of this snapshot — worth checking independent of migration timing.
+- `gluetun` was still unhealthy in the source Compose stack on 2026-07-22; that predates its future
+  Kubernetes migration and is not an Immich recovery blocker.
+- Nextcloud and Kiroku currently use `Delete`-reclaim Longhorn claims. Their preserved source data is
+  the rollback until a real backup/Retain policy is established; do not clean the source partition
+  merely because the applications are live in Kubernetes.

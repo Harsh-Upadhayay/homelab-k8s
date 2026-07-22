@@ -1,7 +1,7 @@
 # Migration record — nextcloud (M5, first platform/off-the-shelf app)
 
-**Date:** 2026-07-09 (migrated) → 2026-07-13 (upgraded to latest) · **Status:** ✅ **complete — live in
-production on v34.0.1 (latest) at `nextcloud.in.neovara.uk`** (internal/Tailscale). ArgoCD app
+**Date:** 2026-07-09 (migrated) → 2026-07-13 (upgraded to the then-current release) · **Status:** ✅ **complete — live in
+production on v34.0.1 at `nextcloud.in.neovara.uk`** (internal/Tailscale). ArgoCD app
 `Synced/Healthy`; login + data + cron + external path all verified at v34.
 
 This migration was executed **autonomously** (operator AFK) with a standing mandate: use managed/Helm
@@ -48,8 +48,9 @@ Postgres, own Redis, PVCs, Traefik IngressRoute/Middlewares) + `SECRETS.md`. Reg
 - **Cron as a native CronJob** with `podAffinity` co-locating it onto the app pod's node (cron.php needs
   the same RWO PVCs; RWO binds to a node, not a pod, so same-node pods share it).
 - **`longhorn-replicated`** (2 copies) for all three PVCs — authoritative personal data. Same
-  reclaim-`Delete` caveat as kiroku: the old-lab `/storage` copy is the fallback until the
-  workstation-as-node conversion; revisit `Retain`/`longhorn-static` before that teardown.
+  reclaim-`Delete` caveat as kiroku: the preserved old-lab `/storage` copy remains the fallback
+  through the Proxmox rebuild. Establish a real backup or Retain policy before the source HDD
+  partition is later cleaned or repurposed.
 
 ## Auth model: OIDC dropped → local account (as mandated)
 

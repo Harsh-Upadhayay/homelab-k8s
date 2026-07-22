@@ -38,15 +38,15 @@ No agents, no daemons on the target — Ansible SSHs in, runs small Python-backe
 
 ## Making non-idempotent commands safe
 
-**`ansible.builtin.command` has no built-in idempotency.** Unlike `copy`/`apt`, a raw command module has no idea whether it changed anything — left alone it reports `changed` on every run, forever. Idempotency has to be hand-rolled around it (`ansible/roles/proxmox_host/tasks/tailscale.yml`).
+**`ansible.builtin.command` has no built-in idempotency.** Unlike `copy`/`apt`, a raw command module has no idea whether it changed anything — left alone it reports `changed` on every run, forever. Idempotency has to be hand-rolled around it (`ansible/tasks/tailscale.yml`).
 
-**`register` captures a task's output into a variable**, exactly like assigning a return value — used to capture `tailscale status --json` for inspection by a later task (`ansible/roles/proxmox_host/tasks/tailscale.yml`).
+**`register` captures a task's output into a variable**, exactly like assigning a return value — used to capture `tailscale status --json` for inspection by a later task (`ansible/tasks/tailscale.yml`).
 
-**`changed_when` / `failed_when` override a module's default reporting.** The status-check task sets both to `false` — it's a pure probe, never a real "change" or "failure," even if `tailscale` isn't installed yet and the command exits non-zero (`ansible/roles/proxmox_host/tasks/tailscale.yml`).
+**`changed_when` / `failed_when` override a module's default reporting.** The status-check task sets both to `false` — it's a pure probe, never a real "change" or "failure," even if `tailscale` isn't installed yet and the command exits non-zero (`ansible/tasks/tailscale.yml`).
 
-**`when:` conditionals + Jinja2 filters gate a task's execution.** `(ts_status.stdout | from_json).BackendState != "Running"` parses JSON output with the `from_json` filter and reads a field from it, so `tailscale up` only actually runs if the host isn't already connected — this is what makes an inherently non-idempotent `command` safe to rerun (`ansible/roles/proxmox_host/tasks/tailscale.yml`).
+**`when:` conditionals + Jinja2 filters gate a task's execution.** `(ts_status.stdout | from_json).BackendState != "Running"` parses JSON output with the `from_json` filter and reads a field from it, so `tailscale up` only actually runs if the host isn't already connected — this is what makes an inherently non-idempotent `command` safe to rerun (`ansible/tasks/tailscale.yml`).
 
-**`no_log: true` suppresses a task's output from logs entirely.** Used on the `tailscale up --authkey=...` task so the secret never appears in plaintext in the terminal or any saved log (`ansible/roles/proxmox_host/tasks/tailscale.yml`).
+**`no_log: true` suppresses a task's output from logs entirely.** Used on the `tailscale up --authkey=...` task so the secret never appears in plaintext in the terminal or any saved log (`ansible/tasks/tailscale.yml`).
 
 ## Execution and safety habits
 

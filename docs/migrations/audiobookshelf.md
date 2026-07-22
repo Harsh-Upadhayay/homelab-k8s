@@ -3,9 +3,11 @@
 **Date:** 2026-07-14 · **Status:** complete · **Exposure:** public at
 `audiobookshelf.neovara.uk` through Kubernetes.
 
-This completes the Audiobookshelf Compose → Kubernetes migration. Immich is explicitly outside
-this run: its 321 GB library, database/vector-version transition, and workstation-storage lifecycle
-remain a separate blocked project. Nothing in this plan changes, copies, or deletes Immich data.
+This completes the Audiobookshelf Compose → Kubernetes migration. Immich was explicitly outside
+this dated run: at the time, its 321 GB library, database/vector-version transition, and
+workstation-storage lifecycle remained a separate blocked project. That work later completed and
+its current maintenance/recovery state is recorded in `docs/migrations/immich.md`. Nothing in this
+Audiobookshelf run changed, copied, or deleted Immich data.
 
 ## Verification handoff
 
@@ -294,8 +296,8 @@ removed in the same GitOps change, leaving the final public-only shape used by k
    were deleted after explicit approval; mover resources and temporary credentials were already
    absent.
 3. Final versions, counts, PVCs, incidents, and cleanup evidence are recorded in this file.
-4. Audiobookshelf is marked migrated in the checklist. Immich remains deferred and its source data
-   stays intact.
+4. Audiobookshelf is marked migrated in the checklist. At this run's close Immich remained deferred
+   and its source data stayed intact; see its own runbook for the later completed migration.
 
 ## Rollback
 

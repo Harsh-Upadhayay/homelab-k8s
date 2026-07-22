@@ -27,7 +27,7 @@ exists here:
 - **GPU workloads deferred.** The old lab was bare metal with an NVIDIA GPU; this cluster is
   Proxmox VMs with no GPU passthrough (yet). Anything that *requires* the GPU stays off-cluster
   for now. Immich is migrated with CPU-only machine learning; its remaining workstation rebuild
-  and one-replica Longhorn recovery are tracked in `docs/migrations/immich.md`.
+  and preserved-disk UUID reassociation are tracked in `docs/migrations/immich.md`.
 - **Authelia + LLDAP removed entirely.** They gave finicky, never-quite-one-click integration and
   are not worth porting. New auth model:
   - **Internal apps → Tailscale reachability *is* the auth.** Not on the tailnet = the hostname
@@ -40,10 +40,10 @@ exists here:
 
 | Verdict | Services | Group |
 | --- | --- | --- |
-| ✅ **Migrate** | homepage, nextcloud, audiobookshelf, immich | `homelab` |
+| ✅ **Migrate** | nextcloud, audiobookshelf, immich | `homelab` |
 | ✅ **Migrate** | kiroku (+ kiroku-api), jobhunt | `personal` |
 | 🧊 **Defer + preserve data** | ollama, openclaw, mediaserver (gluetun, qbittorrent, flaresolverr, prowlarr, sonarr, radarr, jellyseerr, jellyfin) | (migrated later, by hand) |
-| 🗑️ **Drop** | watchtower, authelia, lldap, portfolio (stays on GitHub Pages), openvscode-server, jenkins (→ GitHub Actions) | — |
+| 🗑️ **Drop** | homepage, watchtower, authelia, lldap, portfolio (stays on GitHub Pages), openvscode-server, jenkins (→ GitHub Actions) | — |
 | ✔️ **Already replaced** | traefik, cloudflared, prometheus/grafana/node-exporter/cadvisor | — |
 
 ## Repo boundaries — hybrid by ownership ("Option E")
@@ -51,7 +51,7 @@ exists here:
 This repo's scope widens from "infra provisioning" to **cluster repo**: everything the
 platform operator owns. That's three layers — **infra** (`terraform/`, `ansible/`),
 **platform** (Traefik, cert-manager, Longhorn, monitoring, ArgoCD itself), and
-**off-the-shelf workloads** (homepage, nextcloud, audiobookshelf). Deploying
+**off-the-shelf workloads** (nextcloud, audiobookshelf, Immich). Deploying
 third-party software is platform-adjacent config — the same kind of artifact as Grafana
 values, so it belongs here.
 
@@ -162,12 +162,12 @@ capacity. Audiobookshelf's authoritative config and metadata use replicated clai
   the new worker: Longhorn uses its retained disk UUID to update the existing Replica CR's node and
   path, so the existing PVC/volume is reused without copying the 350 GiB library. Orphan export is
   documented only as a fallback in `docs/migrations/immich.md`.
-- **Media tree (mediaserver, ~TB-scale) does NOT go into this pool** — and doesn't need an NFS/NAS
-  workaround. Plan: once the in-scope services are migrated, **this workstation (currently hosting
-  the old lab + the 1.4 TB `/storage` disk) is converted into a k3s node**, its 1.4 TB disk added
-  as a Longhorn disk, and the **media stack data is migrated by hand** onto it. Clean additive
-  capacity growth (add a node/disk — never touch the internal NVMe), owned by the user, off this
-  milestone's critical path.
+- **Media tree (mediaserver, ~TB-scale) does NOT go into the current pool.** The workstation is
+  rebuilt as a second Proxmox host; a k3s worker VM on that host receives the preserved HDD by
+  passthrough. Immich recovery uses the existing Longhorn partition and disk UUID first. The
+  remaining HDD space can become another Longhorn disk only after the preserved `/dev/sdb1`
+  rollback/deferred-data partition is explicitly audited and approved for cleanup. This requires
+  extending Terraform and Ansible; the current code models only `pve-dell` and its three VMs.
 
 The media tree and rollback copies remain intact on `/dev/sdb1` pending the workstation rebuild
 and a later, separately approved cleanup.
@@ -176,14 +176,14 @@ and a later, separately approved cleanup.
 
 | Phase | App(s) | New concept | Group / exposure |
 | --- | --- | --- | --- |
-| **M0** | — (groundwork) | App scaffold, AppProjects **as security boundaries**, namespace-label grouping, RBAC + ResourceQuota/LimitRange baseline for dev-owned namespaces, the host→PVC mover pattern, secret convention | — |
-| **M1** | homepage | Deployment + Service + IngressRoute + ConfigMap; first real app end-to-end on the public path | homelab / public |
-| **M2** | kiroku (+ kiroku-api) | **First pointer Application** (manifests in kiroku's own repo under `deploy/`), custom GHCR image, two-container app w/ internal Service DNS, first small PVC | personal / public |
+| **M0 (complete)** | — (groundwork) | App scaffold, AppProjects **as security boundaries**, namespace-label grouping, RBAC + ResourceQuota/LimitRange baseline for dev-owned namespaces, the host→PVC mover pattern, secret convention | — |
+| **M1 (cancelled)** | homepage | Dropped from the target; the source dashboard depends on old-host Prometheus and is not required after workstation retirement | — |
+| **M2 (complete)** | kiroku (+ kiroku-api) | **First pointer Application** (manifests in kiroku's own repo under `deploy/`), custom GHCR image, two-container app w/ internal Service DNS, first small PVC | personal / public |
 | **M3 (complete)** | audiobookshelf | First **real data migration** from old `/storage`; app with a media library; own login | homelab / public |
 | **M4** | jobhunt | Pointer Application again; multi-tier app: StatefulSet (MySQL) + Redis + Deployments (django/celery×2/frontend) + a migration **Job** + nginx front | personal / public |
-| **M5** | nextcloud | The heavy one: Postgres + Redis + app, large PVCs, `pg_dump` restore, trusted-proxy, upload-buffering middleware, cron → **CronJob** | homelab / public |
+| **M5 (complete)** | nextcloud | The heavy one: Postgres + Redis + app, large PVCs, `pg_dump` restore, trusted-proxy, upload-buffering middleware, cron → **CronJob** | homelab / internal |
 | **M6 (complete; maintenance pending)** | immich | GitOps chart adoption, retained PVCs, pgvecto.rs → VectorChord, v3 upgrade, then disk-UUID reassociation of the preserved replica across the workstation rebuild | homelab / internal |
-| **M7** | old-lab decommission | **Backup/restore drill** + preserve deferred-app data (ollama models, mediaserver media tree + *arr configs, openclaw config/workspace), then power down the old lab | — |
+| **M7 (in progress)** | old-lab decommission | **Backup/restore drill** + preserve deferred-app data (ollama models, mediaserver media tree + *arr configs, openclaw config/workspace), then power down the old lab | — |
 
 Audiobookshelf M3 is complete: Kubernetes runs 2.35.1 at `audiobookshelf.neovara.uk` with exact
 migrated state and the 49.7 GiB library on a one-replica Longhorn claim. Public login, API state,
@@ -197,21 +197,22 @@ temporarily disabled while the only library replica is preserved through the wor
 `ollama`, `openclaw`, and the whole `mediaserver` tree stay on Compose or disk and get migrated later
 by hand. Immich is migrated, but its rollback copy remains on the same preserved disk until the
 post-Proxmox recovery is accepted. The old host is deprecated, but its 1.4 TB `/storage` disk is **not** wiped — it's the
-storage that gets folded back in when the workstation becomes a k3s node (see the capacity
-section). So preservation is mostly "don't destroy the disk," plus a safety backup for the
+storage that gets passed through to a k3s worker VM on the new Proxmox host (see the capacity
+section). So preservation is mostly "don't destroy either HDD partition," plus a safety backup for the
 small stuff:
 
 - **Media tree** → stays on the 1.4 TB disk in place; migrated by the user after the
-  workstation-as-node conversion adds that disk to Longhorn. No copy needed.
+  Proxmox/worker-VM conversion and only after its source partition is explicitly released for reuse.
 - **Immich rollback** → keep `/storage/immich` untouched until the preserved Longhorn replica has
   been recovered on the new worker and the application has passed the full acceptance checks.
 - **`ollama/data` (models), `openclaw/{config,workspace}`, `mediaserver` per-service `state/*/config`**
   → small enough to also take a **verified backup copy** (restic/tar) before the host is repurposed,
-  as insurance against the reformat that the node conversion implies.
+  as insurance before the source partition is eventually cleaned or repurposed.
 
-Note: converting the workstation to a k3s node reformats/repartitions its OS disk — so the
-`/storage` (`sdb`) disk must be preserved as-is through that step, and the small config datasets
-above backed up off-disk first.
+Note: installing Proxmox reformats the workstation's 119 GiB SSD. The 1.4 TB HDD must be excluded
+from the installer and preserved with both partitions intact; Linux device names such as `/dev/sdb`
+may change after the rebuild, so use the recorded filesystem and Longhorn disk UUIDs. Back up the
+small config datasets off-disk before later deleting or repurposing their source partition.
 
 ## CKA learning track (woven into the phases)
 
@@ -230,8 +231,8 @@ copy-paste).
 | **M3** | Storage | The whole 10% domain in one phase: **PV/PVC binding, access modes, reclaim policies, StorageClasses, dynamic vs static provisioning** — `longhorn-static` pre-provisioned binding is literally the exam's "create a PV, bind a PVC to it" task. Plus **securityContext** (`runAsUser`/`fsGroup`) to satisfy the old UID/GID contracts. |
 | **M4** | Workloads · Troubleshooting | **StatefulSet vs Deployment** (stable identity, one-PVC-per-replica via `volumeClaimTemplates`), **headless Services**, **Job** semantics (`backoffLimit`, `restartPolicy`), init containers. A 6-workload app is a triage playground — deliberate break-and-fix drills. |
 | **M5** | Workloads & Scheduling | **CronJob** (schedule syntax, `concurrencyPolicy`, history limits); **Secrets**: types, `envFrom` vs volume mounts, and why a ConfigMap/Secret change doesn't restart pods by itself. |
-| **M6** | Storage · Troubleshooting | Immich exercised retained PVs, single-replica recovery, application quiescing, database migration, and node-loss planning; HPA remains a separate study topic. |
-| **M7** | Cluster Architecture · Troubleshooting | **etcd snapshot & restore drill** (embedded etcd — the exam's `etcdctl`/restore task, k3s-flavored); **node lifecycle**: `cordon`/`drain`/`uncordon`; joining a new node (workstation → k3s agent ≈ the kubeadm-join concept); node `NotReady` triage. |
+| **M6** | Storage · Troubleshooting | Immich exercised retained PVs, application quiescing, database migration, node-loss planning, and preserved Longhorn disk-UUID reassociation; HPA remains a separate study topic. |
+| **M7** | Cluster Architecture · Troubleshooting | **etcd snapshot & restore drill** (embedded etcd — the exam's `etcdctl`/restore task, k3s-flavored); **node lifecycle**: `cordon`/`drain`/`uncordon`; joining a new Proxmox-hosted worker VM (≈ the kubeadm-join concept); node `NotReady` triage. |
 | **every phase** | Troubleshooting (30%) | The acceptance checks below are run as triage practice, not checklist theatre: `kubectl describe`/`logs --previous`/`get events --sort-by`, `kubectl debug`, DNS + Service-endpoint checks. At least one deliberate break-then-fix per phase. |
 
 Known gaps this migration **won't** cover (study separately before the exam): **kubeadm**

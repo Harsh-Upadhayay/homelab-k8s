@@ -1,18 +1,23 @@
 # Homelab Kubernetes Platform — Build Guide
 
-End-to-end setup: Proxmox → Terraform-provisioned VMs → Ansible-configured k3s → Traefik → cert-manager → Cloudflare Tunnel → Tailscale. Deferred by design: GitOps (Argo CD), monitoring, logging, secrets management (SOPS/age, later External Secrets/Vault), and the full backup strategy — each is a clean follow-on once this foundation is solid.
+End-to-end foundation setup: Proxmox → Terraform-provisioned VMs → Ansible-configured k3s → Traefik → cert-manager → Cloudflare Tunnel → Tailscale. GitOps (Argo CD), Longhorn, monitoring, and logging were originally follow-on phases and are now live; their current state is summarized in `ROADMAP.md` and recorded in the v2.0 ADRs. Secrets management (SOPS/age, later External Secrets/Vault) and the full backup strategy remain deferred.
 
 **Companion files referenced throughout live alongside this guide:**
 ```
 homelab-k8s/
 ├── GUIDE.md                 ← this file
-├── terraform/                provisions the two VMs on Proxmox
+├── terraform/                provisions the current three VMs on Proxmox
 ├── ansible/                  configures OS + installs k3s, reproducibly
-└── k8s/                      manifests applied after the cluster is up
+└── k8s/                      GitOps-managed platform and application manifests
+    ├── argocd/
     ├── traefik/
     ├── cert-manager/
     ├── cloudflared/
     ├── tailscale/
+    ├── longhorn/
+    ├── monitoring/
+    ├── argo-rollouts/
+    ├── apps/
     └── example-app/
 ```
 
@@ -23,10 +28,10 @@ Versions pinned at the time of writing (verify current before you install — li
 | Ubuntu Server | 26.04 LTS "Resolute Raccoon" (5yr support to 2031) |
 | Terraform provider `bpg/proxmox` | `~> 0.111` |
 | k3s | `v1.36.2+k3s1` |
-| Traefik Helm chart | `41.x` |
+| Traefik Helm chart | `41.0.1` |
 | cert-manager | `v1.20.3` |
-| cloudflared | check `cloudflare/cloudflared` tags on Docker Hub before pulling |
-| Tailscale Kubernetes Operator | latest stable from `pkgs.tailscale.com/helmcharts` |
+| cloudflared | `2026.6.1` |
+| Tailscale Kubernetes Operator | Helm chart `1.98.4` |
 
 ---
 
@@ -123,7 +128,7 @@ Verify it shows up as a template (grey/cube icon) in the web UI under your node.
 
 ---
 
-## Phase 3 — Terraform: provision the two VMs
+## Phase 3 — Terraform: provision the three VMs
 
 Files: `terraform/`. This is the infra-as-code layer — think of it as the CloudFormation/Terraform equivalent you already know from AWS, just targeting Proxmox's API instead. `bpg/proxmox` is the actively-maintained community provider (the older `telmate/proxmox` is effectively legacy at this point) — it's what clones VMs from the template you just built rather than reinstalling an OS every time.
 
@@ -200,7 +205,7 @@ ansible-playbook site.yml --extra-vars "k3s_token=${K3S_TOKEN}"
 
 **What each phase actually does, mapped to the roles:**
 
-- **`common`** (Phase 4, runs on both nodes) — the real k3s prerequisites, nothing more: swap off (Kubernetes requires this), `br_netfilter` + `overlay` kernel modules loaded and persisted, the two sysctl flags that let bridged traffic hit iptables rules, hostname set to match inventory. This is deliberately *not* general server hardening — that's a separate concern from "what does k3s actually need to boot."
+- **`common`** (Phase 4, runs on all k3s nodes) — the real k3s prerequisites, nothing more: swap off (Kubernetes requires this), `br_netfilter` + `overlay` kernel modules loaded and persisted, the two sysctl flags that let bridged traffic hit iptables rules, hostname set to match inventory. This is deliberately *not* general server hardening — that's a separate concern from "what does k3s actually need to boot."
 
 - **`k3s_server`** (Phase 5, `k3s-server-1` only) — writes `/etc/rancher/k3s/config.yaml` from the template, which is where every earlier design decision becomes a real flag:
   - `cluster-init: true` → embedded etcd, not SQLite — the pivotal call from the design phase
@@ -291,7 +296,8 @@ helm install traefik traefik/traefik \
   --values k8s/traefik/values.yaml
 ```
 
-(`k8s/traefik/dashboard-service.yaml` gets applied in Phase 12 — it depends on the Tailscale operator existing first, since it's claimed by `loadBalancerClass: tailscale`.)
+The internal front-door Service and dashboard IngressRoute live under `k8s/traefik/manifests/` and
+are introduced in Phase 12 after the Tailscale Operator exists.
 
 **Pin the chart version.** The chart's values schema isn't stable across releases — this exact install failed once against an unpinned `traefik/traefik` because the schema had moved `ports.websecure.tls` to `ports.websecure.http.tls`, and separately, silently defaulted `service.type` to `LoadBalancer` because `service.spec.type` had replaced it without erroring (ADR-0027). Before trusting this values file against a newer chart version, diff it against `helm show values traefik/traefik --version <new-version>` first.
 
@@ -463,7 +469,8 @@ In the Tailscale admin console → Access Controls, add to the policy file's `ta
 }
 ```
 
-Create an OAuth client (Settings → OAuth clients) scoped to write `devices:core` — copy the client ID and secret.
+Create an OAuth client (Settings → OAuth clients) with **Devices Core**, **Auth Keys**, and
+**Services** Read+Write scopes, tagged `tag:k8s-operator` (ADR-0025). Copy the client ID and secret.
 
 ```bash
 helm repo add tailscale https://pkgs.tailscale.com/helmcharts
@@ -471,12 +478,20 @@ helm repo update
 
 kubectl create namespace tailscale
 
+# Runtime credentials stay outside Git and Helm values. The chart consumes this
+# existing Secret when oauth.* is omitted from k8s/tailscale/values.yaml.
+kubectl -n tailscale create secret generic operator-oauth \
+  --from-literal=client_id="<your OAuth client ID>" \
+  --from-literal=client_secret="<your OAuth client secret>"
+
 helm upgrade --install tailscale-operator tailscale/tailscale-operator \
   --namespace tailscale \
-  --set-string oauth.clientId="<your OAuth client ID>" \
-  --set-string oauth.clientSecret="<your OAuth client secret>" \
-  --values k8s/tailscale/operator-values.yaml \
+  --version 1.98.4 \
+  --values k8s/tailscale/values.yaml \
   --wait
+
+kubectl apply -f k8s/tailscale/manifests/api-server-rbac.yaml
+kubectl apply -f k8s/tailscale/manifests/proxyclass-monitoring.yaml
 
 kubectl get pods -n tailscale
 # operator pod should reach Running; check the Tailscale admin console —
@@ -490,19 +505,19 @@ tailscale configure kubeconfig <operator-magicdns-name>
 kubectl get nodes   # now works over the tailnet, from any device, no public API exposure
 ```
 
-**Traefik dashboard over Tailscale** — this is what `k8s/traefik/dashboard-service.yaml` was for:
+**Traefik dashboard over Tailscale** uses the shared internal Traefik front door from Part C, not a
+separate LoadBalancer Service. Once that front door exists, the dashboard's IngressRoute exposes
+`api@internal` at `https://traefik.in.neovara.uk`:
+
 ```bash
-kubectl apply -f k8s/traefik/dashboard-service.yaml
-kubectl get svc -n traefik traefik-dashboard
-# EXTERNAL-IP will show a tailnet IP once the operator's claimed it — give it a minute
+kubectl apply -f k8s/traefik/manifests/ingressroute-dashboard.yaml
 ```
-Reach it from any tailnet device at the MagicDNS name shown in the Tailscale admin console under Machines. This exact `type: LoadBalancer` + `loadBalancerClass: tailscale` pattern is the one you'll reuse for Grafana and Argo CD's dashboard once those land in a later phase — same two lines on any Service, every time.
 
 **Part C — Internal apps over Tailscale (`*.in.neovara.uk`)** — this is where the Phase 10 wildcard cert finally goes into service, and it completes the cluster half of ADR-0018. The goal: any internal app gets a real HTTPS name like `whoami.in.neovara.uk`, reachable from tailnet devices only, with a browser-trusted cert and no per-app cert or DNS work. Three manifests do it (see ADR-0029 for the full decision):
 
 ```bash
-kubectl apply -f k8s/traefik/tailscale-service.yaml     # internal front door
-kubectl apply -f k8s/traefik/tlsstore.yaml              # wildcard cert as Traefik's default
+kubectl apply -f k8s/traefik/manifests/tailscale-service.yaml  # internal front door
+kubectl apply -f k8s/traefik/manifests/tlsstore.yaml           # wildcard cert as Traefik's default
 kubectl apply -f k8s/example-app/ingressroute-internal.yaml   # first internal route
 kubectl get svc -n traefik traefik-internal
 # EXTERNAL-IP fills in with the Tailscale IP + MagicDNS name (~30s) once the operator claims it
@@ -528,13 +543,14 @@ Counterintuitively, that CNAME target does *not* need to exist in public DNS —
 
 ## Phase 13 — End-to-end validation
 
-Files: `k8s/example-app/`. Everything up to this point is infrastructure — this is the first proof that a request can actually travel the whole path: browser → Cloudflare → tunnel → Traefik → Service → pod. Validated two independent planes (public + private) against a throwaway `traefik/whoami` app.
+Files: `k8s/example-app/`. Everything up to this point is infrastructure — this is the first proof that a request can actually travel the whole path: browser → Cloudflare → tunnel → Traefik → Service → pod. The original validation used a throwaway Deployment. The current directory was later converted into an Argo Rollouts blue/green exercise (ADR-0047), so the following small imperative Deployment/Service recreates the foundation-era test without requiring the Rollouts CRDs.
 
 **Deploy:**
 ```bash
-kubectl apply -f k8s/example-app/deployment.yaml
-kubectl apply -f k8s/example-app/service.yaml
+kubectl create deployment whoami --image=traefik/whoami:v1.11.0 --replicas=2
+kubectl expose deployment whoami --name=whoami-stable --port=80 --target-port=80
 kubectl apply -f k8s/example-app/ingressroute.yaml
+kubectl apply -f k8s/example-app/ingressroute-internal.yaml
 ```
 
 **Add the tunnel public hostname** — Cloudflare Zero Trust → Networks → Tunnels → homelab → Public Hostname:
@@ -560,20 +576,33 @@ kubectl get pods -n default -l app=whoami
 ```
 Both work = every layer in the build is doing its job: Flannel/CNI, kube-proxy/Service, CoreDNS, Traefik IngressRoute, cloudflared tunnel, and the Tailscale Operator API proxy.
 
-Once confirmed, `kubectl delete -f k8s/example-app/` — this was scaffolding, not a real app.
+After validating the foundation-era test above, remove only the imperative resources it created:
+
+```bash
+kubectl delete deployment whoami
+kubectl delete service whoami-stable
+kubectl delete -f k8s/example-app/ingressroute.yaml
+kubectl delete -f k8s/example-app/ingressroute-internal.yaml
+```
+
+The directory was later repurposed as the Argo Rollouts blue/green exercise (ADR-0047), so do not
+delete the whole current directory from the cluster unless deliberately retiring that exercise.
 
 ---
 
-## What's deferred, and why that's fine
+## Follow-on status
 
-Everything below was explicitly scoped out of this build — not forgotten, staged:
+This guide ends at the validated foundation. Several originally deferred layers have since landed:
 
-- **GitOps (Argo CD)** — once added, this is what turns "manual `kubectl apply`" into "commit and it reconciles itself," and it's also what will manage Traefik/cert-manager/cloudflared themselves going forward instead of the imperative `helm install`/`kubectl apply` commands used to bootstrap them here.
-- **Monitoring** (kube-prometheus-stack) and **logging** (Loki + Grafana Alloy) — both slot in additively; nothing in this guide blocks them.
+- **GitOps (Argo CD)** is live and manages the platform and migrated applications through the app-of-apps pattern. Runtime Secrets remain imperative and outside Git.
+- **Longhorn**, **monitoring** (kube-prometheus-stack), and **logging** (Loki + Grafana Alloy) are live. See `ROADMAP.md`, `docs/adr/v2.0 - Operability.md`, and `k8s/` for the tested configuration.
+
+The following remain deliberately deferred:
+
 - **Secrets management (SOPS + age, later External Secrets Operator + Vault)** — for now, Kubernetes Secrets are created imperatively with `kubectl create secret` and never committed to Git in any form, encrypted or otherwise. SOPS+age is the natural first step when this gets automated (commit ciphertext to Git, decrypt-and-apply manually), with ESO/Vault as the later upgrade once real rotation and a secrets backend are wanted.
 - **Full backup strategy** (Velero, off-box etcd snapshots via `--etcd-s3-*`, Proxmox VM backups) — local etcd snapshots are already running from Phase 5; shipping them off-box and adding Velero + Proxmox Backup Server is the next layer, not a redo.
 - **Cilium** — deliberately deferred; recall this is the one *non-additive* item on this whole list. Flannel → Cilium isn't an upgrade, it's a rebuild (pod networking can't be live-migrated between CNIs). Treat it as its own dedicated project later — and a good real rebuild-from-Git/DR drill when you get there.
-- **HA control plane** (`k3s-server-2`, `k3s-server-3`) and **more workers** — both are additive. A second/third server joins the existing embedded-etcd cluster for real quorum; a second worker just needs a new Terraform resource block and an Ansible inventory entry. This is exactly the path the embedded-etcd choice back in the design phase was making room for.
+- **HA control plane** (`k3s-server-2`, `k3s-server-3`) and **more workers** — both are additive. A second/third server joins the existing embedded-etcd cluster for real quorum; each additional worker needs a Terraform resource and an Ansible inventory entry. The Immich recovery runbook explicitly plans one such worker on a second Proxmox host; it is not implemented in the current code yet.
 
 ---
 
@@ -601,13 +630,19 @@ homelab-k8s/
 ├── ansible/
 │   ├── ansible.cfg / inventory.ini / site.yml / proxmox-host.yml / requirements.yml
 │   ├── group_vars/{all.yml, proxmox_hosts.yml}
-│   └── roles/{common, k3s_server, k3s_agent, proxmox_host/tasks/{repos,tailscale}.yml}
+│   ├── roles/{common,k3s_server,k3s_agent,proxmox_host}/
+│   └── tasks/tailscale.yml  shared host/node tailnet join tasks
 └── k8s/
-    ├── traefik/          values.yaml, dashboard-service.yaml
-    ├── cert-manager/      cluster-issuer.yaml, internal-wildcard-certificate.yaml
-    ├── cloudflared/       namespace.yaml, deployment.yaml, networkpolicy.yaml
-    ├── tailscale/         operator-values.yaml
-    └── example-app/       deployment.yaml, service.yaml, ingressroute.yaml
+    ├── argocd/            root app, child Applications, and AppProjects
+    ├── traefik/           chart values + companion manifests
+    ├── cert-manager/      chart values + issuer/certificate manifests
+    ├── cloudflared/       Deployment, NetworkPolicy, metrics
+    ├── tailscale/         chart values + companion manifests
+    ├── longhorn/          chart values + StorageClasses/UI route
+    ├── monitoring/        Prometheus/Grafana, Loki, and Alloy values/manifests
+    ├── argo-rollouts/     controller values + dashboard route
+    ├── apps/              homelab workloads and personal-app governance
+    └── example-app/       blue/green Rollout exercise
 ```
 
 Push this to Git now, before you forget — everything except `kubeconfig` and Terraform's local state/lock (all gitignored) is meant to live there. `terraform.tfvars` **is** committed: it holds no secrets now that the API token comes from `$PROXMOX_VE_API_TOKEN`.
