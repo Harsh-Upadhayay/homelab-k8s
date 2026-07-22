@@ -21,6 +21,19 @@ therefore point at the same `immich-library` claim. Do not remove the legacy
 mount until a separately planned path-normalization change has rewritten and
 revalidated every stored path.
 
+## Authentication
+
+As of 2026-07-22 JST, password login is enabled and the migrated Authelia/OAuth
+configuration has been removed. OAuth is disabled, auto-launch is false, the
+issuer/client ID/client secret are empty, and the sole admin user's OAuth link
+is cleared. The admin password was reset with Immich's supported
+`immich-admin reset-admin-password` command and is intentionally not stored in
+Git; Immich requires it to be changed after the next successful sign-in.
+
+These are Immich system settings stored in PostgreSQL, so they survive pod
+replacement and Argo CD reconciliation without placing credentials in this
+public repository.
+
 ## Adoption and upgrade record
 
 - Signed commit `05f2f45` introduced the GitOps baseline on v2.7.3.
