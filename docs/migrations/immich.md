@@ -11,6 +11,26 @@ The application components are now intentionally disabled in Git while the works
 as a Proxmox host. PostgreSQL remains online on its independent, two-replica Longhorn PVC. Do not
 re-enable the Immich server until the library is recovered and attached.
 
+## Completed pre-rebuild checkpoint
+
+The controlled maintenance transition completed on 2026-07-22 JST:
+
+- Commit `dc5a5ce` was pushed and Argo CD reconciled `Synced/Healthy`.
+- At 11:40 JST the chart-managed server, machine-learning, and Valkey deployments were absent;
+  only the independently managed PostgreSQL deployment remained.
+- The library volume reported `detached`; its replica reported `stopped` and `started=false`.
+- `lsof` found no process with the replica directory open. `fuser` reported only the expected
+  kernel reference for the still-mounted outer filesystem.
+- `k3s-agent` was stopped and disabled. The Kubernetes node becoming
+  `NotReady,SchedulingDisabled` is expected and must not be deleted.
+- `/mnt/longhorn-immich` unmounted successfully. A subsequent `findmnt` found no mount, and
+  read-only `e2fsck -fn /dev/sdb2` completed with exit code 0.
+- `/dev/sdb1` remains mounted and unchanged. Its cleanup is deferred.
+
+The workstation is at the rebuild boundary, but it has not been powered off. Immediately before
+starting the Proxmox installer, stop the remaining Docker workloads, shut down cleanly, and
+disconnect the HDD as described below.
+
 ## Preserved disk and Longhorn identity
 
 The entire physical HDD `/dev/sdb` must survive unchanged:
