@@ -84,3 +84,8 @@ permanent worker. Do not wipe or repartition the preserved HDD before recording
 the live Longhorn replica/disk state and completing the separate Proxmox
 recovery procedure. GitOps recreates Kubernetes objects, but it does not import
 an orphaned Longhorn replica from an arbitrary new node or disk path.
+
+The application components are intentionally disabled in Git during this maintenance window;
+PostgreSQL remains online on its separate replicated claim. The complete disk identity, evidence
+bundle, `/dev/sdb1` preservation audit, shutdown procedure, and post-Proxmox orphan-replica
+recovery steps are recorded in `docs/migrations/immich.md`.

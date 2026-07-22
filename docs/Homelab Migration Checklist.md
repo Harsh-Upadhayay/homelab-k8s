@@ -11,12 +11,11 @@ Check off apps as they're migrated to k8s or eliminated outright.
   former claim released after acceptance. Compose is intentionally still running as rollback but
   is no longer on the public route. Plan/runbook: `docs/migrations/audiobookshelf.md`.
 - [x] nextcloud + nextcloud-db + nextcloud-redis — file storage/sync, real personal data.
-
-## Deferred because of blockers
-
-- [ ] immich — do not migrate in the current run. Keep Compose and `/storage/immich` intact; the
-  321 GB library, storage placement/workstation rebuild, and v2.7.3 pgvecto-rs → v3 VectorChord
-  transition need a separate plan.
+- [x] immich — exact Compose state migrated to retained Longhorn PVCs, pgvecto.rs converted to
+  VectorChord, upgraded from v2.7.3 to v3.0.3, and accepted through the internal route. The old
+  Compose deployment was stopped after manual comparison on 2026-07-22 JST. The application is
+  intentionally in GitOps maintenance while the workstation becomes a Proxmox host; preserve
+  both HDD partitions and follow `docs/migrations/immich.md`.
 
 ## To preserve data, and migrate later, no active users so migration isnt' urgent, we can depricate this workstation without these apps live, but data is importatnt, whenever the k8s deployment is ready, the data should be restored exactly as it was on this host, and the k8s deployment should be able to pick up where this host left off.
 
@@ -39,6 +38,6 @@ Check off apps as they're migrated to k8s or eliminated outright.
 
 ## Notes
 
-- No GPU configuration anywhere in the current migration. Immich itself is deferred; the host GPU
-  (GTX 1660 SUPER) is not carried into the cluster as part of this effort.
+- Immich machine learning is CPU-only. The workstation GPU (GTX 1660 SUPER) is not carried into
+  the cluster as part of this migration.
 - `gluetun` reporting unhealthy as of this snapshot — worth checking independent of migration timing.

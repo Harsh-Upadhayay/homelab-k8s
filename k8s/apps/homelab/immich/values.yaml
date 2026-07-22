@@ -1,6 +1,12 @@
 # Official immich-app community chart 0.13.1 defaults to Immich v3.0.0. Pin
 # both the server and CPU-only ML images to the targeted v3.0.3 patch release.
 # The required v2.7.3 VectorChord migration completed before this image bump.
+#
+# WORKSTATION REBUILD MAINTENANCE (2026-07-22 JST): the application components
+# are intentionally disabled so the one-replica library volume can detach before
+# /dev/sdb2 is preserved through the Proxmox installation. PostgreSQL remains
+# online on its separately replicated PVC. Set the three enabled flags below
+# back to true only after the library has been recovered onto managed storage.
 controllers:
   main:
     containers:
@@ -17,6 +23,7 @@ immich:
       existingClaim: immich-library
 
 server:
+  enabled: false
   controllers:
     main:
       # One server writes one RWO library. Recreate guarantees no overlapping
@@ -60,7 +67,7 @@ server:
         - path: /usr/src/app/upload
 
 machine-learning:
-  enabled: true
+  enabled: false
   controllers:
     main:
       containers:
@@ -78,7 +85,7 @@ machine-learning:
       type: emptyDir
 
 valkey:
-  enabled: true
+  enabled: false
   controllers:
     main:
       containers:
