@@ -157,8 +157,11 @@ capacity. Audiobookshelf's authoritative config and metadata use replicated clai
   `docs/migrations/audiobookshelf.md`.
 - **Immich used a dedicated temporary HDD tier** — the library is a retained 350 GiB,
   single-replica Longhorn volume on the workstation's preserved `/dev/sdb2`; PostgreSQL is on a
-  separate retained, two-replica claim. The app migration and v3 upgrade are complete, but the
-  library must follow the recovery runbook while the workstation is rebuilt as Proxmox.
+  separate retained, two-replica claim. The app migration and v3 upgrade are complete. After the
+  workstation is rebuilt as Proxmox, the primary recovery path reintroduces the preserved disk on
+  the new worker: Longhorn uses its retained disk UUID to update the existing Replica CR's node and
+  path, so the existing PVC/volume is reused without copying the 350 GiB library. Orphan export is
+  documented only as a fallback in `docs/migrations/immich.md`.
 - **Media tree (mediaserver, ~TB-scale) does NOT go into this pool** — and doesn't need an NFS/NAS
   workaround. Plan: once the in-scope services are migrated, **this workstation (currently hosting
   the old lab + the 1.4 TB `/storage` disk) is converted into a k3s node**, its 1.4 TB disk added
@@ -179,7 +182,7 @@ and a later, separately approved cleanup.
 | **M3 (complete)** | audiobookshelf | First **real data migration** from old `/storage`; app with a media library; own login | homelab / public |
 | **M4** | jobhunt | Pointer Application again; multi-tier app: StatefulSet (MySQL) + Redis + Deployments (django/celery×2/frontend) + a migration **Job** + nginx front | personal / public |
 | **M5** | nextcloud | The heavy one: Postgres + Redis + app, large PVCs, `pg_dump` restore, trusted-proxy, upload-buffering middleware, cron → **CronJob** | homelab / public |
-| **M6 (complete; maintenance pending)** | immich | GitOps chart adoption, retained PVCs, pgvecto.rs → VectorChord, v3 upgrade, then preserved-replica recovery across the workstation rebuild | homelab / internal |
+| **M6 (complete; maintenance pending)** | immich | GitOps chart adoption, retained PVCs, pgvecto.rs → VectorChord, v3 upgrade, then disk-UUID reassociation of the preserved replica across the workstation rebuild | homelab / internal |
 | **M7** | old-lab decommission | **Backup/restore drill** + preserve deferred-app data (ollama models, mediaserver media tree + *arr configs, openclaw config/workspace), then power down the old lab | — |
 
 Audiobookshelf M3 is complete: Kubernetes runs 2.35.1 at `audiobookshelf.neovara.uk` with exact

@@ -9,7 +9,8 @@ on 2026-07-22 JST.
 
 The application components are now intentionally disabled in Git while the workstation is rebuilt
 as a Proxmox host. PostgreSQL remains online on its independent, two-replica Longhorn PVC. Do not
-re-enable the Immich server until the library is recovered and attached.
+re-enable the Immich server until the preserved library disk has been reassociated with the
+existing Longhorn volume and attached successfully.
 
 ## Completed pre-rebuild checkpoint
 
@@ -68,6 +69,40 @@ It contains the partition table, filesystem UUIDs, SMART report, `fstab`, Longho
 metadata, Kubernetes PV/PVC and Longhorn CR exports, Argo CD state, database counts, API version,
 and a depth-limited source-data inventory. It contains no Kubernetes Secret values.
 
+## Resume from the Mac after the workstation is rebuilt
+
+This runbook and the declarative Kubernetes, Terraform, and Ansible source are tracked in Git. A
+fresh clone on the Mac must use `main` from `origin` and start with this file. The actual library,
+database dump, evidence bundle, credentials, kubeconfig, and Terraform state are deliberately not
+stored in Git.
+
+The pre-rebuild Mac verification copied the local-only handoff into `~/homelab-handoff/`, including:
+
+- SSH keys for the Proxmox hosts and k3s nodes
+- `terraform.tfstate`, `terraform.tfstate.backup`, and `.terraform.lock.hcl`
+- the direct cluster-admin kubeconfig, in addition to the Tailscale Operator kubeconfig
+- the workstation-rebuild evidence directory
+- `immich-post-maintenance-20260722-113158-JST.dump`
+
+Before running Terraform from the clone, restore the copied state and lock file into `terraform/`
+and keep them untracked. Never initialize an empty state and apply the existing `pve-dell` resources
+as if they were new. `PROXMOX_VE_API_TOKEN` remains a runtime secret; retrieve it from the password
+manager or bootstrap a new token on the target Proxmox host. Obtain the existing cluster join token
+live from `k3s-server-1` when adding the worker; do not generate a new cluster token.
+
+Verify the copied database dump on macOS with:
+
+```bash
+shasum -a 256 ~/homelab-handoff/recovery/immich-post-maintenance-20260722-113158-JST.dump
+```
+
+Expected SHA-256:
+`ebb7754c7c4f5dffde1cb319634758d06ac3795f8190ffc05fdf4f1e42389802`.
+
+The first safe post-install handoff is the new Proxmox hostname/IP plus read-only output from
+`pveversion`, `ip -br address`, `pvesm status`, `lsblk`, and `blkid`. Do not initialize the HDD in
+the Proxmox UI. Resume at **Post-Proxmox recovery without the old node name or mount path** below.
+
 ## Deferred `/dev/sdb1` cleanup audit
 
 No cleanup was performed. The partition contains about 365 GiB and must remain intact through the
@@ -109,34 +144,91 @@ replica. Do not delete the PVC, PV, Longhorn Volume, Replica, Kubernetes Node, o
 
 ## Post-Proxmox recovery without the old node name or mount path
 
+### Why the existing volume can be reused directly
+
+This is **not** an orphan-only recovery while the Kubernetes and Longhorn CRs listed above still
+exist. The retained object chain is:
+
+`immich-library` PVC -> retained PV `pvc-ff54c47e-3e29-4ce3-9192-b6e644351b97` -> Longhorn Volume
+CR -> Replica CR `pvc-ff54c47e-3e29-4ce3-9192-b6e644351b97-r-3ef55838` -> disk UUID
+`72fbdae2-c51d-41f7-a679-33c6d617ab62`.
+
+The final live check before the rebuild confirmed that the PVC and PV were still `Bound`, the
+Longhorn Volume was detached, and the Replica CR still had all of the following:
+
+- label `longhorndiskuuid=72fbdae2-c51d-41f7-a679-33c6d617ab62`
+- `spec.diskID: 72fbdae2-c51d-41f7-a679-33c6d617ab62`
+- `spec.nodeID: k3s-worker-migration`
+- `spec.diskPath: /mnt/longhorn-immich`
+- `spec.dataDirectoryName: pvc-ff54c47e-3e29-4ce3-9192-b6e644351b97-b9dc1bdb`
+- `spec.active: true`
+
+Longhorn v1.12.0's node controller lists Replica CRs by the disk UUID read from the preserved
+`longhorn-disk.cfg`. When that disk becomes Ready on another Longhorn node, the controller updates
+each matching Replica CR's `spec.nodeID` and `spec.diskPath` to the new node and its configured
+path. Therefore neither the old Kubernetes node name nor the old mount path is required, and the
+350 GiB library is not expected to be copied into a second Longhorn volume.
+
+The volume retains `nodeSelector: [immich-migration]` and `diskSelector: [immich-hdd]`. Apply those
+tags to the new Longhorn node and preserved disk. These are replica-placement selectors; they do
+not force the Immich pod to run on the storage node. The Longhorn engine follows the workload pod
+and connects to the replica over the cluster network.
+
+Implementation evidence:
+
+- Longhorn v1.12.0 node controller, disk-UUID replica reassociation:
+  <https://github.com/longhorn/longhorn-manager/blob/fcba150e04d609c944b53cb92f7cd8adf32d7585/controller/node_controller.go#L952-L970>
+- Longhorn node-maintenance guidance on reusing existing replicas after storage returns:
+  <https://longhorn.io/docs/1.12.0/maintenance/maintenance/>
+
+### Primary path: reassociate the retained disk and volume
+
 1. Add the new Proxmox host and k3s worker to Terraform and Ansible. The current code only models
    `pve-dell`, `k3s-worker-1`, and `k3s-worker-2`; an unmanaged VM would violate the repo's
    provisioning standard.
-2. Pass the preserved `/dev/sdb2` partition to the new worker and mount it read-only at any chosen
-   recovery path. Do not format it and do not add it as a clean Longhorn disk.
-3. Verify the preserved `longhorn-disk.cfg`, `volume.meta`, replica directory, filesystem UUID, and
-   recorded checksums against the evidence bundle.
-4. Keep Longhorn's `orphan-resource-auto-deletion` setting empty. Never delete an Orphan resource
-   for this directory: deleting that CR deletes the associated replica data.
-5. Verify `lsof` and `fuser` report no writers to the replica directory.
-6. Use the Longhorn v1.12.0 `launch-simple-longhorn` recovery procedure with:
-   - volume name `pvc-ff54c47e-3e29-4ce3-9192-b6e644351b97`
-   - volume size `375809638400` bytes
-   - the preserved replica directory listed above
-7. Mount `/dev/longhorn/pvc-ff54c47e-3e29-4ce3-9192-b6e644351b97` read-only and copy its filesystem
-   into a newly managed Longhorn volume with sufficient capacity. Longhorn detects an untracked
-   replica as orphaned data; it does not automatically bind it to the existing PVC under an
-   unrelated node identity/path.
-8. Bind or reference the recovered claim from the Immich values, preserving both `/data` and
-   `/usr/src/app/upload` mounts until stored paths are separately normalized.
-9. Restore the three application component `enabled` flags to `true`, commit, push, and wait for
-   Argo CD `Synced/Healthy`.
-10. Repeat the database counts, zero-missing-path check, file count, sample image/video playback,
+2. Pass the preserved HDD or `/dev/sdb2` through to the new worker using stable hardware identity,
+   not an assumed `/dev/sdX` name. Confirm the partition by ext4 UUID
+   `e613c520-2cd4-4b0f-b8dd-1be2ea055b49`; never format it.
+3. Mount the partition read-only at any chosen recovery path. Verify the filesystem UUID,
+   `longhorn-disk.cfg`, `volume.meta`, replica directory, and recorded checksums against the
+   evidence bundle. Confirm `lsof` and `fuser` report no writers.
+4. Unmount it and mount the same filesystem read-write at its durable path, persisted by filesystem
+   UUID. Longhorn needs write access when it starts the replica, but the path does not have to be
+   `/mnt/longhorn-immich`.
+5. Join the worker to the existing k3s cluster and verify its Longhorn manager/CSI prerequisites.
+   Add Longhorn node tag `immich-migration`. Add the mounted path as disk `immich-hdd`, preserving
+   the existing `longhorn-disk.cfg`, with disk tag `immich-hdd`. Do not initialize it as a clean
+   disk or replace its disk UUID.
+6. Watch the existing Replica CR. Longhorn should retain disk ID
+   `72fbdae2-c51d-41f7-a679-33c6d617ab62` and data directory name
+   `pvc-ff54c47e-3e29-4ce3-9192-b6e644351b97-b9dc1bdb`, while changing only `spec.nodeID` and
+   `spec.diskPath` to the new worker/path.
+7. Keep `orphan-resource-auto-deletion` empty. The preserved directory should match the existing
+   Replica CR rather than become orphaned. If an Orphan CR appears for it, stop and diagnose the
+   disk-UUID/CR association; never delete that Orphan CR, because deletion removes its data.
+8. Confirm the replica can start and the existing volume becomes attachable. `auto-salvage` was
+   `true` at the final live check. If the volume remains Faulted, inspect controller/replica logs
+   and perform a controlled salvage using this preserved replica; do not delete/rebuild it.
+9. Attach the existing `immich-library` claim to a read-only verification pod and confirm expected
+   files before starting Immich. No new library PVC, PV, or 350 GiB copy is part of the primary
+   path.
+10. Preserve both `/data` and `/usr/src/app/upload` mounts in the Immich values. Restore the three
+    application component `enabled` flags to `true`, commit, push, and wait for Argo CD
+    `Synced/Healthy`.
+11. Repeat the database counts, zero-missing-path check, file count, sample image/video playback,
     login, pod-restart, and node-reschedule checks.
-11. Only after acceptance may the old `/dev/sdb1` Immich rollback be considered for deletion and
-    its free space be introduced as a separate clean Longhorn disk.
+12. Only after acceptance may the obsolete `k3s-worker-migration` Kubernetes/Longhorn objects be
+    reviewed for removal. The old `/dev/sdb1` Immich rollback may then be considered for deletion,
+    and its free space may be introduced as a separate clean Longhorn disk.
 
-Upstream recovery references:
+### Fallback only: export an orphaned replica
+
+Use `launch-simple-longhorn` and copy the filesystem to another managed volume only if the Replica
+CR/control-plane metadata is missing, or if disk-UUID reassociation fails after the preserved
+metadata and Longhorn controller logs have been checked. This fallback is not the expected
+post-Proxmox path and must not be started merely because the old node name or mount path changed.
+
+Fallback references:
 
 - <https://longhorn.io/docs/1.12.0/advanced-resources/data-recovery/export-from-replica/>
 - <https://longhorn.io/kb/restoring-data-from-an-orphaned-replica-directory/>
