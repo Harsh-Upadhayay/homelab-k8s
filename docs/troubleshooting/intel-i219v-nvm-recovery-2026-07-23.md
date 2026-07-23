@@ -657,6 +657,13 @@ SHA256SUMS
   digest=sha256:2f1c5ebddf19480322feba37234cf6d3a1faca9ee47d837d168b4225005dbd47
 ```
 
+An anonymous download of the complete public ISO asset was then streamed
+directly into `sha256sum`. It independently reproduced:
+
+```text
+65e5ea078e019ba5017acce6b66f78ea0dfec0672f39eca94772e628f5de8f25
+```
+
 Because the saved GitHub CLI API token was expired while Git over SSH still
 worked, publication used one temporary GitHub Actions branch. A short-lived
 download tunnel exposed only the ISO and checksum manifest. The GitHub runner
