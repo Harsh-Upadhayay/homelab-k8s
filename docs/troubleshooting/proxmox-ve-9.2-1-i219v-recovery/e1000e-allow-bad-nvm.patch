@@ -1,0 +1,49 @@
+diff --git a/drivers/net/ethernet/intel/e1000e/netdev.c b/drivers/net/ethernet/intel/e1000e/netdev.c
+index 9befdacd6730..0eff9191e6cf 100644
+--- a/drivers/net/ethernet/intel/e1000e/netdev.c
++++ b/drivers/net/ethernet/intel/e1000e/netdev.c
+@@ -37,6 +37,11 @@
+ module_param(debug, int, 0);
+ MODULE_PARM_DESC(debug, "Debug level (0=none,...,16=all)");
+ 
++static bool allow_bad_nvm;
++module_param(allow_bad_nvm, bool, 0);
++MODULE_PARM_DESC(allow_bad_nvm,
++		 "Allow probe to continue without validating the NVM checksum");
++
+ static const struct e1000_info *e1000_info_tbl[] = {
+ 	[board_82571]		= &e1000_82571_info,
+ 	[board_82572]		= &e1000_82572_info,
+@@ -7571,16 +7576,22 @@
+ 	 */
+ 	adapter->hw.mac.ops.reset_hw(&adapter->hw);
+ 
+-	/* systems with ASPM and others may see the checksum fail on the first
+-	 * attempt. Let's give it a few tries
+-	 */
+-	for (i = 0;; i++) {
+-		if (e1000_validate_nvm_checksum(&adapter->hw) >= 0)
+-			break;
+-		if (i == 2) {
+-			dev_err(&pdev->dev, "The NVM Checksum Is Not Valid\n");
+-			err = -EIO;
+-			goto err_eeprom;
++	if (allow_bad_nvm) {
++		dev_warn(&pdev->dev,
++			 "NVM checksum validation bypassed by allow_bad_nvm=1\n");
++	} else {
++		/* systems with ASPM and others may see the checksum fail on the
++		 * first attempt. Let's give it a few tries
++		 */
++		for (i = 0;; i++) {
++			if (e1000_validate_nvm_checksum(&adapter->hw) >= 0)
++				break;
++			if (i == 2) {
++				dev_err(&pdev->dev,
++					"The NVM Checksum Is Not Valid\n");
++				err = -EIO;
++				goto err_eeprom;
++			}
+ 		}
+ 	}
+ 

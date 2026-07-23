@@ -74,5 +74,6 @@ See [ROADMAP.md](./ROADMAP.md) for what's built, what's next, and what's intenti
 - **[GUIDE.md](./GUIDE.md)** — the canonical build guide, one phase at a time
 - **[Wiki](../../wiki)** — architecture decision log and troubleshooting reference
 - **[docs/Homelab Learning Map.md](./docs/Homelab%20Learning%20Map.md)** — revision notes: formal ADRs (`docs/adr/`, one log per milestone) for *why*, and concept docs (`docs/concepts/`) for the Ansible/Terraform/Kubernetes/platform mechanics, written up as each phase lands
+- **[Proxmox VE 9.2-1 I219-V recovery installer](./docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/)** — unofficial modified installer, checksum, exact source patch, build manifest, risks, verification, and rollback
 - **[CHANGELOG.md](./CHANGELOG.md)** — what changed, when
 - **[ROADMAP.md](./ROADMAP.md)** — what's next and what's deliberately deferred
