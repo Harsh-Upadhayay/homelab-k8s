@@ -8,7 +8,7 @@ The Ansible/Terraform/Kubernetes/platform *mechanics* these decisions rely on li
 
 ## Logs
 
-- [[v0.1 - Foundation]] — ADR-0001 … ADR-0007, ADR-0019 … ADR-0024
+- [[v0.1 - Foundation]] — ADR-0001 … ADR-0007, ADR-0019 … ADR-0024, ADR-0049
 - [[v0.2 - Cluster Bootstrap]] — ADR-0008 … ADR-0012
 - [[v0.3 - Ingress and TLS]] — ADR-0013 … ADR-0015, ADR-0027
 - [[v0.4 - Public and Private Access]] — ADR-0016 … ADR-0018, ADR-0025 … ADR-0026, ADR-0028 … ADR-0029
@@ -70,3 +70,4 @@ v1.0 has no log — it produced no architecture decisions of its own, only valid
 | 0046 | Complete the GitOps migration: all remaining apps + companions, one at a time; tailscale-operator deferred on secrets policy | Superseded in part by 0048 | [[v2.0 - Operability]] |
 | 0047 | whoami repurposed as the Rollout exercise app; Traefik API group pinned; canary swapped for blueGreen | Accepted | [[v2.0 - Operability]] |
 | 0048 | Adopt Tailscale Operator into GitOps while keeping OAuth credentials imperative | Accepted | [[v2.0 - Operability]] |
+| 0049 | Grow one Proxmox cluster across physical hosts; accept the temporary two-node quorum limit | Accepted | [[v0.1 - Foundation]] |

@@ -4,6 +4,12 @@
 
 Linux, networking, and infra ideas that don't belong to one specific tool — the "any other concept" bucket.
 
+## Proxmox clustering and failure domains
+
+**Proxmox quorum protects shared hypervisor configuration, not application data.** Cluster members replicate `/etc/pve` through `pmxcfs`: VM definitions, users/tokens, storage configuration, locks and cluster-wide VM IDs. In a two-member cluster, both votes are needed; losing one makes the survivor's cluster filesystem read-only so the two sides cannot accept conflicting configuration. Already-running guests continue, but Terraform/configuration writes fail and a cold-started survivor waits for quorum before starting `onboot` guests. ADR-0049 accepts that limitation temporarily because provisioning is infrequent and a third physical member is planned soon.
+
+**Proxmox, k3s and Longhorn have independent availability models.** One Proxmox API can manage VMs on every hypervisor without making `local-lvm` shared. A running k3s control-plane VM can keep Kubernetes online even while its Proxmox host is inquorate, but applications survive only if a remaining worker has enough compute and healthy Longhorn replicas for every required PVC. Moving `k3s-server-1` away from `pve-dell` therefore fixes API placement, not storage placement. Exactly two k3s embedded-etcd servers are also not HA; K3s requires an odd count, normally three.
+
 ## SSH
 
 **`~/.ssh/config` `Host` aliases are local, not portable.** A `Host pve-dell` block with `HostName`/`User`/`IdentityFile` lets *you* type `ssh pve-dell` from *your* machine — but that alias lives entirely in your dotfiles, not in DNS or the repo. Using it as `ansible_host` in a committed inventory file makes the automation silently depend on one person's local config; anyone else (or CI, or a future you on a new laptop) would fail to resolve the host. The fix: commit the real, resolvable value (an IP here) to the inventory, and let personal SSH aliases stay personal (ADR-0007, `ansible/inventory.ini`).

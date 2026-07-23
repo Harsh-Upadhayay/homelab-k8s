@@ -4,7 +4,7 @@ This file is read automatically at the start of every session. It captures decis
 
 ## What this is
 
-A production-shaped homelab Kubernetes platform whose current baseline runs on one Proxmox host, built for hands-on operational learning (etcd internals, networking, GitOps, storage, and observability) — not just to get something running. Correctness and understanding are prioritized over the fastest path. See `GUIDE.md` for the foundation build and `ROADMAP.md` for the layers that landed afterward. The preserved Immich-disk recovery adds a second Proxmox host and worker VM, but that host/VM is not represented in Terraform or Ansible yet; follow `docs/migrations/immich.md` rather than inventing a bare-metal worker conversion.
+A production-shaped homelab Kubernetes platform whose current baseline runs on one Proxmox host, built for hands-on operational learning (etcd internals, networking, GitOps, storage, and observability) — not just to get something running. Correctness and understanding are prioritized over the fastest path. See `GUIDE.md` for the foundation build and `ROADMAP.md` for the layers that landed afterward. ADR-0049 fixes the next topology: the freshly rebuilt workstation joins `pve-dell` as the second member of one Proxmox cluster *before* any guest is created; its Immich recovery worker is then added through the existing Terraform/Ansible standards. A third Proxmox node is planned one to two months later. None of this is represented in Terraform or Ansible yet; follow `docs/migrations/immich.md` rather than inventing a standalone provider or bare-metal worker conversion.
 
 ## Architecture
 
@@ -19,6 +19,8 @@ Proxmox host (pve-dell: laptop, 14 threads / 30GiB / 816GiB thin pool on an EXTE
 
 Provisioning is split deliberately: **Terraform** (`terraform/`) provisions the VMs, **Ansible** (`ansible/`) configures the OS and installs k3s. Different problems (infra existence vs. configuration state), different tools — don't collapse them into one.
 
+**ACCEPTED NEXT HYPERVISOR TOPOLOGY (ADR-0049): one Proxmox cluster, not independent hosts.** Create the cluster on `pve-dell`; join the empty workstation before building templates/VMs; keep one Terraform provider and cluster-wide token; select placement with each VM's `node_name`. The temporary two-node stage intentionally accepts that losing either member makes `pmxcfs` read-only and delays cold-start `onboot` guests until quorum returns. Running guests continue. A third member is planned soon. Do not add a QDevice unless availability requirements change.
+
 Sizing rule (ADR-0020): CPU is mildly overcommitted (16 vCPU on 14 threads — vCPUs are schedulable threads); **RAM is never overcommitted** (24 of 30GiB allocated, ~5GiB host reserve) because a host OOM kill against the server VM kills etcd and the cluster with it.
 
 ## Decisions already made — do not silently change
@@ -26,6 +28,7 @@ Sizing rule (ADR-0020): CPU is mildly overcommitted (16 vCPU on 14 threads — v
 The formal, numbered record of these (Status/Context/Decision/Consequences, with reversals tracked via "Superseded by") lives in `docs/adr/` — this section is the fast-reading summary for AI context loading, that's the durable version.
 
 - **Embedded etcd via `cluster-init: true`**, not SQLite — even at a single server node. This is what enables real etcd snapshot/restore/inspection and a clean path to a 3-node HA quorum later.
+- **Preferred control-plane placement after Immich recovery: move the existing `k3s-server-1` VM to the workstation**, subject to the 119GiB SSD capacity check and a zero-replacement migration plan. Do not leave exactly two embedded-etcd servers as fake HA; K3s HA requires an odd member count, normally three. Moving the API does not provide Dell-outage app continuity until critical Longhorn volumes also have healthy workstation replicas.
 - **`secrets-encryption: true`** — Kubernetes Secrets encrypted at rest in etcd, not just base64.
 - **Control-plane taint** (`node-role.kubernetes.io/control-plane:NoSchedule`) on k3s-server-1 — app pods must never schedule there.
 - **Flannel + kube-proxy on defaults — Cilium is deliberately deferred.** This was an explicit, reasoned tradeoff: start on the simplest CNI, learn the platform layers first, adopt Cilium later as its own project. **This is the one non-additive item in the whole design** — Flannel → Cilium is not a live migration, it requires a full cluster rebuild. Don't suggest switching CNIs casually; if it comes up, flag that it means a rebuild, not a config change.

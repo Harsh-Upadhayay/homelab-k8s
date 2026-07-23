@@ -604,6 +604,8 @@ The following remain deliberately deferred:
 - **Cilium** — deliberately deferred; recall this is the one *non-additive* item on this whole list. Flannel → Cilium isn't an upgrade, it's a rebuild (pod networking can't be live-migrated between CNIs). Treat it as its own dedicated project later — and a good real rebuild-from-Git/DR drill when you get there.
 - **HA control plane** (`k3s-server-2`, `k3s-server-3`) and **more workers** — both are additive. A second/third server joins the existing embedded-etcd cluster for real quorum; each additional worker needs a Terraform resource and an Ansible inventory entry. The Immich recovery runbook explicitly plans one such worker on a second Proxmox host; it is not implemented in the current code yet.
 
+**Accepted physical-host expansion (ADR-0049):** the second Proxmox host is not standalone. Immediately after installing the workstation—and before creating any guest—create the Proxmox cluster on `pve-dell` and join the empty workstation. Keep one Terraform provider/token and select VM placement by `node_name`. The temporary two-node stage accepts read-only Proxmox configuration when either member is missing; a third physical node is planned one to two months later. The complete, data-safe order is in `docs/migrations/immich.md`. After Immich recovery and a real 119GiB SSD capacity check, the preferred placement change is moving the existing single `k3s-server-1` VM to the workstation. Do not add only one more k3s server: two embedded-etcd members still require both; real HA needs three.
+
 ---
 
 ## Troubleshooting — sharp edges you're likely to actually hit

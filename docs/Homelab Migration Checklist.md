@@ -1,7 +1,7 @@
 # Homelab migration checklist
 
 Source: `../homelab` (Docker Compose on the workstation). Initial inventory: 2026-07-09.
-Last reconciled with Git and the live cluster: 2026-07-22 JST.
+Last reconciled with Git and the live cluster: 2026-07-23 JST.
 
 The old Compose stack was brought back up for final manual comparison. A running source container
 does not mean it is still authoritative or required after the workstation rebuild; use the categories
@@ -21,7 +21,9 @@ below and the per-app runbooks.
   intentionally in GitOps maintenance while the workstation becomes a Proxmox host; preserve
   both HDD partitions and follow `docs/migrations/immich.md`. The normal recovery path reuses the
   existing PVC/Longhorn volume by reassociating the preserved Longhorn disk UUID on the new worker;
-  it does not copy the 350 GiB library into a new PVC.
+  it does not copy the 350 GiB library into a new PVC. Before that worker is created, join the
+  empty workstation to the Proxmox cluster created on `pve-dell` as required by ADR-0049; do not
+  provision it as a separate Proxmox/Terraform island.
 
 ## Preserve data and migrate later
 
@@ -58,3 +60,6 @@ until each later Kubernetes deployment has restored and verified it.
 - Nextcloud and Kiroku currently use `Delete`-reclaim Longhorn claims. Their preserved source data is
   the rollback until a real backup/Retain policy is established; do not clean the source partition
   merely because the applications are live in Kubernetes.
+- Moving `k3s-server-1` to the workstation after Immich recovery improves Kubernetes API placement
+  but does not by itself make applications survive a Dell outage. Critical PVCs also need healthy
+  workstation replicas and the workstation worker needs enough compute to run the required pods.

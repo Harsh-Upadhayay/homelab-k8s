@@ -169,6 +169,17 @@ capacity. Audiobookshelf's authoritative config and metadata use replicated clai
   rollback/deferred-data partition is explicitly audited and approved for cleanup. This requires
   extending Terraform and Ansible; the current code models only `pve-dell` and its three VMs.
 
+The second host is not standalone. ADR-0049 requires the freshly installed, guest-free workstation
+to join a Proxmox cluster created on `pve-dell` before any template, VM, Terraform apply, or HDD
+passthrough. One provider/token then manages both nodes and VM placement is expressed with
+`node_name`. The temporary two-node stage accepts read-only Proxmox configuration after loss of one
+member because provisioning is infrequent; a third physical node is planned one to two months later.
+After Immich recovery, the preferred control-plane change is migration of the existing
+`k3s-server-1` VM to the workstation—not creation of a two-member etcd cluster. Dell retirement
+waits until the third node exists, all guests and Longhorn dependencies have moved, Terraform points
+at a survivor, and a zero-destroy plan has passed. See `docs/migrations/immich.md` for the executable
+order and ADR-0049 for the decision.
+
 The media tree and rollback copies remain intact on `/dev/sdb1` pending the workstation rebuild
 and a later, separately approved cleanup.
 

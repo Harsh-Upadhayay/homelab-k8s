@@ -1,6 +1,6 @@
 # Homelab Kubernetes Platform
 
-A production-shaped Kubernetes platform whose current baseline runs on one Proxmox host, built for hands-on operational learning — etcd internals, CNI networking, ingress, secure remote access — not just to get something running. Correctness and understanding are prioritized over the fastest path. A second Proxmox host and worker VM are planned as part of the preserved Immich-disk recovery; they are not in Terraform or Ansible yet.
+A production-shaped Kubernetes platform whose current baseline runs on one Proxmox host, built for hands-on operational learning — etcd internals, CNI networking, ingress, secure remote access — not just to get something running. Correctness and understanding are prioritized over the fastest path. The accepted next topology (ADR-0049) joins the freshly rebuilt workstation to `pve-dell` as the second member of one Proxmox cluster before provisioning its Immich recovery worker; a third physical Proxmox node is planned one to two months later. That expansion is documented but not implemented in Terraform or Ansible yet.
 
 The full phase-by-phase build is in **[GUIDE.md](./GUIDE.md)**. This README is the map; the guide is the territory.
 
@@ -11,11 +11,18 @@ Proxmox host (pve-dell)
 ├── k3s-server-1   control plane, tainted (no app workloads), embedded etcd
 ├── k3s-worker-1   application workloads + Longhorn data disk
 └── k3s-worker-2   application workloads + Longhorn data disk
+
+Accepted next state (not provisioned yet):
+Proxmox cluster
+├── pve-dell        existing three VMs initially
+└── pve-workstation new recovery worker + preserved physical HDD
+    └── later preferred placement for the existing k3s-server-1 VM
 ```
 
 | Layer | Choice | Why (short version — see GUIDE.md / wiki for the full reasoning) |
 |---|---|---|
 | Provisioning | Terraform (`bpg/proxmox`) | Declarative infra state — VM existence, sizing, IPs |
+| Hypervisor topology | One Proxmox cluster (ADR-0049) | One API/token and normal node lifecycle; temporary two-node read-only-on-quorum-loss behavior is accepted until node 3 |
 | Configuration | Ansible | Idempotent, SSH-based OS + k3s setup — different problem than provisioning, kept as a different tool |
 | Cluster datastore | Embedded etcd (`cluster-init: true`) | Real etcd snapshot/restore/inspection, clean path to HA later |
 | CNI | Flannel + kube-proxy (defaults) | Simplest CNI first; Cilium deliberately deferred as its own rebuild-required project |

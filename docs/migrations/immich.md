@@ -86,9 +86,11 @@ The pre-rebuild Mac verification copied the local-only handoff into `~/homelab-h
 
 Before running Terraform from the clone, restore the copied state and lock file into `terraform/`
 and keep them untracked. Never initialize an empty state and apply the existing `pve-dell` resources
-as if they were new. `PROXMOX_VE_API_TOKEN` remains a runtime secret; retrieve it from the password
-manager or bootstrap a new token on the target Proxmox host. Obtain the existing cluster join token
-live from `k3s-server-1` when adding the worker; do not generate a new cluster token.
+as if they were new. `PROXMOX_VE_API_TOKEN` remains a runtime secret; retrieve the existing
+`terraform@pve!tf` token from the password manager. After the workstation joins the Proxmox cluster,
+that identity and its ACLs are cluster-wide; do not create a second provider/token merely because the
+VM is placed on another physical node. Obtain the existing k3s join token live from `k3s-server-1`
+when adding the worker; do not generate a new cluster token.
 
 Verify the copied database dump on macOS with:
 
@@ -101,7 +103,57 @@ Expected SHA-256:
 
 The first safe post-install handoff is the new Proxmox hostname/IP plus read-only output from
 `pveversion`, `ip -br address`, `pvesm status`, `lsblk`, and `blkid`. Do not initialize the HDD in
-the Proxmox UI. Resume at **Post-Proxmox recovery without the old node name or mount path** below.
+the Proxmox UI. Resume at **Proxmox cluster expansion before any guest is created** below.
+
+## Proxmox cluster expansion before any guest is created
+
+ADR-0049 fixes the hypervisor topology: `pve-dell`, the rebuilt workstation, and the planned third
+physical node belong to one Proxmox cluster. The workstation is **not** a separate Proxmox
+installation with a second Terraform provider. The initial two-node period deliberately accepts
+loss of Proxmox configuration writes when either member is absent; provisioning is infrequent and a
+third member is expected in one to two months.
+
+This must happen while the workstation is still empty. Proxmox overwrites a joining node's
+`/etc/pve` configuration and requires it to hold no guests. Do not build its Ubuntu template, create
+the k3s worker, attach the HDD to a VM, or run Terraform first.
+
+1. Keep the 1.4 TB HDD disconnected for the Proxmox installation. Reconnect it only after the new
+   host boots, then verify both preserved partition UUIDs with `lsblk -f` and `blkid`. Do not add the
+   HDD as Proxmox storage, an LVM PV, or a ZFS member.
+2. Give the workstation a unique permanent Proxmox hostname and static LAN IP. Verify forward and
+   reverse name resolution, time synchronization, identical supported Proxmox versions, and stable
+   low-latency LAN connectivity between it and `pve-dell`.
+3. Capture `pvecm status`, `pvecm nodes`, `/etc/pve/storage.cfg`, and the VM inventory from
+   `pve-dell`. If it is still standalone, create the cluster there. Join the **empty workstation**
+   using the assisted join information from `pve-dell` or the equivalent `pvecm add` flow.
+4. Verify both nodes appear in `pvecm nodes`, both report `Online`, `pvecm status` reports `Quorate:
+   Yes` with both online, and the existing three VMs on `pve-dell` are unchanged and running.
+5. Recheck `pvesm status` on both nodes. Proxmox storage configuration is cluster-wide but the
+   underlying `local-lvm` media remains node-local. Apply node restrictions if storage IDs are not
+   genuinely present on both nodes; clustering does not make local disks shared.
+6. Run the Proxmox Ansible role against the new host, including its host-specific repository,
+   Tailscale, hardware and Terraform ACL settings. Do not apply `pve-dell`-specific laptop/NIC
+   workarounds to different hardware without detection/host variables.
+7. Extend the single Terraform root and Ansible inventory for the new physical node and k3s worker.
+   Keep one Proxmox provider and token; use the VM resource's `node_name` for placement. Restore the
+   copied Terraform state first, then require a reviewed plan with the existing three VM resources
+   unchanged and only the intended new infrastructure added.
+
+Two-node Proxmox behavior is accepted but must remain understood:
+
+- With both nodes online, either node's API can manage the cluster and Terraform can place VMs on
+  either physical node.
+- If one node is absent, already-running VMs on the survivor continue, but `pmxcfs` becomes
+  read-only and Terraform/configuration changes fail.
+- If the survivor cold-starts while the other member is absent, `onboot` guests wait for quorum.
+- This is not Proxmox HA. The planned third node supplies the normal third vote. If `pve-dell` is
+  later removed and only two members remain, the same limitation returns unless another node or a
+  QDevice supplies a third vote.
+
+References:
+
+- <https://pve.proxmox.com/pve-docs/pve-admin-guide.html#chapter_pvecm>
+- <https://pve.proxmox.com/pve-docs/chapter-pmxcfs.html>
 
 ## Deferred `/dev/sdb1` cleanup audit
 
@@ -183,9 +235,10 @@ Implementation evidence:
 
 ### Primary path: reassociate the retained disk and volume
 
-1. Add the new Proxmox host and k3s worker to Terraform and Ansible. The current code only models
-   `pve-dell`, `k3s-worker-1`, and `k3s-worker-2`; an unmanaged VM would violate the repo's
-   provisioning standard.
+1. Complete **Proxmox cluster expansion before any guest is created** above, then add the new
+   Proxmox node and k3s worker to Terraform and Ansible. The current code only models `pve-dell`,
+   `k3s-worker-1`, and `k3s-worker-2`; an unmanaged VM would violate the repo's provisioning
+   standard. Use the one clustered Proxmox provider, not a provider alias for an independent host.
 2. Pass the preserved HDD or `/dev/sdb2` through to the new worker using stable hardware identity,
    not an assumed `/dev/sdX` name. Confirm the partition by ext4 UUID
    `e613c520-2cd4-4b0f-b8dd-1be2ea055b49`; never format it.
@@ -220,6 +273,54 @@ Implementation evidence:
 12. Only after acceptance may the obsolete `k3s-worker-migration` Kubernetes/Longhorn objects be
     reviewed for removal. The old `/dev/sdb1` Immich rollback may then be considered for deletion,
     and its free space may be introduced as a separate clean Longhorn disk.
+
+## Control-plane placement and eventual `pve-dell` retirement
+
+Today `k3s-server-1`, `k3s-worker-1`, and `k3s-worker-2` all live on `pve-dell`; a Dell outage is
+therefore a practical Kubernetes outage. After Immich is recovered, the preferred next placement
+change is to move the **existing** `k3s-server-1` VM to the workstation, retaining its Kubernetes
+identity, embedded-etcd data, IP and API endpoint. Do not leave exactly two embedded-etcd server
+members as an attempted HA design: K3s embedded-etcd HA requires an odd number, normally three or
+more. A real three-server control plane is a separate future project.
+
+Before moving the existing control-plane VM:
+
+1. Inspect real workstation `local-lvm` capacity and actual guest disk use. The 119 GiB SSD must
+   safely hold Proxmox plus the worker OS and control-plane OS; never rely only on thin-provisioned
+   virtual sizes.
+2. Take and verify an etcd snapshot and have a tested rollback path.
+3. Use a reviewed Proxmox/Terraform migration plan that preserves the VM rather than destroys and
+   recreates it. A valid plan must show no control-plane replacement.
+4. After the move, verify etcd health, Kubernetes API access from the Mac, all nodes, Argo CD,
+   Longhorn, DNS, Traefik and both public/private application paths.
+
+Moving the API alone does not make applications survive a Dell outage. At the 2026-07-23 live
+checkpoint, ordinary Longhorn replicas—including both replicas of Immich PostgreSQL volume
+`pvc-78a421f5-cc42-4e1c-b9c0-c9cd94b7c7c9`—were on `k3s-worker-1` and
+`k3s-worker-2`, which share `pve-dell`. Before claiming Dell-outage continuity, place healthy
+workstation replicas for every critical PVC and prove the workstation worker has enough compute for
+the workloads that must reschedule there. The preserved Immich library replica alone is not enough;
+Immich also needs its PostgreSQL volume and routing components.
+
+When the planned third Proxmox node arrives, join it empty to this same Proxmox cluster. To retire
+`pve-dell` later:
+
+1. Move or replace every Dell-owned VM and evacuate every required Longhorn replica while Dell is
+   healthy. Local Proxmox storage is not made recoverable merely by cluster membership.
+2. Confirm no VM, template, required local disk, Kubernetes role, Longhorn replica, route or secret
+   recovery dependency remains unique to Dell.
+3. Change `proxmox_endpoint` to a surviving cluster member and prove Terraform refresh/plan works
+   with zero unintended destroy or replace actions.
+4. Power Dell off and remove it from a surviving member with the supported `pvecm delnode` flow.
+   Do not improvise by deleting `/etc/pve` files or letting a removed node rejoin with stale cluster
+   state.
+5. Update Terraform, Ansible, README/architecture docs and recovery material in the same change.
+
+References:
+
+- Proxmox node join: <https://pve.proxmox.com/pve-docs/pve-admin-guide.html#pvecm_join_node_to_cluster>
+- Proxmox node removal: <https://pve.proxmox.com/pve-docs/pve-admin-guide.html#pvecm_remove_node>
+- K3s embedded-etcd HA: <https://docs.k3s.io/datastore/ha-embedded>
 
 ### Fallback only: export an orphaned replica
 
