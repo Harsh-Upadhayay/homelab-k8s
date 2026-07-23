@@ -16,6 +16,9 @@ The image lets the installer and first installed boot use the onboard
 Ethernet interface even though its NVM checksum is invalid. It does **not**
 repair, rewrite, or otherwise modify the NIC NVM.
 
+Download the ISO and checksum manifest from the
+[GitHub Release](https://github.com/Harsh-Upadhayay/homelab-k8s/releases/tag/proxmox-ve-9.2-1-i219v-recovery-v1).
+
 ## Release files
 
 | File | Purpose |

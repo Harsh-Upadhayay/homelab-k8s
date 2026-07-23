@@ -626,6 +626,50 @@ This returns to the original signed driver and therefore to the original NVM
 checksum probe failure. No Proxmox installation and no NIC NVM write occurred
 during media preparation.
 
+## Repository package and release — published and verified
+
+The release documentation was committed and pushed to `main`:
+
+```text
+commit=37cb751b9b40eb4534f25b9fb553a376bbdf40d2
+commit signature=Good
+tag=proxmox-ve-9.2-1-i219v-recovery-v1
+tag object=0d59909e038a923b5426af23926aef1257f7e9d7
+tag signature=Good
+```
+
+The 1.7 GB ISO was kept out of Git history and published with its checksum
+manifest as assets on:
+
+<https://github.com/Harsh-Upadhayay/homelab-k8s/releases/tag/proxmox-ve-9.2-1-i219v-recovery-v1>
+
+GitHub's public release API reported:
+
+```text
+proxmox-ve_9.2-1-i219v-recovery.iso
+  state=uploaded
+  size=1,709,592,576 bytes
+  digest=sha256:65e5ea078e019ba5017acce6b66f78ea0dfec0672f39eca94772e628f5de8f25
+
+SHA256SUMS
+  state=uploaded
+  size=102 bytes
+  digest=sha256:2f1c5ebddf19480322feba37234cf6d3a1faca9ee47d837d168b4225005dbd47
+```
+
+Because the saved GitHub CLI API token was expired while Git over SSH still
+worked, publication used one temporary GitHub Actions branch. A short-lived
+download tunnel exposed only the ISO and checksum manifest. The GitHub runner
+downloaded the complete ISO, passed `sha256sum --check`, and uploaded both
+assets using its scoped repository token. The action completed successfully:
+
+<https://github.com/Harsh-Upadhayay/homelab-k8s/actions/runs/29986433162>
+
+The tunnel and local HTTP server were stopped immediately after the runner's
+checksum gate passed. The temporary remote and local branch were deleted after
+the action succeeded. The release tag remains on the signed documentation
+commit.
+
 ## NVM-repair gate
 
 No EEPROM/NVM write may proceed unless all of the following are satisfied:
