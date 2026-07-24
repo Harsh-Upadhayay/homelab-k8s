@@ -7,10 +7,20 @@ v2.7.3 to v3.0.3, and accepted at `https://immich.in.neovara.uk`. Database count
 and files matched the source. The old Compose instance was stopped after a final manual comparison
 on 2026-07-22 JST.
 
-The application components are now intentionally disabled in Git while the workstation is rebuilt
-as a Proxmox host. PostgreSQL remains online on its independent, two-replica Longhorn PVC. Do not
-re-enable the Immich server until the preserved library disk has been reassociated with the
-existing Longhorn volume and attached successfully.
+Post-Proxmox recovery completed on 2026-07-24 JST. `k3s-worker-3` runs on `pve-asrock`, mounts the
+preserved `/dev/sdb2` filesystem at `/var/lib/longhorn`, and owns the reassociated library replica
+under its original Longhorn disk UUID. Immich, machine learning, Valkey, and PostgreSQL are Running;
+Argo CD is `Synced/Healthy`, and the library volume is `attached/healthy`.
+
+The post-rebuild database baseline matched: 19,004 total assets, 19,003 active assets, one user,
+870 albums, 203 persons, and the same newest pre-rebuild asset timestamp. A live snapshot then
+checked all 56,799 database-referenced paths after client activity resumed, with zero missing.
+The user verified accounts, albums, photos, videos, search, and timeline. The obsolete Kubernetes
+and Longhorn `k3s-worker-migration` objects and their six stale pod records were removed only after
+zero replicas, engines, attachments, and Orphans referenced that node.
+
+`/dev/sdb1` remains unchanged. Repurposing it, retiring `k3s-worker-2`, and converging the HDD
+layout are separate work tracked by GitHub issue #48; moving the existing control-plane VM is #49.
 
 ## Completed pre-rebuild checkpoint
 
@@ -44,7 +54,7 @@ The entire physical HDD `/dev/sdb` must survive unchanged:
 | Library volume/PV | `pvc-ff54c47e-3e29-4ce3-9192-b6e644351b97`, 350 GiB | Authoritative migrated library volume |
 | Replica CR | `pvc-ff54c47e-3e29-4ce3-9192-b6e644351b97-r-3ef55838` | Only library replica |
 | Replica directory | `pvc-ff54c47e-3e29-4ce3-9192-b6e644351b97-b9dc1bdb` | Raw Longhorn v1 replica data |
-| Old node | `k3s-worker-migration` | Temporary bare-metal worker; do not require this name after rebuild |
+| Old node | `k3s-worker-migration` | Removed from Kubernetes and Longhorn after acceptance |
 
 The PostgreSQL volume is `pvc-78a421f5-cc42-4e1c-b9c0-c9cd94b7c7c9`, 10 GiB, retained, with two
 replicas on the permanent workers. The library and source rollback are two partitions on the same
@@ -255,7 +265,9 @@ Implementation evidence:
    evidence bundle. Confirm `lsof` and `fuser` report no writers.
 4. Unmount it and mount the same filesystem read-write at its durable path, persisted by filesystem
    UUID. Longhorn needs write access when it starts the replica, but the path does not have to be
-   `/mnt/longhorn-immich`.
+   `/mnt/longhorn-immich`. **The durable mount must exist before `k3s-agent` starts.** Starting
+   Longhorn first and mounting over `/var/lib/longhorn` later can leave engine-image and
+   instance-manager pods with different filesystem views.
 5. Join the worker to the existing k3s cluster and verify its Longhorn manager/CSI prerequisites.
    Add Longhorn node tag `immich-migration`. Add the mounted path as disk `immich-hdd`, preserving
    the existing `longhorn-disk.cfg`, with disk tag `immich-hdd`. Do not initialize it as a clean
@@ -281,6 +293,48 @@ Implementation evidence:
 12. Only after acceptance may the obsolete `k3s-worker-migration` Kubernetes/Longhorn objects be
     reviewed for removal. The old `/dev/sdb1` Immich rollback may then be considered for deletion,
     and its free space may be introduced as a separate clean Longhorn disk.
+
+Steps 1–10 completed on 2026-07-24. Step 11 passed database, path, sample-file, playback, login, and
+server-pod restart checks. A read-only verification pod also attached and read the library from
+`k3s-worker-1`, proving remote Longhorn presentation, but a full Immich-server cross-node
+reschedule remains issue #48 acceptance scope before worker-2 retirement. Step 12 removed the
+obsolete node objects; `/dev/sdb1` cleanup remains deliberately deferred to that same issue.
+
+Before node deletion, the cluster reported zero old-node replicas, engines, VolumeAttachments,
+Orphans, and non-system workloads. Scheduling was disabled on the old Longhorn node and both disks;
+deleting the Kubernetes Node triggered automatic Longhorn Node removal. Six unreachable stale pod
+records required explicit force deletion because the destroyed kubelet could not acknowledge
+termination.
+
+The 2026-07-24 recovery violated the mount-before-k3s ordering and produced a real attach outage.
+If this happens again, do not delete the PVC, PV, Volume, or Replica. Read
+[INC-2026-001](../incidents/INC-2026-001-longhorn-stale-mount-namespace.md) before acting: after
+verifying the host engine binary, both the engine-image and instance-manager filesystem views may
+need to be refreshed.
+
+### Recovery branch: the Longhorn disk was mounted after k3s started
+
+Use this branch only when the durable Longhorn filesystem is now mounted correctly, but the
+engine error says `/engine-binaries/.../longhorn` does not exist.
+
+1. Confirm the mounted source is the intended filesystem UUID and that `longhorn-disk.cfg` and the
+   preserved replica directory are present. Stop if the identity differs.
+2. Confirm the engine binary exists and is executable under the host's
+   `/var/lib/longhorn/engine-binaries/` tree. If it does not, recreate only the worker's
+   engine-image pod and wait for the file to appear.
+3. Find the instance-manager pod scheduled to the affected worker and run `stat` against the same
+   binary through its `/engine-binaries/` path.
+4. If the host sees the file but the instance-manager does not, delete only that instance-manager
+   pod. Longhorn recreates this process pod with a fresh view of the mounted filesystem. Never
+   substitute deletion of the Replica, Volume, PV, PVC, disk directory, or an Orphan.
+5. Verify the recreated instance-manager sees the executable before retrying the application.
+6. Wait for the Longhorn engine to become Running, the volume to become `attached/healthy`, and
+   the CSI VolumeAttachment to report `attached: true`. CSI retries normally; do not delete the
+   attachment merely because it retains an earlier error while a retry is active.
+7. If an application pod created during the failed-attach window remains in `ContainerCreating`
+   after the attachment is healthy, replace that pod once and let its controller recreate it.
+8. Verify Longhorn identity and health, application readiness, Argo CD health, and application
+   data before considering any old node or rollback-data cleanup.
 
 ## Control-plane placement and eventual `pve-dell` retirement
 

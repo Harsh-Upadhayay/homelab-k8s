@@ -75,20 +75,22 @@ Tailscale Kubernetes API proxy 503 occurred from roughly 22:23 to 22:25 JST;
 the direct API server remained Ready, and the proxy recovered without a cluster
 restart or rollout change.
 
-## Workstation rebuild boundary
+## Workstation rebuild recovery
 
-The library currently has one Longhorn replica on `k3s-worker-migration`; the
-node is cordoned after its SSD hit the kubelet ephemeral-storage watermark.
-Cordoning does not stop its Longhorn replica or prevent Immich from running on a
-permanent worker. Do not wipe or repartition the preserved HDD before recording
-the live Longhorn replica/disk state and completing the separate Proxmox
-recovery procedure. The existing Longhorn and Kubernetes CRs are being retained:
-when the passed-through disk returns on the new worker, Longhorn v1.12 uses its
-stored disk UUID to update the existing Replica CR's node and path. The worker
-name and mount path therefore do not need to match the temporary node.
+Recovery completed on 2026-07-24 JST. The preserved filesystem is passed through to
+`k3s-worker-3` on `pve-asrock` and mounted at `/var/lib/longhorn`. Longhorn reassociated the
+existing Replica CR by disk UUID, changing only its node and path; the data-directory identity
+remained unchanged. The library volume is `attached/healthy`, and all Immich components are enabled
+and Ready under Argo CD.
 
-The application components are intentionally disabled in Git during this maintenance window;
-PostgreSQL remains online on its separate replicated claim. The complete disk identity, evidence
-bundle, `/dev/sdb1` preservation audit, shutdown procedure, and post-Proxmox disk-reassociation
-recovery steps are recorded in `docs/migrations/immich.md`. Orphan export is a fallback only if the
-retained control-plane metadata is lost or disk-UUID reassociation fails; it is not the normal path.
+Post-rebuild acceptance matched the saved database baseline, verified a 56,799-path live database
+snapshot with zero missing files, survived a server-pod replacement, and passed manual login,
+album, photo, video, search, and timeline checks. The obsolete bare-metal
+`k3s-worker-migration` Kubernetes and Longhorn objects were then removed after proving they owned
+no replicas, engines, attachments, Orphans, or application workloads.
+
+The recovery exposed a mount-ordering failure in which Longhorn's instance-manager retained the
+pre-mount view of `/var/lib/longhorn`. The blameless report and preventive actions are
+[INC-2026-001](../../../../docs/incidents/INC-2026-001-longhorn-stale-mount-namespace.md). The full
+disk identity, evidence bundle, recovery sequence, and deferred `/dev/sdb1` boundary remain in
+[the migration runbook](../../../../docs/migrations/immich.md).

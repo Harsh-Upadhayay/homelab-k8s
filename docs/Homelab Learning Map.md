@@ -2,10 +2,12 @@
 
 Entry point for the revision notes on this build.
 
-The notes are organized into two kinds of document:
+The notes are organized into three kinds of document:
 
 - **ADRs** (`adr/`) — architecture decisions, one log per release milestone (v0.1 … v2.0), in standard Status/Context/Decision/Consequences format. Each log opens with a short narrative, so reading one top-to-bottom tells the story of that milestone.
 - **Concepts** (`concepts/`) — the Ansible/Terraform/Kubernetes/platform mechanics the decisions rely on, condensed into themed prose. Read the ADRs for the *why*; read Concepts for the *how*.
+- **Incident reviews** (`incidents/`) — blameless reconstructions of real outages and near misses,
+  including impact, evidence, root cause, recovery, and owned preventive actions.
 
 This is a second, formal decision record alongside `claude.md` (settled decisions, optimized for fast AI context loading) and `GUIDE.md` (the phase-by-phase build, with reasoning inline). The ADRs are the durable, numbered version of the same decisions — `claude.md` and `GUIDE.md` stay as the fast-reading front door; this is where a decision's full Context/Consequences and any later reversal actually lives.
 
@@ -16,6 +18,7 @@ This is a second, formal decision record alongside `claude.md` (settled decision
 - [[Terraform Concepts]] — providers, resources, state (populated from Phase 3 onward)
 - [[Kubernetes Concepts]] — Helm, CRDs/Operator pattern, RBAC, kubectl debugging, monitoring/logging (Prometheus Operator's selector chain, Endpoints, DaemonSet vs. Deployment, container storage, ConfigMap-as-dashboard-provisioning) (first populated at Phase 12 Part B)
 - [[Platform Concepts]] — Linux, networking, and infra ideas that don't belong to one tool
+- [[incidents/README|Incident reviews]] — production-style operational learning log and template
 
 ## Decision logs by milestone
 
