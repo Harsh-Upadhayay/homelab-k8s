@@ -8,7 +8,7 @@ The Ansible/Terraform/Kubernetes/platform *mechanics* these decisions rely on li
 
 ## Logs
 
-- [[v0.1 - Foundation]] — ADR-0001 … ADR-0007, ADR-0019 … ADR-0024, ADR-0049
+- [[v0.1 - Foundation]] — ADR-0001 … ADR-0007, ADR-0019 … ADR-0024, ADR-0049 … ADR-0050
 - [[v0.2 - Cluster Bootstrap]] — ADR-0008 … ADR-0012
 - [[v0.3 - Ingress and TLS]] — ADR-0013 … ADR-0015, ADR-0027
 - [[v0.4 - Public and Private Access]] — ADR-0016 … ADR-0018, ADR-0025 … ADR-0026, ADR-0028 … ADR-0029
@@ -27,7 +27,7 @@ v1.0 has no log — it produced no architecture decisions of its own, only valid
 | 0003 | Defer secrets management for v1 | Accepted | [[v0.1 - Foundation]] |
 | 0004 | Automate Proxmox host housekeeping and the Tailscale host join via Ansible | Accepted | [[v0.1 - Foundation]] |
 | 0005 | Split Proxmox host automation into two separate roles/playbooks | Superseded by 0006 | [[v0.1 - Foundation]] |
-| 0006 | Merge Proxmox host automation into one role with tagged task files | Accepted | [[v0.1 - Foundation]] |
+| 0006 | Merge Proxmox host automation into one role with tagged task files | Superseded by 0050 | [[v0.1 - Foundation]] |
 | 0007 | Inventory must use portable, resolvable connection targets | Accepted | [[v0.1 - Foundation]] |
 | 0008 | Use embedded etcd instead of SQLite | Accepted | [[v0.2 - Cluster Bootstrap]] |
 | 0009 | Enable secrets-encryption at rest | Accepted | [[v0.2 - Cluster Bootstrap]] |
@@ -71,3 +71,4 @@ v1.0 has no log — it produced no architecture decisions of its own, only valid
 | 0047 | whoami repurposed as the Rollout exercise app; Traefik API group pinned; canary swapped for blueGreen | Accepted | [[v2.0 - Operability]] |
 | 0048 | Adopt Tailscale Operator into GitOps while keeping OAuth credentials imperative | Accepted | [[v2.0 - Operability]] |
 | 0049 | Grow one Proxmox cluster across physical hosts; accept the temporary two-node quorum limit | Accepted | [[v0.1 - Foundation]] |
+| 0050 | Organize Ansible roles by lifecycle ownership | Accepted | [[v0.1 - Foundation]] |

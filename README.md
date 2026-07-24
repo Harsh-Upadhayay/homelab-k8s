@@ -39,10 +39,14 @@ homelab-k8s/
 ├── terraform/             provisions the current three VMs on pve-dell
 ├── ansible/               configures the OS, installs k3s, and manages the Proxmox host itself
 │   └── roles/
-│       ├── proxmox_host/  host-level housekeeping (apt/repos) + joining the tailnet
-│       ├── common/        shared k3s prerequisites (all cluster nodes)
+│       ├── proxmox_host/  host-local repositories and opt-in package maintenance
+│       ├── proxmox_cluster/ cluster-wide names and Terraform API identity
+│       ├── proxmox_hw_*/  physical-machine-specific safeguards
+│       ├── tailscale_host/ shared host-level tailnet join
+│       ├── k3s_node/      shared k3s prerequisites (all cluster nodes)
 │       ├── k3s_server/    control-plane bootstrap
-│       └── k3s_agent/     worker join
+│       ├── k3s_agent/     worker join
+│       └── longhorn_node/ worker storage and Longhorn prerequisites
 └── k8s/                   GitOps-managed platform and application manifests
     ├── argocd/             app-of-apps definitions and AppProjects
     ├── traefik/

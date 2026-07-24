@@ -18,9 +18,9 @@ Linux, networking, and infra ideas that don't belong to one specific tool — th
 
 ## Package management
 
-**deb822 `.sources` format vs. legacy `.list`.** Debian 13 (Trixie) / Proxmox VE 9 ship apt sources as deb822 stanzas (`Types:`/`URIs:`/`Suites:`/`Components:`/`Signed-By:`/`Enabled:`) rather than the older one-line `deb <url> <suite> <components>` format. The `Enabled: false` field is what actually disables a repo — the file doesn't need to be deleted or commented out (`ansible/roles/proxmox_host/tasks/repos.yml`, confirmed by inspecting `/etc/apt/sources.list.d/*.sources` on `pve-dell` directly over SSH).
+**deb822 `.sources` format vs. legacy `.list`.** Debian 13 (Trixie) / Proxmox VE 9 ship apt sources as deb822 stanzas (`Types:`/`URIs:`/`Suites:`/`Components:`/`Signed-By:`/`Enabled:`) rather than the older one-line `deb <url> <suite> <components>` format. The `Enabled: false` field is what actually disables a repo — the file doesn't need to be deleted or commented out (`ansible/roles/proxmox_host/tasks/repositories.yml`, confirmed by inspecting `/etc/apt/sources.list.d/*.sources` on `pve-dell` directly over SSH).
 
-**A repo needs both a source file and a trusted signing key.** Adding `pkgs.tailscale.com`'s apt repo means fetching its GPG keyring (`get_url` → `/usr/share/keyrings/tailscale-archive-keyring.gpg`) *and* pointing the `.sources` file's `Signed-By:` at that exact file — apt won't trust packages from a repo whose key it doesn't have, regardless of the source line being correct (`ansible/tasks/tailscale.yml`).
+**A repo needs both a source file and a trusted signing key.** Adding `pkgs.tailscale.com`'s apt repo means fetching its GPG keyring (`get_url` → `/usr/share/keyrings/tailscale-archive-keyring.gpg`) *and* pointing the `.sources` file's `Signed-By:` at that exact file — apt won't trust packages from a repo whose key it doesn't have, regardless of the source line being correct (`ansible/roles/tailscale_host/tasks/main.yml`).
 
 ## Mesh VPNs (Tailscale)
 
@@ -142,7 +142,7 @@ The symmetry to remember: each door has exactly one component holding an outboun
 
 **Two co-triggers, both worth fixing: TSO/GSO/GRO enabled is the primary; PCIe ASPM L0s/L1 transitions is the mechanism.** With offloads on, the MAC's transmit DMA can stall; with PCIe ASPM letting the link drop to a low-power state during idle TX windows, the MAC fails to resume DMA — which is why the hang first fires a few minutes after every cold boot (the first idle TX window lets ASPM kick in), independent of host load. Proven independent here: it recurred ~3 min after boot, *before* any IO storm could build, with zero OOM/`hung_task`/memory correlation — so it was the outage's prime mover, not a victim of the box's storage pressure.
 
-**Fix: disable the offloads live + persist, and disable ASPM in GRUB.** `ethtool -K nic0 tso off gso off gro off` stops the hang immediately with no reboot; `pcie_aspm=off` (or `=performance`) appended to `GRUB_CMDLINE_LINUX_DEFAULT` + `update-grub` removes the ASPM trigger but needs a reboot. Both codified idempotently in `ansible/roles/proxmox_host/tasks/e1000e_fix.yml` (tag `e1000e`) and `e1000e_aspm.yml` (tag `e1000e-aspm`).
+**Fix: disable the offloads live + persist, and disable ASPM in GRUB.** `ethtool -K nic0 tso off gso off gro off` stops the hang immediately with no reboot; `pcie_aspm=off` (or `=performance`) appended to `GRUB_CMDLINE_LINUX_DEFAULT` + `update-grub` removes the ASPM trigger but needs a reboot. Both are Dell-specific hardware policy, codified idempotently in `ansible/roles/proxmox_hw_dell/tasks/e1000e_offload.yml` (tag `e1000e`) and `e1000e_aspm.yml` (explicit-only tag `e1000e-aspm`).
 
 **Persist the offload fix via a systemd oneshot, not a `/etc/network/interfaces` `post-up`.** A templated `e1000e-offload.service` (`After=network-online.target`, `ExecStart=/usr/sbin/ethtool -K ...`) survives Proxmox GUI network edits that regenerate the interfaces file — a `post-up` line under `iface nic0 inet manual` can be silently dropped on such a regeneration. The systemd unit is self-contained, idempotent, and visible as its own object.
 

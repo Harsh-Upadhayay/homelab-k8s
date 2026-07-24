@@ -69,20 +69,34 @@ After first boot, the web UI is at `https://<proxmox-ip>:8006`. Log in as `root`
 **One thing that has to happen manually, before anything else can be automated:** enable SSH key access to the Proxmox host itself (Terraform's provider needs SSH for some operations like file uploads, and Ansible needs it to run at all — this is the one bootstrap step that can't automate itself into existence):
 ```bash
 # from your workstation, generate a key if you don't have one
-ssh-keygen -t ed25519 -C "homelab-admin"
-ssh-copy-id root@<proxmox-ip>
+ssh-keygen -t ed25519 -f ~/.ssh/proxmox_ed25519 -C "homelab-proxmox-admin"
+ssh-copy-id -i ~/.ssh/proxmox_ed25519.pub root@<proxmox-ip>
 ```
 
 **Verify which physical device backs your storage pool** — `pvs` and `lsblk` on the host, or Datacenter → Storage in the UI. Confirm two things now, not after etcd is already unhappy: (1) `local-lvm` sits entirely on the intended disk (here: the external SSD, `/dev/sda3` as the only LVM PV), and (2) the off-limits internal NVMe appears in **no** volume group and nowhere in `/etc/pve/storage.cfg` (ADR-0022). Left as a manual, one-time check against the live host rather than scripted.
 
-**Everything else — disabling the enterprise repo nag and running `apt full-upgrade`  — is codified** in `ansible/roles/proxmox_host/`, once the SSH key step above has landed:
+**Normal host configuration is codified** once the SSH key step above has
+landed. A default run applies hardware safeguards first, configures the APT
+repositories, and maintains stable LAN hostname mappings. It deliberately does
+not run package upgrades, Tailscale enrollment, or API-token creation:
+
 ```bash
 cd ansible
-ansible-playbook proxmox-host.yml --tags repos
+ansible-playbook proxmox.yml
 ```
-This is a separate playbook from `site.yml` on purpose — it targets the hypervisor itself (`[proxmox_hosts]` in `inventory.ini`), not the k3s cluster, so it has its own blast radius and its own rerun cadence. It's idempotent: rerun it any time (e.g. after a Proxmox reinstall) to land in the same state.
 
-The role also has a `tailscale` tag for joining the host to your tailnet (Phase 12 Part A) — see that phase below for why it's a separate tag rather than running by default: it needs a fresh auth key, which routine repo/apt housekeeping shouldn't require.
+Package maintenance is a separate, explicit operation. The upgrade fails
+closed unless every hardware-specific package hold is already present:
+
+```bash
+ansible-playbook proxmox.yml --tags maintenance-upgrade
+```
+
+This is separate from `site.yml` because it targets the hypervisors, not the
+k3s guests. Fresh-install bootstrap, protected-disk preflights, Proxmox cluster
+create/join, and ASRock's installed-first-boot NIC repair remain tracked in
+GitHub issues #43, #45, #46, and #47; a successful default play must not be
+mistaken for zero-manual-step disaster recovery.
 
 ---
 
@@ -124,7 +138,9 @@ qm set 9000 --agent enabled=1
 qm template 9000
 ```
 
-Verify it shows up as a template (grey/cube icon) in the web UI under your node. That's the only manual VM-building step in this whole guide — everything from here is code.
+Verify it shows up as a template (grey/cube icon) in the web UI under your
+node. Automating this template lifecycle and multi-node VM placement is tracked
+in GitHub issue #44; until then, this remains a manual rebuild step.
 
 ---
 
@@ -132,7 +148,7 @@ Verify it shows up as a template (grey/cube icon) in the web UI under your node.
 
 Files: `terraform/`. This is the infra-as-code layer — think of it as the CloudFormation/Terraform equivalent you already know from AWS, just targeting Proxmox's API instead. `bpg/proxmox` is the actively-maintained community provider (the older `telmate/proxmox` is effectively legacy at this point) — it's what clones VMs from the template you just built rather than reinstalling an OS every time.
 
-**Create a dedicated API token** (don't use the root password — a scoped token is the equivalent of an IAM role vs. root credentials). Automated by the `proxmox_host` role's `terraform-token` tag — see below — but the equivalent by hand:
+**Create a dedicated API token** (don't use the root password — a scoped token is the equivalent of an IAM role vs. root credentials). Automated by the cluster-scoped `proxmox_cluster` role's `terraform-api` tag — see below — but the equivalent by hand:
 ```bash
 # on the Proxmox host
 pveum user add terraform@pve
@@ -151,10 +167,12 @@ pveum user token add terraform@pve tf --privsep 0
 # copy the printed token value — it's shown exactly once
 ```
 
-Or run it via Ansible (idempotent, self-heals a host that's already missing any of the three grants):
+Or run it via Ansible after the `neovara` cluster is quorate. The role delegates
+to the declared cluster seed and independently self-heals all three ACLs:
+
 ```bash
 cd ansible
-ansible-playbook proxmox-host.yml --tags terraform-token
+ansible-playbook proxmox.yml --tags terraform-api
 ```
 
 **Set up and apply:**
@@ -205,7 +223,7 @@ ansible-playbook site.yml --extra-vars "k3s_token=${K3S_TOKEN}"
 
 **What each phase actually does, mapped to the roles:**
 
-- **`common`** (Phase 4, runs on all k3s nodes) — the real k3s prerequisites, nothing more: swap off (Kubernetes requires this), `br_netfilter` + `overlay` kernel modules loaded and persisted, the two sysctl flags that let bridged traffic hit iptables rules, hostname set to match inventory. This is deliberately *not* general server hardening — that's a separate concern from "what does k3s actually need to boot."
+- **`k3s_node`** (Phase 4, runs on all k3s nodes) — the real k3s prerequisites, nothing more: swap off (Kubernetes requires this), `br_netfilter` + `overlay` kernel modules loaded and persisted, the two sysctl flags that let bridged traffic hit iptables rules, hostname set to match inventory. This is deliberately *not* general server hardening — that's a separate concern from "what does k3s actually need to boot."
 
 - **`k3s_server`** (Phase 5, `k3s-server-1` only) — writes `/etc/rancher/k3s/config.yaml` from the template, which is where every earlier design decision becomes a real flag:
   - `cluster-init: true` → embedded etcd, not SQLite — the pivotal call from the design phase
@@ -217,7 +235,9 @@ ansible-playbook site.yml --extra-vars "k3s_token=${K3S_TOKEN}"
 
   After install, the role fetches `/etc/rancher/k3s/k3s.yaml` back to your workstation as `kubeconfig` and rewrites the server URL from `127.0.0.1` to the real LAN IP (the file defaults to localhost, which only works *on* the node itself — an easy trap if you skip this step and then wonder why `kubectl` from your laptop can't connect).
 
-- **`k3s_agent`** (Phase 6, both workers) — formats and mounts the dedicated data disk (`/dev/sdb`, ext4, label `k3s-data`, mounted at `/var/lib/longhorn` — mounted by label since `/dev/sdX` names can reorder across boots), then points at the server's real IP with the shared token and joins as an agent. The mount is preparation for the distributed-storage phase (ADR-0021); the format task is a no-op on any disk that already has a filesystem, so reruns never eat data.
+- **`longhorn_node`** (Phase 6, both workers) — owns the explicitly declared worker data device: ext4 formatting, the `/var/lib/longhorn` mount, and iSCSI/NFS prerequisites. Keeping this out of `k3s_agent` prevents Kubernetes membership logic from hiding storage mutation.
+
+- **`k3s_agent`** (Phase 6, both workers) — writes the agent config, converges the pinned k3s version, and joins the workers to the server with the shared token.
 
 **One honest tradeoff in `ansible.cfg`:** `host_key_checking = False`. Convenient for a homelab where you're rebuilding VMs often (no stale host-key prompts blocking automation), but it does mean Ansible won't warn you if a host's SSH key ever unexpectedly changes. Fine here; flip it back on if this repo ever manages anything less trusted than your own LAN.
 
@@ -422,20 +442,25 @@ Files: `k8s/tailscale/`. This is the admin front door — private, never public,
 | Kubernetes API (`kubectl`) | the k3s control plane | the Operator's built-in API server proxy — no separate route needed |
 | In-cluster dashboards (Traefik now; Grafana/Argo CD later) | inside the cluster | the Operator claiming a Service via `loadBalancerClass: tailscale` |
 
-**Part A — tailscaled on the Proxmox host** (covers Proxmox UI + node-level access). This is codified as the `tailscale` tag in `ansible/roles/proxmox_host/` (same role as Phase 1's repo housekeeping, kept as a separate tag since this needs a fresh auth key and that shouldn't run by default) — independent of the k3s cluster, so it can be done any time after Phase 1.
+**Part A — tailscaled on the Proxmox hosts** (covers Proxmox UI + node-level access). The shared `tailscale_host` role is explicit-only because it needs a runtime auth key; a default Proxmox run never attempts enrollment.
 
-Generate a one-time-use auth key first (Tailscale admin console → Settings → Keys → Generate auth key — no need for reusable or ephemeral, this host is permanent), then:
+Generate a reusable, non-ephemeral auth key (one play enrolls two permanent
+hosts; a one-time key would be consumed by the first), then:
+
 ```bash
 cd ansible
-ansible-playbook proxmox-host.yml --tags tailscale --extra-vars "tailscale_auth_key=<paste the auth key>"
+ansible-playbook proxmox.yml --tags tailscale --extra-vars "tailscale_auth_key=<paste the reusable key>"
 ```
 Same pattern as the k3s join token in Phase 4–6: passed at runtime via `--extra-vars`, never written to a file in this repo. The role installs `tailscale` from its official apt repo, enables `tailscaled`, and runs `tailscale up` non-interactively — idempotent, so rerunning it is a no-op once the host is already joined.
 
 The Proxmox UI is now reachable at `https://<tailscale-ip-or-magicdns-name>:8006` from any device on your tailnet — never from the public internet.
 
-**Part A (extended) — tailscaled on the k3s nodes themselves.** The host-level join above covers SSH to the *hypervisor*, but not to the three k3s VMs — and those are exactly what you need to reach for etcd snapshots, `journalctl`, and node-level debugging once a LAN-connected workstation is no longer in the picture. So the same mechanism is extended onto the nodes via the `common` role (tag `tailscale`), sharing one parameterised task file with the host — `ansible/tasks/tailscale.yml`, told `ubuntu`/`{{ ubuntu_codename }}` for the nodes vs `debian`/`{{ debian_codename }}` for the host. It's tagged `[never, tailscale]` so a bare `ansible-playbook site.yml` never trips over the missing auth key; it only runs when asked for explicitly.
+**Part A (extended) — tailscaled on the k3s nodes themselves.** The same
+`tailscale_host` role runs against the k3s guests with Ubuntu repository
+variables. It is tagged `[never, tailscale]`, so a bare `site.yml` run never
+requires an auth key.
 
-Generate a **reusable** auth key this time (one run joins all three nodes, so a one-time-use key would fail after the first) — still **not** ephemeral, since these VMs are permanent and an ephemeral node gets pruned from the tailnet shortly after it goes offline (a reboot could then cost you access). Run it from a host that still has LAN reachability to `192.168.1.2x` (the inventory is still LAN-IP-pinned — see #29):
+Generate a **reusable** auth key this time (one run joins all three nodes, so a one-time-use key would fail after the first) — still **not** ephemeral, since these VMs are permanent and an ephemeral node gets pruned from the tailnet shortly after it goes offline (a reboot could then cost you access). For a fresh rebuild, temporarily select the commented LAN targets in inventory; the normal committed targets use MagicDNS and therefore assume Tailscale is already connected (see #43):
 ```bash
 cd ansible
 ansible-playbook site.yml --tags tailscale --extra-vars "tailscale_auth_key=<paste a reusable auth key>"
@@ -630,10 +655,11 @@ homelab-k8s/
 │   ├── versions.tf / provider.tf / variables.tf / main.tf / outputs.tf
 │   └── terraform.tfvars   (committed — no secrets; API token comes from $PROXMOX_VE_API_TOKEN)
 ├── ansible/
-│   ├── ansible.cfg / inventory.ini / site.yml / proxmox-host.yml / requirements.yml
-│   ├── group_vars/{all.yml, proxmox_hosts.yml}
-│   ├── roles/{common,k3s_server,k3s_agent,proxmox_host}/
-│   └── tasks/tailscale.yml  shared host/node tailnet join tasks
+│   ├── ansible.cfg / inventory.ini / site.yml / proxmox.yml / requirements.yml
+│   ├── group_vars/
+│   └── roles/
+│       ├── k3s_{node,server,agent}/ and longhorn_node/
+│       └── proxmox_{host,cluster,hw_asrock,hw_dell}/ and tailscale_host/
 └── k8s/
     ├── argocd/            root app, child Applications, and AppProjects
     ├── traefik/           chart values + companion manifests
