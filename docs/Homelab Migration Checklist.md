@@ -1,7 +1,7 @@
 # Homelab migration checklist
 
 Source: `../homelab` (Docker Compose on the workstation). Initial inventory: 2026-07-09.
-Last reconciled with Git and the live cluster: 2026-07-23 JST.
+Last reconciled with Git and the live cluster: 2026-07-24 JST.
 
 The old Compose stack was brought back up for final manual comparison. A running source container
 does not mean it is still authoritative or required after the workstation rebuild; use the categories
@@ -17,13 +17,10 @@ below and the per-app runbooks.
 - [x] nextcloud + nextcloud-db + nextcloud-redis — file storage/sync, real personal data.
 - [x] immich — exact Compose state migrated to retained Longhorn PVCs, pgvecto.rs converted to
   VectorChord, upgraded from v2.7.3 to v3.0.3, and accepted through the internal route. The old
-  Compose deployment was stopped after manual comparison on 2026-07-22 JST. The application is
-  intentionally in GitOps maintenance while the workstation becomes a Proxmox host; preserve
-  both HDD partitions and follow `docs/migrations/immich.md`. The normal recovery path reuses the
-  existing PVC/Longhorn volume by reassociating the preserved Longhorn disk UUID on the new worker;
-  it does not copy the 350 GiB library into a new PVC. Before that worker is created, join the
-  empty workstation to the Proxmox cluster created on `pve-dell` as required by ADR-0049; do not
-  provision it as a separate Proxmox/Terraform island.
+  Compose deployment was stopped after manual comparison on 2026-07-22 JST. Post-Proxmox recovery
+  completed on 2026-07-24: `k3s-worker-3` reused the existing PVC/Longhorn volume by disk UUID
+  without copying the 350 GiB library, zero database-referenced files were missing, and the old
+  bare-metal node objects were removed. `/dev/sdb1` remains protected for issue #48.
 
 ## Preserve data and migrate later
 

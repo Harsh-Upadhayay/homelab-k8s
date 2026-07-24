@@ -26,8 +26,8 @@ exists here:
 
 - **GPU workloads deferred.** The old lab was bare metal with an NVIDIA GPU; this cluster is
   Proxmox VMs with no GPU passthrough (yet). Anything that *requires* the GPU stays off-cluster
-  for now. Immich is migrated with CPU-only machine learning; its remaining workstation rebuild
-  and preserved-disk UUID reassociation are tracked in `docs/migrations/immich.md`.
+  for now. Immich runs CPU-only machine learning; its completed workstation rebuild and
+  preserved-disk UUID reassociation are recorded in `docs/migrations/immich.md`.
 - **Authelia + LLDAP removed entirely.** They gave finicky, never-quite-one-click integration and
   are not worth porting. New auth model:
   - **Internal apps → Tailscale reachability *is* the auth.** Not on the tailnet = the hostname
@@ -155,19 +155,18 @@ capacity. Audiobookshelf's authoritative config and metadata use replicated clai
 - **Audiobookshelf fits now** — all four source mount boundaries stage into explicit Longhorn
   PVCs; config/metadata/podcasts are replicated and bulk audiobook media is single-replica. See
   `docs/migrations/audiobookshelf.md`.
-- **Immich used a dedicated temporary HDD tier** — the library is a retained 350 GiB,
+- **Immich uses a dedicated HDD tier** — the library is a retained 350 GiB,
   single-replica Longhorn volume on the workstation's preserved `/dev/sdb2`; PostgreSQL is on a
-  separate retained, two-replica claim. The app migration and v3 upgrade are complete. After the
-  workstation is rebuilt as Proxmox, the primary recovery path reintroduces the preserved disk on
-  the new worker: Longhorn uses its retained disk UUID to update the existing Replica CR's node and
-  path, so the existing PVC/volume is reused without copying the 350 GiB library. Orphan export is
+  separate retained, two-replica claim. The app migration, v3 upgrade, Proxmox rebuild, and
+  disk-UUID recovery are complete. Longhorn updated the existing Replica CR's node and path on
+  `k3s-worker-3`, reusing the PVC/volume without copying the 350 GiB library. Orphan export remains
   documented only as a fallback in `docs/migrations/immich.md`.
 - **Media tree (mediaserver, ~TB-scale) does NOT go into the current pool.** The workstation is
-  rebuilt as a second Proxmox host; a k3s worker VM on that host receives the preserved HDD by
-  passthrough. Immich recovery uses the existing Longhorn partition and disk UUID first. The
+  is now a second Proxmox host; `k3s-worker-3` receives the preserved partition by passthrough.
+  Immich recovery reused the existing Longhorn partition and disk UUID first. The
   remaining HDD space can become another Longhorn disk only after the preserved `/dev/sdb1`
-  rollback/deferred-data partition is explicitly audited and approved for cleanup. This requires
-  extending Terraform and Ansible; the current code models only `pve-dell` and its three VMs.
+  rollback/deferred-data partition is explicitly audited and approved for cleanup. Terraform and
+  Ansible now model the worker; the remaining storage convergence is tracked in issue #48.
 
 The second host is not standalone. ADR-0049 requires the freshly installed, guest-free workstation
 to join a Proxmox cluster created on `pve-dell` before any template, VM, Terraform apply, or HDD
@@ -193,29 +192,28 @@ and a later, separately approved cleanup.
 | **M3 (complete)** | audiobookshelf | First **real data migration** from old `/storage`; app with a media library; own login | homelab / public |
 | **M4** | jobhunt | Pointer Application again; multi-tier app: StatefulSet (MySQL) + Redis + Deployments (django/celery×2/frontend) + a migration **Job** + nginx front | personal / public |
 | **M5 (complete)** | nextcloud | The heavy one: Postgres + Redis + app, large PVCs, `pg_dump` restore, trusted-proxy, upload-buffering middleware, cron → **CronJob** | homelab / internal |
-| **M6 (complete; maintenance pending)** | immich | GitOps chart adoption, retained PVCs, pgvecto.rs → VectorChord, v3 upgrade, then disk-UUID reassociation of the preserved replica across the workstation rebuild | homelab / internal |
+| **M6 (complete)** | immich | GitOps chart adoption, retained PVCs, pgvecto.rs → VectorChord, v3 upgrade, then disk-UUID reassociation of the preserved replica across the workstation rebuild | homelab / internal |
 | **M7 (in progress)** | old-lab decommission | **Backup/restore drill** + preserve deferred-app data (ollama models, mediaserver media tree + *arr configs, openclaw config/workspace), then power down the old lab | — |
 
 Audiobookshelf M3 is complete: Kubernetes runs 2.35.1 at `audiobookshelf.neovara.uk` with exact
 migrated state and the 49.7 GiB library on a one-replica Longhorn claim. Public login, API state,
 byte-range playback, secure headers, and WebSockets passed. The old Compose deployment remains
 running but is no longer on the public route; its data remains the rollback copy. The detached old
-PVC was released after acceptance. Immich M6 is also migrated and accepted; its application is
-temporarily disabled while the only library replica is preserved through the workstation rebuild.
+PVC was released after acceptance. Immich M6 is also migrated and accepted; its only library
+replica was preserved and reassociated on `k3s-worker-3` through the workstation rebuild.
 
 ## Deferred-app data preservation (M7)
 
 `ollama`, `openclaw`, and the whole `mediaserver` tree stay on Compose or disk and get migrated later
-by hand. Immich is migrated, but its rollback copy remains on the same preserved disk until the
-post-Proxmox recovery is accepted. The old host is deprecated, but its 1.4 TB `/storage` disk is **not** wiped — it's the
-storage that gets passed through to a k3s worker VM on the new Proxmox host (see the capacity
-section). So preservation is mostly "don't destroy either HDD partition," plus a safety backup for the
-small stuff:
+by hand. Immich is migrated and post-Proxmox recovery is accepted, but its rollback/deferred-data
+partition remains protected until issue #48 explicitly clears it. The old host has been repurposed,
+and `/dev/sdb2` is passed through to `k3s-worker-3`; `/dev/sdb1` is **not** wiped. Preservation is
+now about not destroying that remaining partition plus taking a safety backup for the small stuff:
 
 - **Media tree** → stays on the 1.4 TB disk in place; migrated by the user after the
   Proxmox/worker-VM conversion and only after its source partition is explicitly released for reuse.
-- **Immich rollback** → keep `/storage/immich` untouched until the preserved Longhorn replica has
-  been recovered on the new worker and the application has passed the full acceptance checks.
+- **Immich rollback** → recovery and acceptance are complete; keep `/storage/immich` untouched
+  until issue #48's separate cleanup decision and off-HDD safety boundary are satisfied.
 - **`ollama/data` (models), `openclaw/{config,workspace}`, `mediaserver` per-service `state/*/config`**
   → small enough to also take a **verified backup copy** (restic/tar) before the host is repurposed,
   as insurance before the source partition is eventually cleaned or repurposed.

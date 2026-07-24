@@ -6,7 +6,7 @@ End-to-end foundation setup: Proxmox → Terraform-provisioned VMs → Ansible-c
 ```
 homelab-k8s/
 ├── GUIDE.md                 ← this file
-├── terraform/                provisions the current three VMs on Proxmox
+├── terraform/                provisions the current VMs across Proxmox
 ├── ansible/                  configures OS + installs k3s, reproducibly
 └── k8s/                      GitOps-managed platform and application manifests
     ├── argocd/
@@ -627,7 +627,7 @@ The following remain deliberately deferred:
 - **Secrets management (SOPS + age, later External Secrets Operator + Vault)** — for now, Kubernetes Secrets are created imperatively with `kubectl create secret` and never committed to Git in any form, encrypted or otherwise. SOPS+age is the natural first step when this gets automated (commit ciphertext to Git, decrypt-and-apply manually), with ESO/Vault as the later upgrade once real rotation and a secrets backend are wanted.
 - **Full backup strategy** (Velero, off-box etcd snapshots via `--etcd-s3-*`, Proxmox VM backups) — local etcd snapshots are already running from Phase 5; shipping them off-box and adding Velero + Proxmox Backup Server is the next layer, not a redo.
 - **Cilium** — deliberately deferred; recall this is the one *non-additive* item on this whole list. Flannel → Cilium isn't an upgrade, it's a rebuild (pod networking can't be live-migrated between CNIs). Treat it as its own dedicated project later — and a good real rebuild-from-Git/DR drill when you get there.
-- **HA control plane** (`k3s-server-2`, `k3s-server-3`) and **more workers** — both are additive. A second/third server joins the existing embedded-etcd cluster for real quorum; each additional worker needs a Terraform resource and an Ansible inventory entry. The Immich recovery runbook explicitly plans one such worker on a second Proxmox host; it is not implemented in the current code yet.
+- **HA control plane** (`k3s-server-2`, `k3s-server-3`) and **more workers** — both are additive. A second/third server joins the existing embedded-etcd cluster for real quorum; each additional worker needs a Terraform resource and an Ansible inventory entry. The first second-host worker, `k3s-worker-3`, is implemented and recovered Immich; further worker/storage convergence is issue #48.
 
 **Accepted physical-host expansion (ADR-0049):** the second Proxmox host is not standalone. Immediately after installing the workstation—and before creating any guest—create the Proxmox cluster on `pve-dell` and join the empty workstation. Keep one Terraform provider/token and select VM placement by `node_name`. The temporary two-node stage accepts read-only Proxmox configuration when either member is missing; a third physical node is planned one to two months later. The complete, data-safe order is in `docs/migrations/immich.md`. After Immich recovery and a real 119GiB SSD capacity check, the preferred placement change is moving the existing single `k3s-server-1` VM to the workstation. Do not add only one more k3s server: two embedded-etcd members still require both; real HA needs three.
 

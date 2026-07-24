@@ -1,6 +1,6 @@
 # Homelab Kubernetes Platform
 
-A production-shaped Kubernetes platform built for hands-on operational learning — etcd internals, CNI networking, ingress, secure remote access — not just to get something running. Correctness and understanding are prioritized over the fastest path. Proxmox cluster `neovara` now contains `pve-dell` and the freshly rebuilt, empty `pve-asrock`; the existing Kubernetes VMs remain on Dell while the workstation awaits its Immich recovery worker. A third physical Proxmox node is planned one to two months later. The new node and worker are documented but not implemented in Terraform or Ansible yet.
+A production-shaped Kubernetes platform built for hands-on operational learning — etcd internals, CNI networking, ingress, secure remote access — not just to get something running. Correctness and understanding are prioritized over the fastest path. Proxmox cluster `neovara` spans `pve-dell` and `pve-asrock`; the latter now hosts `k3s-worker-3` and the recovered Immich library replica on its passed-through HDD partition. A third physical Proxmox node is planned one to two months later.
 
 The full phase-by-phase build is in **[GUIDE.md](./GUIDE.md)**. This README is the map; the guide is the territory.
 
@@ -12,8 +12,8 @@ Proxmox cluster neovara
 │   ├── k3s-server-1   control plane, tainted, embedded etcd
 │   ├── k3s-worker-1   application workloads + Longhorn data disk
 │   └── k3s-worker-2   application workloads + Longhorn data disk
-└── pve-asrock         empty; recovery worker not provisioned yet
-    └── preserved physical HDD remains outside Proxmox storage
+└── pve-asrock
+    └── k3s-worker-3   application workloads + passed-through Immich Longhorn disk
 ```
 
 | Layer | Choice | Why (short version — see GUIDE.md / wiki for the full reasoning) |
@@ -36,7 +36,7 @@ homelab-k8s/
 ├── CHANGELOG.md
 ├── ROADMAP.md
 ├── claude.md              context/decisions for AI-assisted work in this repo
-├── terraform/             provisions the current three VMs on pve-dell
+├── terraform/             provisions the current VMs across the Proxmox cluster
 ├── ansible/               configures the OS, installs k3s, and manages the Proxmox host itself
 │   └── roles/
 │       ├── proxmox_host/  host-local repositories and opt-in package maintenance
@@ -75,6 +75,8 @@ See [ROADMAP.md](./ROADMAP.md) for what's built, what's next, and what's intenti
 - **[GUIDE.md](./GUIDE.md)** — the canonical build guide, one phase at a time
 - **[Wiki](../../wiki)** — architecture decision log and troubleshooting reference
 - **[docs/Homelab Learning Map.md](./docs/Homelab%20Learning%20Map.md)** — revision notes: formal ADRs (`docs/adr/`, one log per milestone) for *why*, and concept docs (`docs/concepts/`) for the Ansible/Terraform/Kubernetes/platform mechanics, written up as each phase lands
+- **[Incident reviews](./docs/incidents/README.md)** — blameless production-style reports for real
+  outages and near misses, with evidence, remediation, and tracked preventive actions
 - **[Proxmox VE 9.2-1 I219-V recovery installer](./docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/)** — unofficial modified installer, checksum, exact source patch, build manifest, risks, verification, and rollback
 - **[CHANGELOG.md](./CHANGELOG.md)** — what changed, when
 - **[ROADMAP.md](./ROADMAP.md)** — what's next and what's deliberately deferred
