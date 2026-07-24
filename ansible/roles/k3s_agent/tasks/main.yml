@@ -8,50 +8,6 @@
       k3s_token is not set. Run with:
       ansible-playbook site.yml --extra-vars "k3s_token=<the same value used on the server>"
 
-# ── Data disk (scsi1 → /dev/sdb) — reserved for distributed storage ──
-# Terraform provisions this second disk raw and empty on every worker.
-# Formatted once here (the filesystem module is a no-op if one already
-# exists — it will NOT reformat a disk with data on it), mounted where
-# Longhorn expects its default disk when that phase lands.
-
-- name: Format the data disk (no-op if a filesystem already exists)
-  community.general.filesystem:
-    fstype: ext4
-    dev: /dev/sdb
-    opts: "-L k3s-data"
-
-- name: Mount the data disk at /var/lib/longhorn (by label — /dev/sdX names can reorder across boots)
-  ansible.posix.mount:
-    path: /var/lib/longhorn
-    src: LABEL=k3s-data
-    fstype: ext4
-    opts: defaults
-    state: mounted
-
-# ── Longhorn node prerequisites (storage phase) ──
-# Longhorn's v1 data path is iSCSI: each volume's engine exposes a block
-# device to the node through the kernel's iSCSI initiator, so iscsid must be
-# running on every node that can attach volumes — that's only the workers,
-# since the tainted server never runs workloads. nfs-common is the NFSv4
-# client Longhorn needs for RWX volumes (served via a share-manager pod).
-# Tagged so this can run standalone: ansible-playbook site.yml --tags longhorn
-
-- name: Install Longhorn prerequisites (iSCSI initiator + NFSv4 client)
-  ansible.builtin.apt:
-    name:
-      - open-iscsi
-      - nfs-common
-    state: present
-    update_cache: true
-  tags: [longhorn]
-
-- name: Ensure iscsid is enabled and running (Longhorn wants the daemon up, not just socket-activated)
-  ansible.builtin.systemd:
-    name: iscsid
-    state: started
-    enabled: true
-  tags: [longhorn]
-
 - name: Create /etc/rancher/k3s directory
   ansible.builtin.file:
     path: /etc/rancher/k3s
@@ -71,13 +27,21 @@
     dest: /tmp/install-k3s.sh
     mode: "0755"
 
-- name: Install k3s agent (pinned version, config.yaml supplies the flags)
+- name: Read the installed k3s agent version
+  ansible.builtin.command: k3s --version
+  register: k3s_agent_installed_version
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Install or upgrade the k3s agent to the pinned version
   ansible.builtin.command: /tmp/install-k3s.sh
   environment:
     INSTALL_K3S_VERSION: "{{ k3s_version }}"
     INSTALL_K3S_EXEC: "agent"
-  args:
-    creates: /usr/local/bin/k3s
+  when: >-
+    k3s_agent_installed_version.rc != 0
+    or k3s_version not in k3s_agent_installed_version.stdout
 
 - name: Ensure k3s-agent service is enabled and running
   ansible.builtin.systemd:

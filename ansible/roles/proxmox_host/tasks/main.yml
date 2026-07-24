@@ -1,36 +1,15 @@
 ---
-# Independent concerns, tagged so any one can run alone:
-#   --tags repos             Phase 1 remainder — apt repo housekeeping + upgrade
-#   --tags tailscale         Phase 12 Part A — join the tailnet (needs an auth key)
-#   --tags terraform-token   Phase 3 prerequisite — bootstrap the terraform@pve API token
-#   --tags laptop            laptop-as-server hardening — never suspend on lid close (ADR-0022)
-#   --tags e1000e            stop the Intel I219-LM NIC TX-hang (offloads off, no reboot)
-#   --tags e1000e-aspm       deeper half — disable PCIe ASPM via GRUB (needs a reboot)
-# Run with no --tags to do all of them.
+# Host-local Proxmox policy:
+#   --tags repositories      configure Proxmox APT repositories
+#   --tags maintenance-upgrade
+#                            explicit apt update + full-upgrade; skipped by default
+# An untagged run applies normal configuration but deliberately skips package
+# maintenance because the imported task carries Ansible's special `never` tag.
 
-- name: Repo housekeeping + apt upgrade (Phase 1)
-  ansible.builtin.import_tasks: repos.yml
-  tags: [repos]
+- name: Configure Proxmox package repositories
+  ansible.builtin.import_tasks: repositories.yml
+  tags: [repositories]
 
-- name: Join the tailnet (Phase 12 Part A)
-  ansible.builtin.import_tasks: ../../../tasks/tailscale.yml
-  vars:
-    tailscale_apt_distro: "debian"
-    tailscale_apt_codename: "{{ debian_codename }}"
-  tags: [tailscale]
-
-- name: Bootstrap the terraform@pve API token (Phase 3 prerequisite)
-  ansible.builtin.import_tasks: terraform_token.yml
-  tags: [terraform-token]
-
-- name: Laptop-as-server hardening (ADR-0022)
-  ansible.builtin.import_tasks: laptop.yml
-  tags: [laptop]
-
-- name: Stop the Intel I219-LM NIC TX-hang (offloads off, no reboot)
-  ansible.builtin.import_tasks: e1000e_fix.yml
-  tags: [e1000e]
-
-# - name: Deeper fix — disable PCIe ASPM via GRUB (needs reboot)
-#   ansible.builtin.import_tasks: e1000e_aspm.yml
-#   tags: [e1000e-aspm]
+- name: Explicit Proxmox package maintenance upgrade
+  ansible.builtin.import_tasks: upgrade.yml
+  tags: [never, maintenance-upgrade]

@@ -1,0 +1,17 @@
+---
+# Hardware policy for the Dell Proxmox node only:
+#   --tags laptop        prevent suspend when the lid closes
+#   --tags e1000e        apply the live, reboot-safe I219-LM offload workaround
+#   --tags e1000e-aspm   optional GRUB workaround; explicit and reboot-required
+
+- name: Laptop-as-server hardening (ADR-0022)
+  ansible.builtin.import_tasks: laptop.yml
+  tags: [laptop]
+
+- name: Stop the Intel I219-LM NIC TX-hang (offloads off, no reboot)
+  ansible.builtin.import_tasks: e1000e_offload.yml
+  tags: [e1000e]
+
+- name: Disable PCIe ASPM for the Intel NIC (stages a reboot)
+  ansible.builtin.import_tasks: e1000e_aspm.yml
+  tags: [never, e1000e-aspm]

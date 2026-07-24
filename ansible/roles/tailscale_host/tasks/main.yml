@@ -1,15 +1,18 @@
 ---
-# Shared by roles/proxmox_host and roles/common (Phase 12 Part A, the latter
-# extended to the k3s nodes) — installs tailscale from the official apt repo
-# and joins the tailnet. The only thing that differs between a Proxmox host
-# (Debian) and a k3s node (Ubuntu) is which repo tree to point at, so callers
-# pass that in rather than this file being copy-pasted per OS:
+# Shared host-level Tailscale policy for Proxmox (Debian) and k3s (Ubuntu).
+# Callers provide the matching package-repository tree:
 #   tailscale_apt_distro:   "debian" or "ubuntu"
 #   tailscale_apt_codename: the matching codename var (debian_codename /
 #                            ubuntu_codename from the relevant group_vars file)
 #
 # Separate mechanism from the in-cluster Tailscale Operator in k8s/tailscale/
 # — see claude.md, don't conflate the two.
+
+- name: Require a supported Tailscale package repository
+  ansible.builtin.assert:
+    that:
+      - tailscale_apt_distro in ["debian", "ubuntu"]
+      - tailscale_apt_codename | length > 0
 
 - name: Add Tailscale's package signing key
   ansible.builtin.get_url:
@@ -44,6 +47,7 @@
   ansible.builtin.command: tailscale status --json
   register: ts_status
   changed_when: false
+  check_mode: false
   failed_when: false
 
 - name: Join the tailnet (auth key passed at runtime, never stored in this repo)

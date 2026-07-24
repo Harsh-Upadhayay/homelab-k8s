@@ -2,10 +2,6 @@
 # These are the actual k3s prerequisites — not general hardening (that's a
 # separate, later concern). Every task here exists because k3s specifically
 # needs it to run correctly.
-#
-# One opt-in exception: --tags tailscale (Phase 12 Part A extended to the
-# k3s nodes) — needs a fresh auth key, so it's excluded from a bare run the
-# same way roles/proxmox_host's tailscale tag is.
 
 - name: Disable swap (Kubernetes requires swap off)
   ansible.builtin.command: swapoff -a
@@ -59,10 +55,3 @@
   ansible.builtin.apt:
     update_cache: true
     cache_valid_time: 3600
-
-- name: Join the tailnet (Phase 12 Part A, extended to k3s nodes)
-  ansible.builtin.import_tasks: ../../../tasks/tailscale.yml
-  vars:
-    tailscale_apt_distro: "ubuntu"
-    tailscale_apt_codename: "{{ ubuntu_codename }}"
-  tags: [never, tailscale]

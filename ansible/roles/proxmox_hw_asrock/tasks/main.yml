@@ -1,0 +1,52 @@
+---
+- name: Keep the ASRock patched-kernel packages on hold
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop: "{{ proxmox_maintenance_required_holds }}"
+
+- name: Read the running ASRock kernel ABI
+  ansible.builtin.command: uname -r
+  changed_when: false
+  check_mode: false
+  register: asrock_live_kernel
+
+- name: Require the tested kernel ABI for the patched ASRock NIC
+  ansible.builtin.assert:
+    that:
+      - asrock_live_kernel.stdout == asrock_tested_kernel
+    fail_msg: >-
+      ASRock is running kernel {{ asrock_live_kernel.stdout }}, but the tested
+      NIC recovery module requires {{ asrock_tested_kernel }}. Do not continue
+      until the replacement ABI has a rebuilt and physically tested module.
+
+- name: Read the e1000e module selected for the running ASRock kernel
+  ansible.builtin.command: modinfo -F filename e1000e
+  changed_when: false
+  check_mode: false
+  register: asrock_live_e1000e_module
+
+- name: Require module resolution to select the patched e1000e driver
+  ansible.builtin.assert:
+    that:
+      - asrock_live_e1000e_module.stdout == asrock_recovery_module_path
+    fail_msg: >-
+      ASRock resolves e1000e to {{ asrock_live_e1000e_module.stdout }}, but the
+      tested NIC recovery module must resolve to
+      {{ asrock_recovery_module_path }}.
+      Do not reload the driver or reboot until module precedence is repaired.
+
+- name: Read the selected ASRock recovery module checksum
+  ansible.builtin.stat:
+    path: "{{ asrock_recovery_module_path }}"
+    checksum_algorithm: sha256
+  register: asrock_recovery_module
+
+- name: Require the physically tested ASRock recovery module content
+  ansible.builtin.assert:
+    that:
+      - asrock_recovery_module.stat.isreg | default(false)
+      - asrock_recovery_module.stat.checksum == asrock_recovery_module_sha256
+    fail_msg: >-
+      The selected ASRock e1000e module does not match the physically tested
+      recovery artifact. Refusing to continue with an unknown driver.

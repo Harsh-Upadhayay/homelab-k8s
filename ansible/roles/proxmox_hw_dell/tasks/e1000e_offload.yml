@@ -2,7 +2,7 @@
 # Fault A remediation: Intel I219-LM `e1000e` "Hardware Unit Hang".
 # (Diagnosed 2026-07-12 — see project memory: pvedell-two-root-causes.)
 #
-# The onboard I219-LM ({{ e1000e_iface }}) wedges its TX descriptor ring when
+# The onboard I219-LM ({{ dell_e1000e_interface }}) wedges its TX ring when
 # TSO/GSO/GRO are enabled, so the host silently disappears from the LAN while
 # the OS keeps running. The driver detects but never resets — each hang needs
 # a manual `systemctl restart networking`. TSO-on is the primary trigger here;
@@ -20,7 +20,8 @@
 # Idempotent and non-destructive. Run it while the host is reachable — if the
 # NIC is *currently* hung you can't reach it to run Ansible anyway; reset
 # networking by hand first, then this keeps it from hanging again.
-# Targets {{ e1000e_iface }} (the I219-LM; defined in group_vars/proxmox_hosts.yml).
+# Targets {{ dell_e1000e_interface }} (the I219-LM; defined in
+# group_vars/proxmox_hw_dell.yml).
 
 - name: Ensure ethtool is installed
   ansible.builtin.package:
@@ -28,14 +29,16 @@
     state: present
 
 - name: Read current offload state
-  ansible.builtin.command: ethtool -k {{ e1000e_iface }}
+  ansible.builtin.command: ethtool -k {{ dell_e1000e_interface }}
   changed_when: false
+  check_mode: false
   register: e1000e_offload_state
 
 # LRO is [fixed]-off on this silicon, so we don't touch it — setting a fixed
 # flag errors out. Only run the change if something is actually still on.
 - name: Disable e1000e offloads live (stops the TX-hang trigger, no reboot)
-  ansible.builtin.command: ethtool -K {{ e1000e_iface }} tso off gso off gro off
+  ansible.builtin.command: >-
+    ethtool -K {{ dell_e1000e_interface }} tso off gso off gro off
   when: >
     'generic-segmentation-offload: on' in e1000e_offload_state.stdout
     or 'generic-receive-offload: on' in e1000e_offload_state.stdout
@@ -46,7 +49,7 @@
     dest: /etc/systemd/system/e1000e-offload.service
     mode: "0644"
     content: |
-      # Managed by Ansible — roles/proxmox_host/tasks/e1000e_fix.yml
+      # Managed by Ansible — roles/proxmox_hw_dell/tasks/e1000e_offload.yml
       # Workaround for the Intel I219-LM e1000e "Hardware Unit Hang":
       # disable the offloads (TSO/GSO/GRO) that trigger the TX-ring freeze.
       [Unit]
@@ -56,7 +59,7 @@
 
       [Service]
       Type=oneshot
-      ExecStart=/usr/sbin/ethtool -K {{ e1000e_iface }} tso off gso off gro off
+      ExecStart=/usr/sbin/ethtool -K {{ dell_e1000e_interface }} tso off gso off gro off
       RemainAfterExit=yes
 
       [Install]
@@ -71,8 +74,9 @@
     state: "{{ 'restarted' if e1000e_offload_unit.changed else 'started' }}"
 
 - name: Confirm offloads are off
-  ansible.builtin.command: ethtool -k {{ e1000e_iface }}
+  ansible.builtin.command: ethtool -k {{ dell_e1000e_interface }}
   changed_when: false
+  check_mode: false
   register: e1000e_offload_check
 
 - name: Assert TSO/GSO/GRO are off
@@ -81,4 +85,6 @@
       - "'generic-segmentation-offload: off' in e1000e_offload_check.stdout"
       - "'generic-receive-offload: off' in e1000e_offload_check.stdout"
       - "'tx-tcp-segmentation: off' in e1000e_offload_check.stdout"
-    fail_msg: "offloads still on — see ethtool -k {{ e1000e_iface }}"
+    fail_msg: >-
+      Offloads are still on; inspect
+      `ethtool -k {{ dell_e1000e_interface }}`.

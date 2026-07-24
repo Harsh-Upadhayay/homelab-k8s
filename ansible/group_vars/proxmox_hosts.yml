@@ -11,7 +11,13 @@ proxmox_storage_pool: "local-lvm"
 # this is what the terraform@pve token's SDN ACL gets scoped to.
 proxmox_network_bridge: "vmbr0"
 
-# The onboard Intel I219-LM that wedges its TX ring (e1000e "Hardware Unit
-# Hang"). It's a bridge port of proxmox_network_bridge above. Targeted by the
-# offload workaround in roles/proxmox_host/tasks/e1000e_fix.yml.
-e1000e_iface: "nic0"
+# Cluster-wide operations always delegate to this explicit seed instead of
+# relying on whichever host happens to appear first in inventory.
+proxmox_cluster_name: "neovara"
+proxmox_cluster_seed: "pve-dell"
+
+# Proxmox node names must resolve through the stable LAN independently of
+# router DNS and Tailscale. Every cluster member receives every mapping.
+proxmox_cluster_lan_hosts:
+  - "192.168.1.50 pve-dell.home.arpa pve-dell"
+  - "192.168.1.51 pve-asrock.home.arpa pve-asrock"

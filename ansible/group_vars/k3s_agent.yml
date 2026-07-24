@@ -1,0 +1,5 @@
+---
+# Terraform provisions this second virtual disk raw and empty on each worker.
+# The Longhorn role formats only this explicitly declared guest device.
+longhorn_data_device: "/dev/sdb"
+longhorn_data_label: "k3s-data"

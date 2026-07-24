@@ -1,0 +1,31 @@
+---
+# Package maintenance is deliberately opt-in through the
+# `maintenance-upgrade` tag. Hardware-specific package holds must already be
+# present; this file verifies them and fails closed before APT can upgrade.
+
+- name: Read held APT packages for the maintenance safety check
+  ansible.builtin.command: apt-mark showhold
+  check_mode: false
+  changed_when: false
+  register: proxmox_live_kernel_holds
+
+- name: Require hardware-specific kernel holds before package maintenance
+  ansible.builtin.assert:
+    that:
+      - >-
+        (
+          (proxmox_maintenance_required_holds | default([]))
+          | difference(proxmox_live_kernel_holds.stdout_lines | default([]))
+        ) | length == 0
+    fail_msg: >-
+      Required package holds are missing. Run the hardware safeguard roles
+      before allowing package maintenance on this host.
+
+# A two-node cluster needs the peer to remain available while package updates
+# restart services, so never maintain both Proxmox nodes concurrently.
+- name: Explicitly update package metadata and full-upgrade the Proxmox host
+  throttle: 1
+  ansible.builtin.apt:
+    update_cache: true
+    upgrade: full
+    cache_valid_time: 0

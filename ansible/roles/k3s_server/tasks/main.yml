@@ -28,13 +28,21 @@
     dest: /tmp/install-k3s.sh
     mode: "0755"
 
-- name: Install k3s server (pinned version, config.yaml supplies the flags)
+- name: Read the installed k3s server version
+  ansible.builtin.command: k3s --version
+  register: k3s_server_installed_version
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Install or upgrade the k3s server to the pinned version
   ansible.builtin.command: /tmp/install-k3s.sh
   environment:
     INSTALL_K3S_VERSION: "{{ k3s_version }}"
     INSTALL_K3S_EXEC: "server"
-  args:
-    creates: /usr/local/bin/k3s
+  when: >-
+    k3s_server_installed_version.rc != 0
+    or k3s_version not in k3s_server_installed_version.stdout
 
 - name: Ensure k3s service is enabled and running
   ansible.builtin.systemd:

@@ -1,9 +1,0 @@
----
-# Separate from site.yml on purpose: this targets the Proxmox hypervisor
-# itself, not the k3s cluster — different blast radius, different concern,
-# same reasoning that keeps Terraform and Ansible split in this repo.
-- name: Proxmox host housekeeping (Phase 1)
-  hosts: proxmox_hosts
-  become: false   # ansible_user is already root on the hypervisor
-  roles: # Just a folder convention
-    - proxmox_host # ansible looks for this file:  roles/proxmox_host/tasks/main.yml

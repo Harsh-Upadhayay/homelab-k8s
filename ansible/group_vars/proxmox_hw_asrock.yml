@@ -1,0 +1,11 @@
+---
+proxmox_maintenance_required_holds:
+  - proxmox-default-kernel
+  - proxmox-kernel-7.0
+  - proxmox-kernel-7.0.2-6-pve-signed
+
+# The I219-V recovery module is ABI-specific. The ASRock hardware role verifies
+# the running ABI, selected module path, and exact tested module content.
+asrock_tested_kernel: "7.0.2-6-pve"
+asrock_recovery_module_path: "/lib/modules/7.0.2-6-pve/updates/nic-recovery/e1000e.ko"
+asrock_recovery_module_sha256: "5d11f5e1599fa4a92fe695a6ff33f05209cfc9683d4d499bdde70f352ffbfdf7"

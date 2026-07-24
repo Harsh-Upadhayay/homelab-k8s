@@ -1,0 +1,31 @@
+---
+# Separate from site.yml on purpose: this targets the Proxmox hypervisor
+# itself, not the k3s cluster — different blast radius, different concern,
+# same reasoning that keeps Terraform and Ansible split in this repo.
+- name: ASRock hardware safeguards
+  hosts: proxmox_hw_asrock
+  become: false
+  roles:
+    - proxmox_hw_asrock
+  tags:
+    - asrock-hardware
+
+- name: Dell hardware safeguards
+  hosts: proxmox_hw_dell
+  become: false
+  roles:
+    - proxmox_hw_dell
+  tags:
+    - dell-hardware
+
+- name: Proxmox host configuration
+  hosts: proxmox_hosts
+  become: false
+  roles:
+    - role: proxmox_host
+    - role: tailscale_host
+      vars:
+        tailscale_apt_distro: "debian"
+        tailscale_apt_codename: "{{ debian_codename }}"
+      tags: [never, tailscale]
+    - role: proxmox_cluster

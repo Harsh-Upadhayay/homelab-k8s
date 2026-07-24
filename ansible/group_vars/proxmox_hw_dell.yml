@@ -1,0 +1,5 @@
+---
+# The onboard Intel I219-LM that wedges its TX ring (e1000e "Hardware Unit
+# Hang"). It's a bridge port of proxmox_network_bridge above. Targeted by the
+# offload workaround in roles/proxmox_hw_dell/tasks/e1000e_offload.yml.
+dell_e1000e_interface: "nic0"

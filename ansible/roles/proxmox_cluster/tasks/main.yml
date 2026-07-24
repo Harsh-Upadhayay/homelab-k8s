@@ -1,0 +1,20 @@
+---
+# Cluster-scoped policy that is safe before membership exists. Actual
+# create/join orchestration is tracked separately in GitHub issue #46.
+#
+# Match by LAN IP so a hostname correction replaces the existing mapping
+# instead of appending a second, conflicting /etc/hosts entry.
+
+- name: Ensure stable LAN hostname mappings for every Proxmox node
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '^{{ item.split()[0] | regex_escape }}\s+'
+    line: "{{ item }}"
+    state: present
+  loop: "{{ proxmox_cluster_lan_hosts }}"
+
+- name: Bootstrap the cluster-wide Terraform API identity
+  ansible.builtin.import_tasks: terraform_api.yml
+  run_once: true
+  delegate_to: "{{ proxmox_cluster_seed }}"
+  tags: [never, terraform-api]

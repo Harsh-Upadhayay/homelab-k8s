@@ -1,0 +1,41 @@
+---
+# Worker-local storage policy for Longhorn. Terraform provisions the declared
+# block device raw and empty; this role owns its filesystem, mount, and client
+# prerequisites. It must never target a physical Proxmox host.
+
+- name: Require an explicit Longhorn data device
+  ansible.builtin.assert:
+    that:
+      - longhorn_data_device is defined
+      - longhorn_data_device is match('^/dev/')
+      - longhorn_data_label is defined
+      - longhorn_data_label | length > 0
+    fail_msg: "Set longhorn_data_device for every Longhorn worker."
+
+- name: Format the Longhorn data device if it has no filesystem
+  community.general.filesystem:
+    fstype: ext4
+    dev: "{{ longhorn_data_device }}"
+    opts: "-L {{ longhorn_data_label }}"
+
+- name: Mount the Longhorn data filesystem by label
+  ansible.posix.mount:
+    path: /var/lib/longhorn
+    src: "LABEL={{ longhorn_data_label }}"
+    fstype: ext4
+    opts: defaults
+    state: mounted
+
+- name: Install Longhorn node prerequisites
+  ansible.builtin.apt:
+    name:
+      - open-iscsi
+      - nfs-common
+    state: present
+    update_cache: true
+
+- name: Ensure the iSCSI daemon is enabled and running
+  ansible.builtin.systemd:
+    name: iscsid
+    state: started
+    enabled: true

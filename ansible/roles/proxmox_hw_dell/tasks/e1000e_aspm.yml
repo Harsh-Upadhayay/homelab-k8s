@@ -6,15 +6,16 @@
 # consistently first appears a few minutes after boot. `pcie_aspm=off` removes
 # that second trigger.
 #
-# Kept separate from e1000e_fix.yml on purpose: this one needs a REBOOT and
+# Kept separate from e1000e_offload.yml on purpose: this needs a REBOOT and
 # touches GRUB, so it gets its own tag and you run it at a time you choose.
 #
-# Run with:  ansible-playbook proxmox-host.yml --tags e1000e-aspm
+# Run with:  ansible-playbook proxmox.yml --tags e1000e-aspm
 # Then reboot the host for it to take effect.
 
 - name: Read current GRUB cmdline
   ansible.builtin.command: grep -E '^GRUB_CMDLINE_LINUX_DEFAULT=' /etc/default/grub
   changed_when: false
+  check_mode: false
   register: e1000e_grub_line
 
 # Backrefs so we append rather than replace: "quiet" -> "quiet pcie_aspm=off".

@@ -1,7 +1,7 @@
 ---
 # Matches the Ubuntu codename the cloud-init template is built from
 # (GUIDE.md Phase 2 — Ubuntu 26.04 LTS "Resolute Raccoon") — used to
-# template the Tailscale apt source in roles/common/tasks/tailscale.yml.
+# select the Tailscale apt source in roles/tailscale_host/tasks/main.yml.
 # Tailscale publishes separate ubuntu/ and debian/ repo trees, unlike
 # proxmox_hosts.yml's debian_codename which points at the debian/ one.
 ubuntu_codename: "resolute"
