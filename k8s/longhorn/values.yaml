@@ -29,6 +29,7 @@ defaultSettings:
   # explicitly because everything about this phase was shaped around it.
   defaultDataPath: /var/lib/longhorn
   defaultReplicaCount: 1 # for volumes created outside any StorageClass (e.g. via the UI) — match the dev tier
+  createDefaultDiskLabeledNodes: true # So that only tagged nodes are used for longhorn's storaget pool
 
 # The four CSI controller sidecars (attacher/provisioner/resizer/snapshotter)
 # are leader-elected Deployments — chart default 3 replicas is hot-standby HA
