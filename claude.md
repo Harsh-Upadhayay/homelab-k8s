@@ -4,22 +4,26 @@ This file is read automatically at the start of every session. It captures decis
 
 ## What this is
 
-A production-shaped homelab Kubernetes platform whose current baseline runs on one Proxmox host, built for hands-on operational learning (etcd internals, networking, GitOps, storage, and observability) — not just to get something running. Correctness and understanding are prioritized over the fastest path. See `GUIDE.md` for the foundation build and `ROADMAP.md` for the layers that landed afterward. ADR-0049 fixes the next topology: the freshly rebuilt workstation joins `pve-dell` as the second member of one Proxmox cluster *before* any guest is created; its Immich recovery worker is then added through the existing Terraform/Ansible standards. A third Proxmox node is planned one to two months later. None of this is represented in Terraform or Ansible yet; follow `docs/migrations/immich.md` rather than inventing a standalone provider or bare-metal worker conversion.
+A production-shaped homelab Kubernetes platform built for hands-on operational learning (etcd internals, networking, GitOps, storage, and observability) — not just to get something running. Correctness and understanding are prioritized over the fastest path. See `GUIDE.md` for the foundation build and `ROADMAP.md` for the layers that landed afterward. ADR-0049's two-node Proxmox topology is now live: cluster `neovara` contains `pve-dell` and the empty `pve-asrock`; the existing Kubernetes VMs remain on Dell while the workstation awaits its Immich recovery worker. A third Proxmox node is planned one to two months later. The new node and worker are not represented in Terraform or Ansible yet; follow `docs/migrations/immich.md` rather than inventing a standalone provider or bare-metal worker conversion.
 
 ## Architecture
 
 ```
-Proxmox host (pve-dell: laptop, 14 threads / 30GiB / 816GiB thin pool on an EXTERNAL 1TB USB SSD)
-├── k3s-server-1   4c/6GiB,  60GB          control plane, tainted (no app workloads), embedded etcd
-├── k3s-worker-1   6c/9GiB,  60GB + 280GB  application workloads + data disk
-└── k3s-worker-2   6c/9GiB,  60GB + 280GB  identical twin — makes rescheduling/storage node-agnosticism observable
+Proxmox cluster neovara
+├── pve-dell: laptop, 14 threads / 30GiB / 816GiB thin pool on an EXTERNAL 1TB USB SSD
+│   ├── k3s-server-1   4c/6GiB,  60GB          control plane, tainted, embedded etcd
+│   ├── k3s-worker-1   6c/9GiB,  60GB + 280GB  application workloads + data disk
+│   └── k3s-worker-2   6c/9GiB,  60GB + 280GB  application workloads + data disk
+└── pve-asrock: empty; patched I219-V NIC; preserved 1.4TB HDD is not Proxmox storage
 ```
 
 **HARD CONSTRAINT (ADR-0022): the laptop's internal NVMe (`nvme0n1`, Samsung 1TB) holds Windows and the user's personal data. It is STRICTLY off-limits — never add it as a storage pool, LVM PV, mount, or passthrough target, never suggest using it "for etcd performance" or "free space." The external USB SSD (`sda`) is the only working storage. Capacity grows by adding physical nodes later, never by touching that disk.**
 
+**HARD CONSTRAINT (`pve-asrock` NIC): do not upgrade or reinstall ASRock's Proxmox kernel.** Its Intel I219-V works through an ABI-specific unsigned e1000e patch for `7.0.2-6-pve`. The host deliberately holds `proxmox-default-kernel`, `proxmox-kernel-7.0`, and `proxmox-kernel-7.0.2-6-pve-signed`; `apt-get -s dist-upgrade` must show no kernel install/removal before an upgrade is approved. Do not remove those holds until a matching replacement module has been rebuilt, tested on the physical NIC, and local console recovery is available. See `docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/README.md`.
+
 Provisioning is split deliberately: **Terraform** (`terraform/`) provisions the VMs, **Ansible** (`ansible/`) configures the OS and installs k3s. Different problems (infra existence vs. configuration state), different tools — don't collapse them into one.
 
-**ACCEPTED NEXT HYPERVISOR TOPOLOGY (ADR-0049): one Proxmox cluster, not independent hosts.** Create the cluster on `pve-dell`; join the empty workstation before building templates/VMs; keep one Terraform provider and cluster-wide token; select placement with each VM's `node_name`. The temporary two-node stage intentionally accepts that losing either member makes `pmxcfs` read-only and delays cold-start `onboot` guests until quorum returns. Running guests continue. A third member is planned soon. Do not add a QDevice unless availability requirements change.
+**CURRENT HYPERVISOR TOPOLOGY (ADR-0049): one Proxmox cluster, not independent hosts.** Cluster `neovara` was created on `pve-dell`; empty `pve-asrock` joined on 2026-07-23. Keep one Terraform provider and cluster-wide token; select placement with each VM's `node_name`. The temporary two-node stage intentionally accepts that losing either member makes `pmxcfs` read-only and delays cold-start `onboot` guests until quorum returns. Running guests continue. A third member is planned soon. Do not add a QDevice unless availability requirements change.
 
 Sizing rule (ADR-0020): CPU is mildly overcommitted (16 vCPU on 14 threads — vCPUs are schedulable threads); **RAM is never overcommitted** (24 of 30GiB allocated, ~5GiB host reserve) because a host OOM kill against the server VM kills etcd and the cluster with it.
 

@@ -23,6 +23,20 @@ Important:
 - Target-disk selection remains the normal destructive Proxmox installer
   workflow.
 
+Known v1 installed-first-boot issue:
+
+- Disable Secure Boot before relying on the installed workaround. On the
+  recorded ASRock firmware the setting is under
+  `Advanced Mode -> Security -> Secure Boot`; Fast Boot is unrelated.
+- The physical install proved that v1 can load the parallel stock e1000e module
+  from the installed initramfs even though the correct patched module is
+  present in the installed package. The stock driver then fails the NVM
+  checksum and no `nic0` appears.
+- Follow the
+  [current usage guide](https://github.com/Harsh-Upadhayay/homelab-k8s/tree/main/docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery)
+  section **Known v1 installed-first-boot repair** to remove the unusable stock
+  copy, regenerate module metadata/initramfs, and prove the fix across a reboot.
+
 Validation included exact source/header pins, embedded artifact hashes, a full
 834,762-sector ISO media check, a no-disk QEMU/SeaBIOS boot through the live
 installer, and an exact SHA-256 readback after writing the physical USB.

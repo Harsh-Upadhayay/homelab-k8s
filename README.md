@@ -1,22 +1,19 @@
 # Homelab Kubernetes Platform
 
-A production-shaped Kubernetes platform whose current baseline runs on one Proxmox host, built for hands-on operational learning — etcd internals, CNI networking, ingress, secure remote access — not just to get something running. Correctness and understanding are prioritized over the fastest path. The accepted next topology (ADR-0049) joins the freshly rebuilt workstation to `pve-dell` as the second member of one Proxmox cluster before provisioning its Immich recovery worker; a third physical Proxmox node is planned one to two months later. That expansion is documented but not implemented in Terraform or Ansible yet.
+A production-shaped Kubernetes platform built for hands-on operational learning — etcd internals, CNI networking, ingress, secure remote access — not just to get something running. Correctness and understanding are prioritized over the fastest path. Proxmox cluster `neovara` now contains `pve-dell` and the freshly rebuilt, empty `pve-asrock`; the existing Kubernetes VMs remain on Dell while the workstation awaits its Immich recovery worker. A third physical Proxmox node is planned one to two months later. The new node and worker are documented but not implemented in Terraform or Ansible yet.
 
 The full phase-by-phase build is in **[GUIDE.md](./GUIDE.md)**. This README is the map; the guide is the territory.
 
 ## Architecture
 
 ```
-Proxmox host (pve-dell)
-├── k3s-server-1   control plane, tainted (no app workloads), embedded etcd
-├── k3s-worker-1   application workloads + Longhorn data disk
-└── k3s-worker-2   application workloads + Longhorn data disk
-
-Accepted next state (not provisioned yet):
-Proxmox cluster
-├── pve-dell        existing three VMs initially
-└── pve-workstation new recovery worker + preserved physical HDD
-    └── later preferred placement for the existing k3s-server-1 VM
+Proxmox cluster neovara
+├── pve-dell
+│   ├── k3s-server-1   control plane, tainted, embedded etcd
+│   ├── k3s-worker-1   application workloads + Longhorn data disk
+│   └── k3s-worker-2   application workloads + Longhorn data disk
+└── pve-asrock         empty; recovery worker not provisioned yet
+    └── preserved physical HDD remains outside Proxmox storage
 ```
 
 | Layer | Choice | Why (short version — see GUIDE.md / wiki for the full reasoning) |

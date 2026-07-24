@@ -122,10 +122,18 @@ the k3s worker, attach the HDD to a VM, or run Terraform first.
    HDD as Proxmox storage, an LVM PV, or a ZFS member.
 2. Give the workstation a unique permanent Proxmox hostname and static LAN IP. Verify forward and
    reverse name resolution, time synchronization, identical supported Proxmox versions, and stable
-   low-latency LAN connectivity between it and `pve-dell`.
+   low-latency LAN connectivity between it and `pve-dell`. The installed host is
+   `pve-asrock.home.arpa` at `192.168.1.51`; `pve-dell.home.arpa` is `192.168.1.50`.
+   Because ASRock's Intel I219-V requires the ABI-specific patched
+   `7.0.2-6-pve` e1000e module, keep the `proxmox-default-kernel`,
+   `proxmox-kernel-7.0`, and `proxmox-kernel-7.0.2-6-pve-signed` packages held.
+   Do not run a kernel upgrade until the replacement ABI has a rebuilt and
+   physically tested module; follow the recovery installer's **Kernel upgrades**
+   section.
 3. Capture `pvecm status`, `pvecm nodes`, `/etc/pve/storage.cfg`, and the VM inventory from
-   `pve-dell`. If it is still standalone, create the cluster there. Join the **empty workstation**
-   using the assisted join information from `pve-dell` or the equivalent `pvecm add` flow.
+   `pve-dell`. If it is still standalone, create the cluster there. The live
+   cluster is named `neovara`; it was created on `pve-dell` and the **empty
+   workstation** joined over the stable LAN on 2026-07-23.
 4. Verify both nodes appear in `pvecm nodes`, both report `Online`, `pvecm status` reports `Quorate:
    Yes` with both online, and the existing three VMs on `pve-dell` are unchanged and running.
 5. Recheck `pvesm status` on both nodes. Proxmox storage configuration is cluster-wide but the

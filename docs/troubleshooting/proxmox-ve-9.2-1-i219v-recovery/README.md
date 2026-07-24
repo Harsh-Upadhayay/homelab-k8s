@@ -154,7 +154,7 @@ Before using Ethernet as the management path, verify the installed system:
 ```bash
 uname -r
 modinfo -n e1000e
-cat /sys/module/e1000e/parameters/allow_bad_nvm
+modinfo -p e1000e | grep allow_bad_nvm
 journalctl -b -k | grep -E 'e1000e|NVM checksum'
 ip -br link
 ethtool <physical-interface>
@@ -165,10 +165,66 @@ Expected essentials:
 ```text
 kernel:       7.0.2-6-pve
 module path:  /lib/modules/7.0.2-6-pve/updates/nic-recovery/e1000e.ko
-parameter:    Y
+parameter:    allow_bad_nvm:... (bool)
 journal:      NVM checksum validation bypassed by allow_bad_nvm=1
 link:         detected and stable at the negotiated speed/duplex
 ```
+
+Do not check `/sys/module/e1000e/parameters/allow_bad_nvm`. The patch declares
+the parameter with permissions `0`, so it is intentionally absent from sysfs.
+The `modinfo` declaration confirms the on-disk module supports the option; the
+boot journal line confirms that the running driver actually used it.
+
+## Known v1 installed-first-boot repair
+
+The physical workstation install on 2026-07-23 exposed a gap that the original
+artifact inspection and no-disk QEMU smoke test did not cover. The installer
+environment used the patched module successfully, and the installed kernel
+package contained the correct patched module with SHA-256
+`5d11f5e1599fa4a92fe695a6ff33f05209cfc9683d4d499bdde70f352ffbfdf7`.
+However, the installed system's first initramfs loaded the parallel stock
+module first. Its boot log showed:
+
+```text
+e1000e: unknown parameter 'allow_bad_nvm' ignored
+e1000e 0000:00:1f.6: The NVM Checksum Is Not Valid
+e1000e 0000:00:1f.6: probe with driver e1000e failed with error -5
+```
+
+The first manual attempt to load the patched module was also rejected by Secure
+Boot because the module is unsigned. On this ASRock Z370M Pro4 firmware, disable
+it under `Advanced Mode -> Security -> Secure Boot` before relying on the
+installed workaround. `Boot -> Fast Boot` is unrelated.
+
+For this v1 image, use the following repair on the first installed boot. It
+removes only the unusable stock e1000e copy for this exact kernel; it does not
+touch any data disk:
+
+```bash
+k=$(uname -r)
+c=/lib/modules/$k/updates/nic-recovery/e1000e.ko
+modinfo -p "$c" | grep allow_bad_nvm
+sha256sum "$c"
+rm /lib/modules/$k/kernel/drivers/net/ethernet/intel/e1000e/e1000e.ko
+depmod "$k"
+modprobe -r e1000e
+modprobe e1000e
+ifreload -a
+update-initramfs -u -k "$k"
+```
+
+Before continuing, require all of:
+
+```bash
+journalctl -b -k | grep 'NVM checksum validation bypassed'
+ip -br link show nic0
+ethtool nic0 | grep -E 'Speed:|Duplex:|Link detected:'
+```
+
+Then reboot once and repeat those checks. The recorded workstation passed the
+reboot with `nic0` at 1000 Mb/s full duplex and the Proxmox UI returning HTTP
+200. Any reinstall of the same kernel package can restore its stock module and
+therefore requires this selection check again.
 
 Confirm management connectivity and error counters before relying on the
 interface:
@@ -188,6 +244,36 @@ in the boot menu as the recovery path.
 
 Merely copying this `e1000e.ko` into a newer kernel tree is unsafe and will
 normally fail module version checks.
+
+The physical `pve-asrock` installation protects this constraint with APT holds:
+
+```bash
+apt-mark showhold
+```
+
+must include:
+
+```text
+proxmox-default-kernel
+proxmox-kernel-7.0
+proxmox-kernel-7.0.2-6-pve-signed
+```
+
+These holds deliberately allow ordinary Proxmox user-space packages to be
+updated while preventing both a new kernel ABI and a reinstall of the working
+kernel package that could restore its stock module tree. Before any unattended
+upgrade, require this simulation to print no kernel install or removal:
+
+```bash
+apt-get -s dist-upgrade |
+  grep -Ei '^(Inst|Remv).*(proxmox-kernel-[0-9]|proxmox-default-kernel)' ||
+  echo no-kernel-change
+```
+
+Do not remove the holds merely to make an update transaction complete. They may
+be removed only after the replacement kernel has its own rebuilt patch, that
+module has been tested on this exact NIC, and local console access is available
+for the first reboot.
 
 ## Rollback
 
@@ -216,6 +302,11 @@ failure itself remains unrepaired.
 - Booted the complete ISO through initrd and live squashfs in QEMU/SeaBIOS to
   the expected graphical installer `No Hard Disk found!` screen; no
   installation was started.
+- Subsequently completed a physical installation. It proved the installer
+  network path but also exposed the v1 installed-initramfs module-selection and
+  Secure Boot problems documented above. After the first-boot repair, a
+  controlled reboot proved the patched module, bypass log, 1 Gb/s link, SSH and
+  Proxmox UI.
 - Wrote the physical SanDisk installer USB only after rechecking identity and
   protected mounts.
 - Read the written ISO-length region back from the USB and reproduced the

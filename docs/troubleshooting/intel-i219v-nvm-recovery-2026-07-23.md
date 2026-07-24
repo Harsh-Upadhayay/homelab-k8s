@@ -677,6 +677,74 @@ checksum gate passed. The temporary remote and local branch were deleted after
 the action succeeded. The release tag remains on the signed documentation
 commit.
 
+## Physical Proxmox installation and first-boot repair
+
+The recovery ISO successfully exposed `nic0` during the physical Proxmox VE
+9.2-1 installation. Proxmox was installed only to the 119.2 GiB SSD as
+`pve-asrock.home.arpa`, with `vmbr0` at `192.168.1.51/24`. The preserved 1.4 TB
+HDD was not initialized as Proxmox storage.
+
+The first installed boot had no `nic0`. The configured bridge and address were
+correct, but the journal proved that the installed initramfs had loaded the
+stock module:
+
+```text
+e1000e: unknown parameter 'allow_bad_nvm' ignored
+e1000e 0000:00:1f.6: The NVM Checksum Is Not Valid
+e1000e 0000:00:1f.6: probe with driver e1000e failed with error -5
+```
+
+The recovery-path filename alone was misleading: `modinfo -n e1000e` reports
+the module that a new `modprobe` would resolve from the root filesystem, not the
+already-running module loaded earlier from the initramfs. The kernel package on
+the ISO was extracted and checked after the incident. It contained both
+expected hashes:
+
+```text
+patched recovery module:
+5d11f5e1599fa4a92fe695a6ff33f05209cfc9683d4d499bdde70f352ffbfdf7
+
+stock module:
+8cad504342df1798e9e22636b0129674c4f2d0309c5e6eced2f129259296587d
+```
+
+A manual patched-module load initially failed with `Key was rejected by
+service`. Secure Boot was enabled despite the workstation's earlier legacy-mode
+Ubuntu boot. It was disabled in `Advanced Mode -> Security -> Secure Boot`;
+the similarly named `Boot -> Fast Boot` setting is unrelated.
+
+The proven v1 repair was to confirm the patched module metadata and hash,
+remove the stock module for `7.0.2-6-pve`, run `depmod`, unload/reload e1000e,
+reload the bridge, and regenerate the initramfs. The live and post-reboot
+journals then showed:
+
+```text
+e1000e 0000:00:1f.6: NVM checksum validation bypassed by allow_bad_nvm=1
+e1000e 0000:00:1f.6 nic0: NIC Link is Up 1000 Mbps Full Duplex
+```
+
+SSH and the Proxmox UI returned after the controlled reboot. The recovery-path
+module still matched the manifest hash. The two protected filesystems remained
+unmounted and matched their recorded UUIDs:
+
+```text
+/dev/sdb1 d807ca3e-804b-4f99-865f-12ec3397932f
+/dev/sdb2 e613c520-2cd4-4b0f-b8dd-1be2ea055b49
+```
+
+The original release testing inspected the embedded module/package hashes and
+booted the ISO to the no-disk installer screen, but did not perform an install.
+That boundary missed both the installed-initramfs selection behavior and
+installed Secure Boot enforcement. A future image must replace or exclude the
+stock module deterministically, state the pre-install Secure Boot requirement,
+and pass a complete install plus first-reboot network test.
+
+The patch uses `module_param(allow_bad_nvm, bool, 0)`. Permission mode `0`
+means the parameter is intentionally absent from
+`/sys/module/e1000e/parameters/`; the old README check for that sysfs file was
+invalid. Verify support with `modinfo -p`, and verify actual use with the
+explicit journal bypass message.
+
 ## NVM-repair gate
 
 No EEPROM/NVM write may proceed unless all of the following are satisfied:

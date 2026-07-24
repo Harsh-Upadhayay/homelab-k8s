@@ -150,6 +150,28 @@ physical USB readback:
   SHA-256:   65e5ea078e019ba5017acce6b66f78ea0dfec0672f39eca94772e628f5de8f25
 ```
 
+### Physical installed-system validation added after release
+
+The original validation above did not test installation or the first installed
+boot. A physical install on the target workstation later established:
+
+- the installer environment detected the I219-V and completed installation;
+- the installed package's recovery module still matched
+  `5d11f5e1599fa4a92fe695a6ff33f05209cfc9683d4d499bdde70f352ffbfdf7`;
+- the first installed initramfs nevertheless selected the stock module, which
+  ignored the unknown option and failed the NVM checksum;
+- Secure Boot rejected a manual load of the unsigned patched module;
+- after disabling Secure Boot, removing the parallel stock module, running
+  `depmod`, reloading e1000e, and regenerating the initramfs, a controlled
+  reboot loaded the patch successfully;
+- the reboot journal contained `NVM checksum validation bypassed by
+  allow_bad_nvm=1`, `nic0` negotiated 1000 Mb/s full duplex, SSH returned, and
+  the Proxmox UI returned HTTP 200.
+
+Future release validation must perform a complete installation and first reboot
+on a target disk, then verify the running module and network. Package-content
+hashes and a no-disk installer boot are necessary but not sufficient.
+
 See the
 [chronological recovery log](../intel-i219v-nvm-recovery-2026-07-23.md) for
 the supporting investigation and safety checks.
