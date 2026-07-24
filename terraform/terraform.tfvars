@@ -13,12 +13,13 @@
 #   DISK 60 + (60+280)*2 = 740G declared of 816G pool (91%) — ~73G headroom
 #        kept so the thin pool can never silently fill under its guests.
 
-proxmox_endpoint = "https://pve-dell.egret-pence.ts.net:8006/" # MagicDNS so applies work off-LAN (was https://192.168.1.50:8006/)
-proxmox_node     = "pve-dell"
+proxmox_cluster_endpoint = "https://pve-dell.egret-pence.ts.net:8006/" # One healthy cluster member; MagicDNS keeps applies available off-LAN.
+proxmox_dell_node        = "pve-dell"
 
-template_vm_id = 9000
-storage_pool   = "local-lvm"
-network_bridge = "vmbr0"
+proxmox_dell_template_vm_id = 9000
+proxmox_dell_storage_pool   = "local-lvm"
+proxmox_asrock_storage_pool = "local-lvm"
+network_bridge              = "vmbr0"
 
 network_gateway     = "192.168.1.1"
 network_cidr_suffix = "/24"
@@ -33,10 +34,17 @@ server_cores     = 4
 server_memory    = 6144
 server_disk_size = 60
 
-# --- workers (identical twins) ---
+# --- existing Dell workers (identical twins) ---
 worker_ip             = "192.168.1.22"
 worker2_ip            = "192.168.1.23"
 worker_cores          = 6
 worker_memory         = 9216
 worker_disk_size      = 60
 worker_data_disk_size = 280
+
+# --- k3s-worker-3 (ASRock Immich recovery worker) ---
+proxmox_asrock_node      = "pve-asrock"
+worker3_ip               = "192.168.1.24"
+worker3_memory           = 12288
+worker3_disk_size        = 40
+worker3_passthrough_path = "/dev/disk/by-id/wwn-0x50024e920627da0f-part2"

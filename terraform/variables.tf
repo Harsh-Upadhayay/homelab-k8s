@@ -1,5 +1,5 @@
-variable "proxmox_endpoint" {
-  description = "Proxmox API endpoint. Prefer a Tailscale MagicDNS name (e.g. https://pve-dell.<tailnet>.ts.net:8006/) over a LAN IP so applies work off-LAN; provider.tf's insecure=true covers the cert mismatch."
+variable "proxmox_cluster_endpoint" {
+  description = "API endpoint for one healthy member of the Proxmox cluster. Prefer a Tailscale MagicDNS name so applies work off-LAN; provider.tf's insecure=true covers the certificate mismatch."
   type        = string
 }
 
@@ -7,20 +7,32 @@ variable "proxmox_endpoint" {
 # the provider reads it straight from PROXMOX_VE_API_TOKEN at runtime (see
 # provider.tf). Create the token with pveum (GUIDE.md Phase 3).
 
-variable "proxmox_node" {
-  description = "Name of the target Proxmox node (hostname shown in the web UI, often 'pve')"
+variable "proxmox_dell_node" {
+  description = "Proxmox node that currently hosts k3s-server-1, k3s-worker-1, k3s-worker-2, and the source template"
   type        = string
-  default     = "pve"
+  default     = "pve-dell"
 }
 
-variable "template_vm_id" {
-  description = "VM ID of the cloud-init template built in Phase 2"
+variable "proxmox_asrock_node" {
+  description = "Proxmox node that hosts k3s-worker-3 during the Immich recovery"
+  type        = string
+  default     = "pve-asrock"
+}
+
+variable "proxmox_dell_template_vm_id" {
+  description = "Cluster-wide VM ID of the cloud-init template stored on pve-dell"
   type        = number
   default     = 9000
 }
 
-variable "storage_pool" {
-  description = "Proxmox storage pool for VM disks. On pve-dell this is the thin pool on the external USB SSD — the internal NVMe is strictly off-limits (ADR-0022)."
+variable "proxmox_dell_storage_pool" {
+  description = "Node-local pve-dell storage pool for existing VM disks; the internal NVMe remains strictly off-limits (ADR-0022)"
+  type        = string
+  default     = "local-lvm"
+}
+
+variable "proxmox_asrock_storage_pool" {
+  description = "Node-local pve-asrock storage pool for the k3s-worker-3 OS and cloud-init disks"
   type        = string
   default     = "local-lvm"
 }
@@ -91,7 +103,7 @@ variable "server_disk_size" {
   default     = 60
 }
 
-# --- workers (both sized identically) ---
+# --- existing Dell workers (sized identically) ---
 variable "worker_ip" {
   description = "Static IP for k3s-worker-1"
   type        = string
@@ -125,4 +137,30 @@ variable "worker_data_disk_size" {
   description = "GB — dedicated data disk (scsi1) per worker, reserved for distributed storage (Longhorn later). Kept separate from the OS disk so storage I/O and OS I/O don't mix, and so future physical nodes arrive with the same symmetric layout. Thin-provisioned: sized to keep total declared ≈91% of the pool, leaving the crumple zone that stops the pool silently filling under its guests."
   type        = number
   default     = 280
+}
+
+# --- k3s-worker-3 (ASRock Immich recovery worker) ---
+
+variable "worker3_ip" {
+  description = "Static LAN IP for k3s-worker-3"
+  type        = string
+  default     = "192.168.1.24"
+}
+
+variable "worker3_memory" {
+  description = "MB allocated to k3s-worker-3 on pve-asrock"
+  type        = number
+  default     = 12288
+}
+
+variable "worker3_disk_size" {
+  description = "GB allocated to the k3s-worker-3 OS disk on pve-asrock local-lvm"
+  type        = number
+  default     = 40
+}
+
+variable "worker3_passthrough_path" {
+  description = "Stable pve-asrock host path for the preserved Immich partition; never use a mutable /dev/sdX name"
+  type        = string
+  default     = "/dev/disk/by-id/wwn-0x50024e920627da0f-part2"
 }

@@ -4,6 +4,7 @@
 # prerequisites. It must never target a physical Proxmox host.
 
 - name: Require an explicit Longhorn data device
+  when: longhorn_manage_clean_disk | default(true) | bool
   ansible.builtin.assert:
     that:
       - longhorn_data_device is defined
@@ -13,12 +14,14 @@
     fail_msg: "Set longhorn_data_device for every Longhorn worker."
 
 - name: Format the Longhorn data device if it has no filesystem
+  when: longhorn_manage_clean_disk | default(true) | bool
   community.general.filesystem:
     fstype: ext4
     dev: "{{ longhorn_data_device }}"
     opts: "-L {{ longhorn_data_label }}"
 
 - name: Mount the Longhorn data filesystem by label
+  when: longhorn_manage_clean_disk | default(true) | bool
   ansible.posix.mount:
     path: /var/lib/longhorn
     src: "LABEL={{ longhorn_data_label }}"
@@ -31,6 +34,8 @@
     name:
       - open-iscsi
       - nfs-common
+      - cryptsetup
+      - dmsetup
     state: present
     update_cache: true
 

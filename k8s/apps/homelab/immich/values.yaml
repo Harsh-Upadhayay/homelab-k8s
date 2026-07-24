@@ -23,7 +23,7 @@ immich:
       existingClaim: immich-library
 
 server:
-  enabled: false
+  enabled: true
   controllers:
     main:
       # One server writes one RWO library. Recreate guarantees no overlapping
@@ -67,7 +67,7 @@ server:
         - path: /usr/src/app/upload
 
 machine-learning:
-  enabled: false
+  enabled: true
   controllers:
     main:
       containers:
@@ -85,7 +85,7 @@ machine-learning:
       type: emptyDir
 
 valkey:
-  enabled: false
+  enabled: true
   controllers:
     main:
       containers:

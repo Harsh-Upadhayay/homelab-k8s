@@ -1,5 +1,5 @@
 provider "proxmox" {
-  endpoint = var.proxmox_endpoint
+  endpoint = var.proxmox_cluster_endpoint
 
   # api_token is intentionally NOT set here — the provider reads it from the
   # PROXMOX_VE_API_TOKEN environment variable instead, so the one secret never
