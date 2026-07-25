@@ -1,0 +1,114 @@
+---
+# Generic host-side storage provisioning. This creates a Proxmox LVM-thin
+# datastore from the one block device declared in host_vars. It is intentionally
+# separate from longhorn_node: that role configures the virtual disk inside a
+# Kubernetes worker, whereas these tasks configure storage on the hypervisor.
+
+- name: Read the Proxmox node name before managing storage
+  ansible.builtin.command: hostname -s
+  register: proxmox_storage_node
+  changed_when: false
+  check_mode: false
+
+- name: Resolve the declared datastore device identity
+  ansible.builtin.command:
+    argv:
+      - readlink
+      - -f
+      - "{{ proxmox_lvmthin_storage.device }}"
+  register: proxmox_storage_resolved_device
+  changed_when: false
+  check_mode: false
+
+- name: Read any existing volume group on the declared device
+  ansible.builtin.command: >-
+    pvs --noheadings --options vg_name
+    {{ proxmox_storage_resolved_device.stdout }}
+  register: proxmox_storage_existing_vg
+  changed_when: false
+  failed_when: proxmox_storage_existing_vg.rc not in [0, 5]
+  check_mode: false
+
+- name: Require the exact Proxmox storage boundary
+  ansible.builtin.assert:
+    that:
+      - proxmox_storage_node.stdout == inventory_hostname
+      - proxmox_storage_resolved_device.stdout is match('^/dev/')
+      - proxmox_storage_existing_vg.stdout | trim in ["", proxmox_lvmthin_storage.volume_group]
+    fail_msg: >-
+      Refusing storage initialization: host/device identity is wrong or the
+      device belongs to unexpected volume group
+      {{ proxmox_storage_existing_vg.stdout | trim }}.
+
+- name: Read the owner VM state before initializing an empty device
+  ansible.builtin.command: "qm status {{ proxmox_lvmthin_storage.owner_vm_id }}"
+  register: proxmox_storage_owner_vm
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: proxmox_storage_existing_vg.stdout | trim == ""
+
+- name: Require the owner VM to be absent or stopped before initialization
+  ansible.builtin.assert:
+    that:
+      - >-
+        proxmox_storage_owner_vm.rc != 0 or
+        proxmox_storage_owner_vm.stdout == "status: stopped"
+    fail_msg: >-
+      Refusing to initialize an empty device while VM
+      {{ proxmox_lvmthin_storage.owner_vm_id }} is running.
+  when: proxmox_storage_existing_vg.stdout | trim == ""
+
+- name: Erase old partition and filesystem signatures from the empty datastore device
+  ansible.builtin.command: >-
+    wipefs --all --force {{ proxmox_storage_resolved_device.stdout }}
+  when: proxmox_storage_existing_vg.stdout | trim == ""
+
+- name: Ask the kernel to forget the erased partition table
+  ansible.builtin.command: >-
+    blockdev --rereadpt {{ proxmox_storage_resolved_device.stdout }}
+  when: proxmox_storage_existing_vg.stdout | trim == ""
+  changed_when: false
+
+- name: Create the datastore volume group
+  community.general.lvg:
+    vg: "{{ proxmox_lvmthin_storage.volume_group }}"
+    pvs: "{{ proxmox_storage_resolved_device.stdout }}"
+  when: proxmox_storage_existing_vg.stdout | trim == ""
+
+- name: Read the datastore thin-pool state
+  ansible.builtin.command: >-
+    lvs --noheadings --options lv_name
+    {{ proxmox_lvmthin_storage.volume_group }}
+  register: proxmox_storage_lvs
+  changed_when: false
+  check_mode: false
+
+- name: Create the datastore thin pool with repair headroom
+  community.general.lvol:
+    vg: "{{ proxmox_lvmthin_storage.volume_group }}"
+    thinpool: "{{ proxmox_lvmthin_storage.thin_pool }}"
+    size: "{{ proxmox_lvmthin_storage.thin_pool_size }}"
+  when: >-
+    proxmox_lvmthin_storage.thin_pool not in
+    (proxmox_storage_lvs.stdout_lines | map('trim') | list)
+
+- name: Read registered Proxmox datastores
+  ansible.builtin.command: pvesm status
+  register: proxmox_registered_storages
+  changed_when: false
+  check_mode: false
+
+- name: Register the node-local LVM-thin datastore
+  ansible.builtin.command: >-
+    pvesm add lvmthin {{ proxmox_lvmthin_storage.storage_id }}
+    --vgname {{ proxmox_lvmthin_storage.volume_group }}
+    --thinpool {{ proxmox_lvmthin_storage.thin_pool }}
+    --content images
+    --nodes {{ inventory_hostname }}
+  when: >-
+    proxmox_registered_storages.stdout
+    | regex_search(
+        '(?m)^' + (proxmox_lvmthin_storage.storage_id | regex_escape) + '\s+'
+      )
+    is none

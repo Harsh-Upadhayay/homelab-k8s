@@ -2,8 +2,10 @@ output "k3s_server_1_ip" {
   value = var.server_ip
 }
 
-output "k3s_worker_1_ip" {
-  value = var.worker_ip
+output "k3s_worker_ips" {
+  value = {
+    for name, worker in var.workers : name => worker.ip_address
+  }
 }
 
 output "vm_user" {

@@ -7,40 +7,22 @@ variable "proxmox_cluster_endpoint" {
 # the provider reads it straight from PROXMOX_VE_API_TOKEN at runtime (see
 # provider.tf). Create the token with pveum (GUIDE.md Phase 3).
 
-variable "proxmox_dell_node" {
-  description = "Proxmox node that hosts k3s-server-1, the consolidated k3s-worker-1, and the source template"
+variable "server_node_name" {
+  description = "Proxmox node that hosts the k3s control-plane VM"
   type        = string
   default     = "pve-dell"
 }
 
-variable "proxmox_asrock_node" {
-  description = "Proxmox node that hosts k3s-worker-3 and its dedicated managed Longhorn HDD datastore"
-  type        = string
-  default     = "pve-asrock"
-}
-
-variable "proxmox_dell_template_vm_id" {
-  description = "Cluster-wide VM ID of the cloud-init template stored on pve-dell"
+variable "template_vm_id" {
+  description = "Cluster-wide VM ID of the cloud-init template used by all k3s VMs"
   type        = number
   default     = 9000
 }
 
-variable "proxmox_dell_storage_pool" {
-  description = "Node-local pve-dell storage pool for existing VM disks; the internal NVMe remains strictly off-limits (ADR-0022)"
+variable "server_storage_pool" {
+  description = "Node-local datastore for the control-plane OS and cloud-init disks"
   type        = string
   default     = "local-lvm"
-}
-
-variable "proxmox_asrock_storage_pool" {
-  description = "Node-local pve-asrock storage pool for the k3s-worker-3 OS and cloud-init disks"
-  type        = string
-  default     = "local-lvm"
-}
-
-variable "proxmox_asrock_longhorn_storage_pool" {
-  description = "Node-local pve-asrock LVM-thin datastore backed only by the dedicated physical Longhorn HDD"
-  type        = string
-  default     = "longhorn-hdd"
 }
 
 variable "network_bridge" {
@@ -78,11 +60,9 @@ variable "vm_user" {
   default     = "harsh"
 }
 
-# Sizing rationale (pve-dell: 14 threads / 30GiB usable RAM / 816GiB thin pool):
-# After retiring worker-2, worker-1 receives its compute allocation. CPU stays
-# mildly overcommitted at 16 vCPU (server 4 + worker 12) on 14 threads. RAM
-# remains 24GiB total (server 6 + worker 18), preserving host headroom. The
-# enlarged worker-1 Longhorn disk replaces both former 280GB worker disks.
+# Current pve-dell sizing: 16 vCPU on 14 threads is a deliberate mild CPU
+# overcommit. RAM remains 24GiB total (server 6 + worker 18), preserving host
+# headroom; the declared VM disks leave thin-pool safety headroom.
 
 # --- k3s-server-1 ---
 variable "server_ip" {
@@ -108,64 +88,34 @@ variable "server_disk_size" {
   default     = 60
 }
 
-# --- consolidated Dell worker ---
-variable "worker_ip" {
-  description = "Static IP for k3s-worker-1"
-  type        = string
-  default     = "192.168.1.22"
-}
+variable "workers" {
+  description = "Worker VM parameters; every entry follows the same VM lifecycle and differs only by these values"
+  type = map(object({
+    node_name           = string
+    clone_node_name     = optional(string)
+    clone_datastore_id  = optional(string)
+    ip_address          = string
+    cores               = number
+    memory              = number
+    os_datastore_id     = string
+    os_disk_size        = number
+    os_disk_cache       = string
+    data_datastore_id   = string
+    data_disk_size      = number
+    data_disk_cache     = string
+    data_disk_backup    = bool
+    data_disk_replicate = bool
+  }))
 
-variable "worker_cores" {
-  type    = number
-  default = 6
-}
-
-variable "worker_memory" {
-  description = "MB"
-  type        = number
-  default     = 9216
-}
-
-variable "worker_disk_size" {
-  description = "GB — OS disk"
-  type        = number
-  default     = 60
-}
-
-variable "worker_data_disk_size" {
-  description = "GB — dedicated Longhorn data disk (scsi1) for the consolidated Dell worker, separate from its OS disk and thin-provisioned with host-pool headroom"
-  type        = number
-  default     = 280
-}
-
-# --- k3s-worker-3 (ASRock managed-HDD worker) ---
-
-variable "worker3_ip" {
-  description = "Static LAN IP for k3s-worker-3"
-  type        = string
-  default     = "192.168.1.24"
-}
-
-variable "worker3_cores" {
-  description = "vCPU allocated to the ASRock worker independently of the consolidated Dell worker"
-  type        = number
-  default     = 6
-}
-
-variable "worker3_memory" {
-  description = "MB allocated to k3s-worker-3 on pve-asrock"
-  type        = number
-  default     = 12288
-}
-
-variable "worker3_disk_size" {
-  description = "GB allocated to the k3s-worker-3 OS disk on pve-asrock local-lvm"
-  type        = number
-  default     = 40
-}
-
-variable "worker3_data_disk_size" {
-  description = "GB allocated to worker-3 from the dedicated ASRock Longhorn HDD datastore, leaving hypervisor and thin-pool headroom"
-  type        = number
-  default     = 1300
+  validation {
+    condition = alltrue([
+      for name, worker in var.workers :
+      startswith(name, "k3s-worker-") &&
+      worker.node_name != "" &&
+      worker.ip_address != "" &&
+      worker.os_datastore_id != "" &&
+      worker.data_datastore_id != ""
+    ])
+    error_message = "Each worker key must start with k3s-worker- and declare its node, IP, OS datastore, and data datastore."
+  }
 }
