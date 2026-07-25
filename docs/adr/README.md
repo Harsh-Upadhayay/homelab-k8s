@@ -51,7 +51,7 @@ v1.0 has no log — it produced no architecture decisions of its own, only valid
 | 0022 | Internal NVMe strictly off-limits; everything on the external SSD | Accepted | [[v0.1 - Foundation]] |
 | 0023 | terraform@pve needs a storage-scoped ACL, not just PVEVMAdmin | Accepted | [[v0.1 - Foundation]] |
 | 0024 | terraform@pve also needs an SDN-scoped ACL for network attach | Accepted | [[v0.1 - Foundation]] |
-| 0030 | Data-replica policy as StorageClass tiers (longhorn = 1 dev, longhorn-replicated = 2 prod) | Accepted | [[v2.0 - Operability]] |
+| 0030 | Data-replica policy as StorageClass tiers (longhorn = 1 dev, longhorn-replicated = 2 prod) | Superseded by 0051 | [[v2.0 - Operability]] |
 | 0031 | Longhorn's StorageClasses are not the cluster default | Accepted | [[v2.0 - Operability]] |
 | 0032 | Keep the upstream-conventional longhorn-system namespace | Accepted | [[v2.0 - Operability]] |
 | 0033 | Longhorn UI exposed internal-only via the Tailscale front door | Accepted | [[v2.0 - Operability]] |
@@ -72,3 +72,5 @@ v1.0 has no log — it produced no architecture decisions of its own, only valid
 | 0048 | Adopt Tailscale Operator into GitOps while keeping OAuth credentials imperative | Accepted | [[v2.0 - Operability]] |
 | 0049 | Grow one Proxmox cluster across physical hosts; accept the temporary two-node quorum limit | Accepted | [[v0.1 - Foundation]] |
 | 0050 | Organize Ansible roles by lifecycle ownership | Accepted | [[v0.1 - Foundation]] |
+| 0051 | One Longhorn data copy by default; redundancy is an explicit per-volume promotion | Accepted | [[v2.0 - Operability]] |
+| 0052 | ASRock HDD becomes a separate Proxmox-managed datastore | Accepted | [[v2.0 - Operability]] |

@@ -20,13 +20,15 @@ below and the per-app runbooks.
   Compose deployment was stopped after manual comparison on 2026-07-22 JST. Post-Proxmox recovery
   completed on 2026-07-24: `k3s-worker-3` reused the existing PVC/Longhorn volume by disk UUID
   without copying the 350 GiB library, zero database-referenced files were missing, and the old
-  bare-metal node objects were removed. `/dev/sdb1` remains protected for issue #48.
+  bare-metal node objects were removed. Issue #48 then used a temporary healthy Dell replica to
+  retire `k3s-worker-2` and convert the ASRock HDD into a separate Proxmox-managed datastore. The
+  final Immich library has one replica on the managed worker-3 data disk.
 
 ## Preserve data and migrate later
 
-These workloads do not block installing Proxmox because they do not need to remain live during the
-transition. Their source data is still important: keep the rollback/deferred-data partition intact
-until each later Kubernetes deployment has restored and verified it.
+These workloads did not block installing Proxmox because they did not need to remain live during
+the transition. Their selected source trees were copied off the workstation HDD before issue #48
+repurposed it; those off-HDD copies now carry the preservation requirement.
 
 - [ ] jobhunt — own project. `-django`, `-celery-beat`, `-celery-worker-1`, `-mysql`, `-redis`, `-frontend`, `-nginx`.
 - [ ] mediaserver stack — gluetun, qbittorrent, flaresolverr, prowlarr, sonarr, radarr, jellyseerr,

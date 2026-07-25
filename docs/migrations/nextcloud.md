@@ -47,10 +47,9 @@ Postgres, own Redis, PVCs, Traefik IngressRoute/Middlewares) + `SECRETS.md`. Reg
   startupProbe gates liveness for up to ~10 min — also covers the schema-migration pause on each upgrade.
 - **Cron as a native CronJob** with `podAffinity` co-locating it onto the app pod's node (cron.php needs
   the same RWO PVCs; RWO binds to a node, not a pod, so same-node pods share it).
-- **`longhorn-replicated`** (2 copies) for all three PVCs — authoritative personal data. Same
-  reclaim-`Delete` caveat as kiroku: the preserved old-lab `/storage` copy remains the fallback
-  through the Proxmox rebuild. Establish a real backup or Retain policy before the source HDD
-  partition is later cleaned or repurposed.
+- **`longhorn-replicated`** remains the class name for all three PVCs because a bound PVC's class is
+  immutable. Under ADR-0051 it now provisions one copy, like every current class; promote selected
+  volumes manually when the additional durability is worth the capacity.
 
 ## Auth model: OIDC dropped → local account (as mandated)
 

@@ -19,8 +19,59 @@ The user verified accounts, albums, photos, videos, search, and timeline. The ob
 and Longhorn `k3s-worker-migration` objects and their six stale pod records were removed only after
 zero replicas, engines, attachments, and Orphans referenced that node.
 
-`/dev/sdb1` remains unchanged. Repurposing it, retiring `k3s-worker-2`, and converging the HDD
-layout are separate work tracked by GitHub issue #48; moving the existing control-plane VM is #49.
+The storage-convergence follow-on in issue #48 then retired `k3s-worker-2`, consolidated its Dell
+resources into `k3s-worker-1`, and converted the ASRock HDD from its temporary recovery partitions
+to the separate Proxmox-managed `longhorn-hdd` datastore. Current volumes use one data copy
+(ADR-0051); the large Immich, Audiobookshelf, and Nextcloud-data volumes live on worker 3's managed
+HDD disk. Moving the existing control-plane VM remains issue #49.
+
+## Post-recovery worker and HDD convergence
+
+Issue #48 used a deliberately gated, two-stage copy so the only healthy Immich replica was never
+destroyed:
+
+1. The old `/dev/sdb1` rollback tree was copied off-host and explicitly released for reuse. It was
+   formatted as ext4 label `longhorn-asrock`, mounted at `/var/lib/longhorn-asrock`, and added as a
+   second Longhorn disk on `k3s-worker-3`.
+2. All ten replicas on `k3s-worker-2` rebuilt elsewhere. Loki's old `local-path` log history was
+   intentionally discarded because it was operationally immaterial and the corrected chart values
+   now create Loki persistence on the `longhorn` StorageClass.
+3. The node-deletion gate required zero Longhorn replicas, engines, attachment tickets, Kubernetes
+   VolumeAttachments, and Orphans. Two already-purged snapshots retained stale snapshot-controller
+   tickets and blocked the gate; the narrow remediation and prevention are recorded in
+   [INC-2026-002](../incidents/INC-2026-002-longhorn-stale-snapshot-attachment-tickets.md).
+4. Only after the gate passed was `k3s-worker-2` drained and deleted. Proxmox VM 102 and only its
+   owned `scsi0`, `scsi1`, and cloud-init volumes were removed. Its Terraform resource/state and
+   Ansible inventory entry were removed in the same change.
+5. `k3s-worker-1` inherited the retired VM's allocation: 12 vCPU, 18 GiB RAM, and a 650 GiB
+   Longhorn data disk. The guest ext4 filesystem was expanded online.
+6. The Immich library rebuilt onto `k3s-worker-1` before `/dev/sdb2` became eligible for removal.
+   The first unthrottled attempt saturated the Dell physical datastore shared with etcd, and a
+   15 MB/s ceiling later proved insufficient. Because API downtime was acceptable, k3s/etcd was
+   stopped cleanly while the already-running Longhorn engine continued under direct
+   engine-namespace monitoring and a 30 MB/s offline-copy ceiling. The complete evidence is in
+   [INC-2026-003](../incidents/INC-2026-003-longhorn-rebuild-starved-etcd.md).
+7. Every current Longhorn Volume was reduced to one data copy. Disk eviction moved the three
+   previously ASRock-only volumes to worker 1 and removed redundant ASRock replicas.
+8. Only after zero replicas, engines, attachment tickets, Kubernetes VolumeAttachments, and
+   Orphans referenced either ASRock Longhorn disk was VM 103 stopped and the raw HDD detached.
+9. The entire HDD was then released: both temporary partitions were erased, the independent
+   `longhorn_hdd` VG and `data` thin pool were created, and Proxmox registered the node-local
+   `longhorn-hdd` datastore. The SSD-backed `pve/local-lvm` VG was not extended or changed.
+10. Terraform allocated VM 103 a 1,300 GiB managed `scsi1` from `longhorn-hdd`. Ansible formatted
+    it as ext4 label `k3s-data`, mounted it at `/var/lib/longhorn`, and retained the
+    mount-before-k3s systemd ordering shared with worker 1.
+11. Longhorn registered the new clean disk. The one-copy Immich library (350 GiB), Audiobookshelf
+    library (70 GiB), and Nextcloud data (20 GiB) volumes moved from Dell back to ASRock; smaller
+    volumes remained on Dell.
+12. Node readiness, volume health and placement, Terraform convergence, Ansible idempotence,
+    GitOps reconciliation, and application health were rechecked before closing the migration.
+
+The physical HDD is identified only by
+`/dev/disk/by-id/wwn-0x50024e920627da0f` during host initialization. Proxmox then owns its LVM
+layout and exposes only the managed VM volume to worker 3. The final guest storage lifecycle is the
+same as worker 1: `/dev/sdb`, ext4 label `k3s-data`, mounted at `/var/lib/longhorn`. Historical
+filesystem and Longhorn disk UUIDs from the recovery partitions are not final-state identities.
 
 ## Completed pre-rebuild checkpoint
 
