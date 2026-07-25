@@ -10,9 +10,8 @@
 #
 # NOTE ON "REPLICAS": every replica count in this file is about Longhorn's
 # own moving parts or DATA copies — none of them have anything to do with an
-# app's `spec.replicas` (pod count). Data-replica policy lives in
-# StorageClasses, not app manifests: `longhorn` (this chart, 1 copy, dev) vs
-# `longhorn-replicated` (storageclass-replicated.yaml, 2 copies, prod).
+# app's `spec.replicas` (pod count). Current StorageClasses create one data
+# copy; selected existing volumes can be promoted manually when required.
 
 persistence:
   # The StorageClass the chart creates (named "longhorn"). Deliberately NOT
@@ -21,7 +20,7 @@ persistence:
   # doesn't stick — and two defaults make PVC binding version-dependent.
   # PVCs say `storageClassName: longhorn` explicitly instead.
   defaultClass: false
-  defaultClassReplicaCount: 1 # DATA copies per volume — dev tier. Prod uses longhorn-replicated (2 copies).
+  defaultClassReplicaCount: 1 # DATA copies per volume.
 
 defaultSettings:
   # Where each node's replicas live as sparse files — this is the dedicated

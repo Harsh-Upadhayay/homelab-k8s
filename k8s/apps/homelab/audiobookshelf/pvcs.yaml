@@ -1,8 +1,8 @@
 # Preserve upstream's four independent mount boundaries. In particular,
 # /config contains the SQLite database and must stay on an RWO block filesystem
-# (never RWX/NFS/SMB). Config, metadata, and podcasts use the prod 2-copy tier.
-# Audiobooks are reproducible bulk media and use the 1-copy tier to avoid spending
-# another 70 GiB on a second replica; the untouched Compose source is the rollback.
+# (never RWX/NFS/SMB). The legacy `longhorn-replicated` class name is immutable
+# on bound PVCs, but the current cluster-wide default is one data copy. Selected
+# volumes can be promoted to two copies manually after this migration.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

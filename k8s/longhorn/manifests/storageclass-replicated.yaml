@@ -1,11 +1,6 @@
-# The PROD storage tier: same driver as the chart's `longhorn` StorageClass,
-# but every volume keeps 2 copies of its data — one per worker (replica
-# anti-affinity is hard by default, so they can never co-locate).
-#
-# This is the mechanism for per-app data-replica policy: a PVC cannot set a
-# replica count itself (numberOfReplicas is a StorageClass *parameter*), so
-# "dev = 1 copy, prod = 2 copies" is expressed by which storageClassName the
-# PVC names — `longhorn` vs `longhorn-replicated`.
+# Legacy StorageClass name retained because bound PVC storageClassName fields
+# are immutable. The current homelab policy starts every volume with one data
+# copy; selected Longhorn volumes can be promoted manually when wanted.
 #
 # Shape mirrors the chart's own generated StorageClass (helm template output),
 # including volumeBindingMode: Immediate — unlike local-path, a Longhorn
@@ -20,6 +15,6 @@ allowVolumeExpansion: true
 reclaimPolicy: Delete
 volumeBindingMode: Immediate
 parameters:
-  numberOfReplicas: "2"
+  numberOfReplicas: "1"
   staleReplicaTimeout: "30"
   fromBackup: ""

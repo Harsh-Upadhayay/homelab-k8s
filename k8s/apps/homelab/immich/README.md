@@ -92,5 +92,13 @@ no replicas, engines, attachments, Orphans, or application workloads.
 The recovery exposed a mount-ordering failure in which Longhorn's instance-manager retained the
 pre-mount view of `/var/lib/longhorn`. The blameless report and preventive actions are
 [INC-2026-001](../../../../docs/incidents/INC-2026-001-longhorn-stale-mount-namespace.md). The full
-disk identity, evidence bundle, recovery sequence, and deferred `/dev/sdb1` boundary remain in
+disk identity, evidence bundle, recovery sequence, and final storage layout remain in
 [the migration runbook](../../../../docs/migrations/immich.md).
+
+The issue #48 follow-on retired `k3s-worker-2`, converted the temporary ASRock recovery layout into
+the separate Proxmox-managed `longhorn-hdd` datastore, and placed the one-copy library on worker
+3's standard `/var/lib/longhorn` data disk. Incident reviews record the stale internal snapshot
+tickets encountered at the worker-deletion gate
+([INC-2026-002](../../../../docs/incidents/INC-2026-002-longhorn-stale-snapshot-attachment-tickets.md))
+and the unthrottled rebuild that starved Dell-hosted etcd
+([INC-2026-003](../../../../docs/incidents/INC-2026-003-longhorn-rebuild-starved-etcd.md)).

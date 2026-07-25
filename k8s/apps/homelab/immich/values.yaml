@@ -2,11 +2,9 @@
 # both the server and CPU-only ML images to the targeted v3.0.3 patch release.
 # The required v2.7.3 VectorChord migration completed before this image bump.
 #
-# WORKSTATION REBUILD MAINTENANCE (2026-07-22 JST): the application components
-# are intentionally disabled so the one-replica library volume can detach before
-# /dev/sdb2 is preserved through the Proxmox installation. PostgreSQL remains
-# online on its separately replicated PVC. Set the three enabled flags below
-# back to true only after the library has been recovered onto managed storage.
+# The workstation rebuild recovery completed on 2026-07-24 JST. The library
+# PVC is retained independently of this chart and uses the current one-copy
+# Longhorn policy; application components remain enabled in Git.
 controllers:
   main:
     containers:
