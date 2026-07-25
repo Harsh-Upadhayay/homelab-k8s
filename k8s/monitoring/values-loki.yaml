@@ -57,6 +57,13 @@ singleBinary:
       memory: 256Mi
     limits:
       memory: 512Mi
+  # Persistence belongs to the SingleBinary workload in chart 7.x. The old
+  # top-level key was accepted as an unused value, so the live PVC silently
+  # fell back to the cluster's local-path class and became pinned to worker-2.
+  persistence:
+    enabled: true
+    storageClass: longhorn
+    size: 10Gi
 
 # The chart always defines the SimpleScalable-mode components too (read/
 # write/backend, defaulting to 3 replicas each) regardless of deploymentMode
@@ -70,11 +77,6 @@ read:
   replicas: 0
 backend:
   replicas: 0
-
-persistence:
-  enabled: true
-  storageClass: longhorn
-  size: 10Gi
 
 # The chart also deploys two Memcached-backed read-path caches by default —
 # NOT sized for a homelab. chunksCache defaults to allocatedMemory: 8192 (8Gi,

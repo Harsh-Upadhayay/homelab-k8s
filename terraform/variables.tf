@@ -8,13 +8,13 @@ variable "proxmox_cluster_endpoint" {
 # provider.tf). Create the token with pveum (GUIDE.md Phase 3).
 
 variable "proxmox_dell_node" {
-  description = "Proxmox node that currently hosts k3s-server-1, k3s-worker-1, k3s-worker-2, and the source template"
+  description = "Proxmox node that hosts k3s-server-1, the consolidated k3s-worker-1, and the source template"
   type        = string
   default     = "pve-dell"
 }
 
 variable "proxmox_asrock_node" {
-  description = "Proxmox node that hosts k3s-worker-3 during the Immich recovery"
+  description = "Proxmox node that hosts k3s-worker-3 and its dedicated managed Longhorn HDD datastore"
   type        = string
   default     = "pve-asrock"
 }
@@ -35,6 +35,12 @@ variable "proxmox_asrock_storage_pool" {
   description = "Node-local pve-asrock storage pool for the k3s-worker-3 OS and cloud-init disks"
   type        = string
   default     = "local-lvm"
+}
+
+variable "proxmox_asrock_longhorn_storage_pool" {
+  description = "Node-local pve-asrock LVM-thin datastore backed only by the dedicated physical Longhorn HDD"
+  type        = string
+  default     = "longhorn-hdd"
 }
 
 variable "network_bridge" {
@@ -73,11 +79,10 @@ variable "vm_user" {
 }
 
 # Sizing rationale (pve-dell: 14 threads / 30GiB usable RAM / 816GiB thin pool):
-# CPU is mildly overcommitted (16 vCPU on 14 threads) — vCPUs are schedulable
-# threads, not reservations, and k8s load is bursty. RAM is deliberately NOT
-# overcommitted: 6+9+9=24GiB leaves ~5GiB for the host, because a host OOM
-# kill against a VM is how etcd dies. Disks are thin-provisioned — blocks are
-# consumed on write, so 680GB provisioned of 816GB costs nothing up front.
+# After retiring worker-2, worker-1 receives its compute allocation. CPU stays
+# mildly overcommitted at 16 vCPU (server 4 + worker 12) on 14 threads. RAM
+# remains 24GiB total (server 6 + worker 18), preserving host headroom. The
+# enlarged worker-1 Longhorn disk replaces both former 280GB worker disks.
 
 # --- k3s-server-1 ---
 variable "server_ip" {
@@ -103,17 +108,11 @@ variable "server_disk_size" {
   default     = 60
 }
 
-# --- existing Dell workers (sized identically) ---
+# --- consolidated Dell worker ---
 variable "worker_ip" {
   description = "Static IP for k3s-worker-1"
   type        = string
   default     = "192.168.1.22"
-}
-
-variable "worker2_ip" {
-  description = "Static IP for k3s-worker-2"
-  type        = string
-  default     = "192.168.1.23"
 }
 
 variable "worker_cores" {
@@ -134,17 +133,23 @@ variable "worker_disk_size" {
 }
 
 variable "worker_data_disk_size" {
-  description = "GB — dedicated data disk (scsi1) per worker, reserved for distributed storage (Longhorn later). Kept separate from the OS disk so storage I/O and OS I/O don't mix, and so future physical nodes arrive with the same symmetric layout. Thin-provisioned: sized to keep total declared ≈91% of the pool, leaving the crumple zone that stops the pool silently filling under its guests."
+  description = "GB — dedicated Longhorn data disk (scsi1) for the consolidated Dell worker, separate from its OS disk and thin-provisioned with host-pool headroom"
   type        = number
   default     = 280
 }
 
-# --- k3s-worker-3 (ASRock Immich recovery worker) ---
+# --- k3s-worker-3 (ASRock managed-HDD worker) ---
 
 variable "worker3_ip" {
   description = "Static LAN IP for k3s-worker-3"
   type        = string
   default     = "192.168.1.24"
+}
+
+variable "worker3_cores" {
+  description = "vCPU allocated to the ASRock worker independently of the consolidated Dell worker"
+  type        = number
+  default     = 6
 }
 
 variable "worker3_memory" {
@@ -159,8 +164,8 @@ variable "worker3_disk_size" {
   default     = 40
 }
 
-variable "worker3_passthrough_path" {
-  description = "Stable pve-asrock host path for the preserved Immich partition; never use a mutable /dev/sdX name"
-  type        = string
-  default     = "/dev/disk/by-id/wwn-0x50024e920627da0f-part2"
+variable "worker3_data_disk_size" {
+  description = "GB allocated to worker-3 from the dedicated ASRock Longhorn HDD datastore, leaving hypervisor and thin-pool headroom"
+  type        = number
+  default     = 1300
 }

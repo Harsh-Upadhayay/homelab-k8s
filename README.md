@@ -1,6 +1,6 @@
 # Homelab Kubernetes Platform
 
-A production-shaped Kubernetes platform built for hands-on operational learning — etcd internals, CNI networking, ingress, secure remote access — not just to get something running. Correctness and understanding are prioritized over the fastest path. Proxmox cluster `neovara` spans `pve-dell` and `pve-asrock`; the latter now hosts `k3s-worker-3` and the recovered Immich library replica on its passed-through HDD partition. A third physical Proxmox node is planned one to two months later.
+A production-shaped Kubernetes platform built for hands-on operational learning — etcd internals, CNI networking, ingress, secure remote access — not just to get something running. Correctness and understanding are prioritized over the fastest path. Proxmox cluster `neovara` spans `pve-dell` and `pve-asrock`; one consolidated k3s worker runs on each physical host, with its own Proxmox-managed Longhorn data disk. ASRock's data disk comes from the separate physical-HDD datastore `longhorn-hdd`, never from its SSD-backed `local-lvm`. A third physical Proxmox node is planned one to two months later.
 
 The full phase-by-phase build is in **[GUIDE.md](./GUIDE.md)**. This README is the map; the guide is the territory.
 
@@ -10,10 +10,9 @@ The full phase-by-phase build is in **[GUIDE.md](./GUIDE.md)**. This README is t
 Proxmox cluster neovara
 ├── pve-dell
 │   ├── k3s-server-1   control plane, tainted, embedded etcd
-│   ├── k3s-worker-1   application workloads + Longhorn data disk
-│   └── k3s-worker-2   application workloads + Longhorn data disk
+│   └── k3s-worker-1   application workloads + consolidated Longhorn data disk
 └── pve-asrock
-    └── k3s-worker-3   application workloads + passed-through Immich Longhorn disk
+    └── k3s-worker-3   application workloads + longhorn-hdd managed data disk
 ```
 
 | Layer | Choice | Why (short version — see GUIDE.md / wiki for the full reasoning) |

@@ -146,27 +146,23 @@ Mechanism (same-LAN, efficient):
 
 ### Capacity: Audiobookshelf and Immich are placed; the media stack remains deferred
 
-On 2026-07-13 Longhorn reports about **259 GiB / 268 GiB available per worker** (both workers
-still sit on the one external USB SSD — ADR-0022: the internal NVMe stays off-limits). A
-2-replica volume must fit on **each** worker; summing both disks is misleading for replicated
-capacity. Audiobookshelf's authoritative config and metadata use replicated claims, while its
-49.7 GiB reproducible audiobook library uses a 70 GiB single-replica `longhorn` claim.
+The original two Dell workers shared one external USB SSD. The 2026-07-24 convergence retired
+`k3s-worker-2` and left one storage worker on each physical host: `k3s-worker-1` has a 650 GiB
+virtual Longhorn disk on `pve-dell`, and `k3s-worker-3` has a 1,300 GiB managed virtual disk from
+the separate `pve-asrock` `longhorn-hdd` datastore. Current volumes use one data copy by default;
+selected volumes can be promoted manually.
 
 - **Audiobookshelf fits now** — all four source mount boundaries stage into explicit Longhorn
   PVCs; config/metadata/podcasts are replicated and bulk audiobook media is single-replica. See
   `docs/migrations/audiobookshelf.md`.
-- **Immich uses a dedicated HDD tier** — the library is a retained 350 GiB,
-  single-replica Longhorn volume on the workstation's preserved `/dev/sdb2`; PostgreSQL is on a
-  separate retained, two-replica claim. The app migration, v3 upgrade, Proxmox rebuild, and
-  disk-UUID recovery are complete. Longhorn updated the existing Replica CR's node and path on
-  `k3s-worker-3`, reusing the PVC/volume without copying the 350 GiB library. Orphan export remains
-  documented only as a fallback in `docs/migrations/immich.md`.
-- **Media tree (mediaserver, ~TB-scale) does NOT go into the current pool.** The workstation is
-  is now a second Proxmox host; `k3s-worker-3` receives the preserved partition by passthrough.
-  Immich recovery reused the existing Longhorn partition and disk UUID first. The
-  remaining HDD space can become another Longhorn disk only after the preserved `/dev/sdb1`
-  rollback/deferred-data partition is explicitly audited and approved for cleanup. Terraform and
-  Ansible now model the worker; the remaining storage convergence is tracked in issue #48.
+- **Immich uses the managed HDD capacity tier** — the library is a retained 350 GiB, one-copy
+  Longhorn volume on worker 3. PostgreSQL is a separate retained one-copy claim on Dell. The app
+  migration, v3 upgrade, Proxmox rebuild, disk-UUID recovery, and final HDD convergence are
+  complete. Orphan export remains documented only as a fallback in `docs/migrations/immich.md`.
+- **Media tree (mediaserver, ~TB-scale) is still deferred.** The former source HDD is now entirely
+  Longhorn-owned; its remaining source trees were copied off-host before the partition was
+  repurposed. Reintroducing media later needs an explicit capacity and backup design rather than
+  writing around Longhorn on the same filesystem.
 
 The second host is not standalone. ADR-0049 requires the freshly installed, guest-free workstation
 to join a Proxmox cluster created on `pve-dell` before any template, VM, Terraform apply, or HDD
@@ -179,8 +175,8 @@ waits until the third node exists, all guests and Longhorn dependencies have mov
 at a survivor, and a zero-destroy plan has passed. See `docs/migrations/immich.md` for the executable
 order and ADR-0049 for the decision.
 
-The media tree and rollback copies remain intact on `/dev/sdb1` pending the workstation rebuild
-and a later, separately approved cleanup.
+The retained source trees were copied off the HDD before `/dev/sdb1` was released for Longhorn.
+They are backup inputs for later migrations, not live paths on the Proxmox worker.
 
 ## Phased sequence (one new concept per phase)
 
@@ -204,24 +200,22 @@ replica was preserved and reassociated on `k3s-worker-3` through the workstation
 
 ## Deferred-app data preservation (M7)
 
-`ollama`, `openclaw`, and the whole `mediaserver` tree stay on Compose or disk and get migrated later
-by hand. Immich is migrated and post-Proxmox recovery is accepted, but its rollback/deferred-data
-partition remains protected until issue #48 explicitly clears it. The old host has been repurposed,
-and `/dev/sdb2` is passed through to `k3s-worker-3`; `/dev/sdb1` is **not** wiped. Preservation is
-now about not destroying that remaining partition plus taking a safety backup for the small stuff:
+`ollama`, `openclaw`, and the whole `mediaserver` tree remain deferred and will be migrated later by
+hand. Their selected source trees were copied off the workstation HDD before issue #48 released the
+disk for full Longhorn use. Preservation now means protecting and verifying those off-HDD copies:
 
-- **Media tree** → stays on the 1.4 TB disk in place; migrated by the user after the
-  Proxmox/worker-VM conversion and only after its source partition is explicitly released for reuse.
-- **Immich rollback** → recovery and acceptance are complete; keep `/storage/immich` untouched
-  until issue #48's separate cleanup decision and off-HDD safety boundary are satisfied.
+- **Media tree** → remains in the off-HDD copy until a separately designed Kubernetes media tier
+  is ready.
+- **Immich rollback** → recovery, acceptance, and two-host replication are complete; the old
+  `/storage/immich` tree was explicitly released before the HDD conversion.
 - **`ollama/data` (models), `openclaw/{config,workspace}`, `mediaserver` per-service `state/*/config`**
   → small enough to also take a **verified backup copy** (restic/tar) before the host is repurposed,
   as insurance before the source partition is eventually cleaned or repurposed.
 
-Note: installing Proxmox reformats the workstation's 119 GiB SSD. The 1.4 TB HDD must be excluded
-from the installer and preserved with both partitions intact; Linux device names such as `/dev/sdb`
-may change after the rebuild, so use the recorded filesystem and Longhorn disk UUIDs. Back up the
-small config datasets off-disk before later deleting or repurposing their source partition.
+Historical note: the Proxmox installer targeted only the workstation's 119 GiB SSD and preserved
+the 1.4 TB HDD for the recovery. After acceptance, issue #48 intentionally converted that HDD into
+the independent Proxmox `longhorn-hdd` LVM-thin datastore. Terraform allocates the guest disk by
+datastore ID; only the one-time host initialization names the physical device by WWN.
 
 ## CKA learning track (woven into the phases)
 

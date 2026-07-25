@@ -5,6 +5,16 @@ Loosely follows [Keep a Changelog](https://keepachangelog.com/). Dates are when 
 ## [Unreleased]
 
 ### Changed
+- Completed issue #48's two-host storage convergence: evacuated and retired
+  `k3s-worker-2`, assigned its Dell CPU/RAM/storage budget to `k3s-worker-1`,
+  expanded that worker's Longhorn filesystem, and converted the ASRock 1.4 TiB
+  passthrough HDD from the temporary recovery partitions to a separate
+  Proxmox-managed LVM-thin datastore. All volumes now use one data copy by
+  default; the large Immich, Audiobookshelf, and Nextcloud-data volumes live on
+  ASRock. Ansible owns the guarded host initialization, guest filesystem, and
+  mount-before-k3s ordering; Terraform owns the final two-worker VM topology.
+- Corrected Loki chart 7.x persistence placement under `singleBinary`, replacing
+  the disposable worker-local log PVC with the declared Longhorn-backed claim.
 - Completed the post-Proxmox Immich recovery on `k3s-worker-3`: Longhorn reassociated the retained
   disk and replica by UUID, the application returned `Synced/Healthy`, the saved database baseline
   matched, and a 56,799-path live snapshot had zero missing files. After proving no storage or
@@ -23,6 +33,12 @@ Loosely follows [Keep a Changelog](https://keepachangelog.com/). Dates are when 
 - Reconciled the documentation with the current three-VM baseline, completed GitOps/observability layers, Tailscale Operator adoption, blue/green Rollouts exercise, and the post-Proxmox Immich disk-UUID recovery plan. Updated moved manifest paths and removed stale instructions that referenced deleted files or passed OAuth credentials as Helm values. Historical migration checkpoints remain dated and explicitly point to the current runbooks where their old status has since changed.
 
 ### Added
+- **INC-2026-002: stale Longhorn snapshot attachment tickets** — records the
+  maintenance near miss where two fully purged Snapshot resources retained
+  controller tickets and blocked the worker-deletion gate. The review preserves
+  the zero-replica/engine/attachment/orphan invariant, documents the narrowly
+  verified finalizer remediation, and tracks the separate historical
+  uppercase-snapshot-name log noise without claiming it as root cause.
 - **Blameless incident-review practice and first report** — added an SRE-style incident index,
   severity model, reusable template, and INC-2026-001 for the Longhorn stale mount-namespace
   failure encountered during Immich activation. The report separates impact, root cause,

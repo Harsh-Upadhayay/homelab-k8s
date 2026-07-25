@@ -6,8 +6,9 @@
 #
 # The chart mounts the MAIN claim by SUBPATH — root/, html/, config/, custom_apps/,
 # themes/, tmp/ each mount into their place under /var/www. The DATA claim holds the
-# user files (mounted at /var/www/html/data). Both RWO; both longhorn-replicated
-# (2 copies) as authoritative personal data.
+# user files (mounted at /var/www/html/data). Both are RWO. The legacy
+# `longhorn-replicated` class name remains because a bound PVC's class is
+# immutable; current policy starts every volume with one copy.
 #
 # reclaimPolicy is Delete on every Longhorn tier — deleting these PVCs (or the ns)
 # destroys the data. The old-lab /storage copy is the fallback until the

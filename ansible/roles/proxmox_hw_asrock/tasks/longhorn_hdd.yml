@@ -1,0 +1,101 @@
+---
+# Explicitly destructive, one-time initialization of the dedicated ASRock HDD.
+# Normal Proxmox/ASRock runs cannot reach this file because its import carries
+# Ansible's `never` tag. Verify Longhorn's empty-disk gate before the first run.
+
+- name: Read the Proxmox node name before managing the HDD
+  ansible.builtin.command: hostname -s
+  register: asrock_storage_node
+  changed_when: false
+  check_mode: false
+
+- name: Resolve the declared Longhorn HDD identity
+  ansible.builtin.command: "readlink -f {{ asrock_longhorn_device }}"
+  register: asrock_longhorn_resolved_device
+  changed_when: false
+  check_mode: false
+
+- name: Read the owner VM state before managing its HDD
+  ansible.builtin.command: "qm status {{ asrock_longhorn_owner_vm_id }}"
+  register: asrock_longhorn_owner_vm
+  changed_when: false
+  check_mode: false
+
+- name: Require the exact ASRock storage boundary
+  ansible.builtin.assert:
+    that:
+      - asrock_storage_node.stdout == "pve-asrock"
+      - asrock_longhorn_resolved_device.stdout is match('^/dev/')
+      - 'asrock_longhorn_owner_vm.stdout == "status: stopped"'
+    fail_msg: >-
+      Refusing HDD initialization: require pve-asrock, the declared WWN, and
+      stopped VM {{ asrock_longhorn_owner_vm_id }}.
+
+- name: Read any existing volume group on the declared HDD
+  ansible.builtin.command: >-
+    pvs --noheadings --options vg_name
+    {{ asrock_longhorn_resolved_device.stdout }}
+  register: asrock_longhorn_existing_vg
+  changed_when: false
+  failed_when: asrock_longhorn_existing_vg.rc not in [0, 5]
+  check_mode: false
+
+- name: Refuse an HDD owned by an unexpected volume group
+  ansible.builtin.assert:
+    that:
+      - >-
+        asrock_longhorn_existing_vg.stdout | trim in
+        ["", asrock_longhorn_vg]
+    fail_msg: >-
+      Refusing HDD initialization: the declared device belongs to unexpected
+      volume group {{ asrock_longhorn_existing_vg.stdout | trim }}.
+
+- name: Erase old partition and filesystem signatures from the released HDD
+  ansible.builtin.command: >-
+    wipefs --all --force {{ asrock_longhorn_resolved_device.stdout }}
+  when: asrock_longhorn_existing_vg.stdout | trim == ""
+
+- name: Ask the kernel to forget the erased partition table
+  ansible.builtin.command: >-
+    blockdev --rereadpt {{ asrock_longhorn_resolved_device.stdout }}
+  when: asrock_longhorn_existing_vg.stdout | trim == ""
+  changed_when: false
+
+- name: Create the dedicated HDD volume group
+  community.general.lvg:
+    vg: "{{ asrock_longhorn_vg }}"
+    pvs: "{{ asrock_longhorn_resolved_device.stdout }}"
+  when: asrock_longhorn_existing_vg.stdout | trim == ""
+
+- name: Read the dedicated thin-pool state
+  ansible.builtin.command: >-
+    lvs --noheadings --options lv_name {{ asrock_longhorn_vg }}
+  register: asrock_longhorn_lvs
+  changed_when: false
+  check_mode: false
+
+- name: Create the HDD thin pool with volume-group repair headroom
+  ansible.builtin.command: >-
+    lvcreate --type thin-pool --extents 95%FREE
+    --name {{ asrock_longhorn_thinpool }} {{ asrock_longhorn_vg }}
+  when: asrock_longhorn_thinpool not in (asrock_longhorn_lvs.stdout_lines | map('trim') | list)
+
+- name: Read registered Proxmox datastores
+  ansible.builtin.command: pvesm status
+  register: asrock_proxmox_storages
+  changed_when: false
+  check_mode: false
+
+- name: Register the node-local Longhorn HDD datastore
+  ansible.builtin.command: >-
+    pvesm add lvmthin {{ asrock_longhorn_storage_id }}
+    --vgname {{ asrock_longhorn_vg }}
+    --thinpool {{ asrock_longhorn_thinpool }}
+    --content images
+    --nodes pve-asrock
+  when: >-
+    asrock_proxmox_storages.stdout
+    | regex_search(
+        '(?m)^' + (asrock_longhorn_storage_id | regex_escape) + '\s+'
+      )
+    is none

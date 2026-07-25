@@ -98,11 +98,10 @@ spec:
     - port: 5432
       targetPort: 5432
 ---
-# Relational DB = truly needs durability, so longhorn-replicated (2 copies) not
-# single-replica longhorn. NOTE reclaimPolicy: Delete on both Longhorn tiers —
-# deleting this PVC/namespace destroys the data. The old-lab /storage copy is the
-# fallback until the workstation-as-node conversion; revisit Retain/longhorn-static
-# before that teardown (same open caveat as kiroku). See docs/migrations/nextcloud.md.
+# The legacy `longhorn-replicated` class name cannot change on this bound PVC.
+# Current policy starts it with one data copy; promote it manually when a second
+# copy is wanted. NOTE reclaimPolicy: Delete — deleting this PVC or namespace
+# destroys the data. See docs/migrations/nextcloud.md.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

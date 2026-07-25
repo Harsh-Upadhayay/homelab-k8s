@@ -122,11 +122,9 @@ Each application mount uses the claim's `data` subdirectory. This keeps Longhorn
 `lost+found` directory outside Audiobookshelf's library/config paths; the mover creates `data`
 before the zero-replica Deployment is enabled.
 
-Longhorn currently reports about 259 GiB and 268 GiB available on the two workers. Config,
-metadata, and podcasts retain two replicas; the 70 GiB audiobook claim intentionally uses one.
-Both workers still live on one physical external SSD, so a second replica would not protect this
-bulk media from physical-disk failure. The untouched Compose source remains the rollback copy after
-the temporary old claim was released.
+The `longhorn-replicated` name is retained because bound PVC storage classes are immutable; it no
+longer implies two data copies. The post-convergence cluster starts every volume with one copy, and
+selected volumes may be promoted manually after capacity and failure-domain placement are reviewed.
 
 The upstream warning against putting `/config` on SMB/NFS is satisfied: a Longhorn RWO claim is
 presented to the pod as a locally mounted ext4 block device through CSI/iSCSI. It is not a shared

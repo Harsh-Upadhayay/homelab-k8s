@@ -55,3 +55,5 @@ Severity reflects actual impact, not how alarming the symptoms looked.
 | ID | Date | Severity | System | Summary | Status |
 | --- | --- | --- | --- | --- | --- |
 | [INC-2026-001](./INC-2026-001-longhorn-stale-mount-namespace.md) | 2026-07-24 | SEV-3 | Immich / Longhorn | Late storage mount left the instance-manager unable to see its engine binary | Resolved; prevention open |
+| [INC-2026-002](./INC-2026-002-longhorn-stale-snapshot-attachment-tickets.md) | 2026-07-24 | SEV-4 | Longhorn / worker retirement | Purged snapshots left stale controller tickets that blocked safe node deletion | Resolved; prevention open |
+| [INC-2026-003](./INC-2026-003-longhorn-rebuild-starved-etcd.md) | 2026-07-24 | SEV-3 | k3s / etcd / Longhorn | Unthrottled replica rebuild saturated the physical datastore shared with etcd | Resolved; prevention open |
