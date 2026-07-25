@@ -1,14 +1,20 @@
 ---
 # Host-local Proxmox policy:
 #   --tags repositories      configure Proxmox APT repositories
+#   --tags storage-bootstrap initialize a host-declared LVM-thin datastore
 #   --tags maintenance-upgrade
 #                            explicit apt update + full-upgrade; skipped by default
-# An untagged run applies normal configuration but deliberately skips package
-# maintenance because the imported task carries Ansible's special `never` tag.
+# Untagged runs deliberately skip destructive storage initialization and
+# package maintenance because both imports carry Ansible's special `never` tag.
 
 - name: Configure Proxmox package repositories
   ansible.builtin.import_tasks: repositories.yml
   tags: [repositories]
+
+- name: Initialize a declared Proxmox LVM-thin datastore
+  ansible.builtin.import_tasks: storage.yml
+  when: proxmox_lvmthin_storage is defined
+  tags: [never, storage-bootstrap]
 
 - name: Explicit Proxmox package maintenance upgrade
   ansible.builtin.import_tasks: upgrade.yml

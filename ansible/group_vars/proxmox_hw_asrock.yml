@@ -9,12 +9,3 @@ proxmox_maintenance_required_holds:
 asrock_tested_kernel: "7.0.2-6-pve"
 asrock_recovery_module_path: "/lib/modules/7.0.2-6-pve/updates/nic-recovery/e1000e.ko"
 asrock_recovery_module_sha256: "5d11f5e1599fa4a92fe695a6ff33f05209cfc9683d4d499bdde70f352ffbfdf7"
-
-# Dedicated Longhorn HDD. The explicit `asrock-longhorn-storage` tag is the
-# only path that may initialize it; normal hardware-safeguard runs remain
-# read-only for this device.
-asrock_longhorn_device: "/dev/disk/by-id/wwn-0x50024e920627da0f"
-asrock_longhorn_vg: "longhorn_hdd"
-asrock_longhorn_thinpool: "data"
-asrock_longhorn_storage_id: "longhorn-hdd"
-asrock_longhorn_owner_vm_id: 103

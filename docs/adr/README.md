@@ -12,9 +12,11 @@ The Ansible/Terraform/Kubernetes/platform *mechanics* these decisions rely on li
 - [[v0.2 - Cluster Bootstrap]] — ADR-0008 … ADR-0012
 - [[v0.3 - Ingress and TLS]] — ADR-0013 … ADR-0015, ADR-0027
 - [[v0.4 - Public and Private Access]] — ADR-0016 … ADR-0018, ADR-0025 … ADR-0026, ADR-0028 … ADR-0029
-- [[v2.0 - Operability]] — ADR-0030 … ADR-0048
+- [[v2.0 - Operability]] — ADR-0030 … ADR-0048, ADR-0051 … ADR-0053
 
-(0019–0021 live in the v0.1 log despite the number gap: 0019 was burned by a tried-and-reverted refactor and is reinstated as Rejected rather than reused, and the decisions themselves belong to Foundation's provisioning scope.)
+(0019–0021 live in the v0.1 log despite the number gap: 0019 records the
+original tried-and-reverted refactor and is now superseded by 0053 rather than
+reused; the decisions themselves belong to Foundation's provisioning scope.)
 
 v1.0 has no log — it produced no architecture decisions of its own, only validation of decisions already captured above. The v2.0 log opened with the Longhorn phase.
 
@@ -45,7 +47,7 @@ v1.0 has no log — it produced no architecture decisions of its own, only valid
 | 0027 | Pin the Traefik Helm chart version | Accepted | [[v0.3 - Ingress and TLS]] |
 | 0028 | Public hostnames use specific first-level names during migration (Universal SSL limit) | Accepted | [[v0.4 - Public and Private Access]] |
 | 0029 | Internal DNS via wildcard CNAME to the proxy's pinned MagicDNS name | Accepted | [[v0.4 - Public and Private Access]] |
-| 0019 | Workers as a for_each map | Rejected | [[v0.1 - Foundation]] |
+| 0019 | Workers as a for_each map | Superseded by 0053 | [[v0.1 - Foundation]] |
 | 0020 | Near-full host allocation: overcommit CPU, never RAM | Accepted | [[v0.1 - Foundation]] |
 | 0021 | Distributed storage direction: data disks now, Longhorn later | Accepted | [[v0.1 - Foundation]] |
 | 0022 | Internal NVMe strictly off-limits; everything on the external SSD | Accepted | [[v0.1 - Foundation]] |
@@ -74,3 +76,4 @@ v1.0 has no log — it produced no architecture decisions of its own, only valid
 | 0050 | Organize Ansible roles by lifecycle ownership | Accepted | [[v0.1 - Foundation]] |
 | 0051 | One Longhorn data copy by default; redundancy is an explicit per-volume promotion | Accepted | [[v2.0 - Operability]] |
 | 0052 | ASRock HDD becomes a separate Proxmox-managed datastore | Accepted | [[v2.0 - Operability]] |
+| 0053 | One parameterized lifecycle for every worker | Accepted | [[v2.0 - Operability]] |

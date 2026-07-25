@@ -98,6 +98,21 @@ create/join, and ASRock's installed-first-boot NIC repair remain tracked in
 GitHub issues #43, #45, #46, and #47; a successful default play must not be
 mistaken for zero-manual-step disaster recovery.
 
+After `pve-asrock` has joined the cluster and before Terraform creates worker 3,
+initialize the physical HDD datastore declared in
+`ansible/host_vars/pve-asrock.yml`:
+
+```bash
+ansible-playbook proxmox.yml --limit pve-asrock --tags storage-bootstrap
+```
+
+This is deliberately explicit and destructive only when the declared device has
+no expected volume group. It resolves the stable by-id path, refuses an
+unexpected VG, requires VM 103 to be absent or stopped for first initialization,
+creates the independent LVM-thin pool, and registers `longhorn-hdd` only on
+`pve-asrock`. A rerun against the expected existing VG does not erase it. This
+host-side operation is separate from the guest `longhorn_node` role.
+
 ---
 
 ## Phase 2 — Build the Ubuntu cloud-init template
@@ -158,6 +173,8 @@ pveum aclmod / -user terraform@pve -role PVEVMAdmin
 # target storage. Without this second grant, terraform apply fails with
 # "HTTP 403 - Permission check failed (/storage/<pool>, Datastore.AllocateSpace)".
 pveum aclmod /storage/local-lvm -user terraform@pve -role PVEDatastoreUser
+# Repeat for every datastore referenced by the worker map.
+pveum aclmod /storage/longhorn-hdd -user terraform@pve -role PVEDatastoreUser
 # A third bucket: attaching a VM's NIC to a bridge needs SDN.Use, even for a
 # plain Linux bridge with zero SDN zones/vnets actually configured — Proxmox
 # wraps every bridge in an implicit zone ("localnetwork") for this check.
@@ -185,15 +202,22 @@ cd terraform
 export PROXMOX_VE_API_TOKEN='terraform@pve!tf=<the token from the step above>'
 
 terraform init
-terraform plan    # review — should show 3 resources to add
+terraform plan    # fresh environment: one server plus two worker instances
 terraform apply
 ```
 
-After a couple of minutes you'll have three running VMs with static IPs, cloud-init-provisioned SSH access, and qemu-guest-agent reporting status back to Proxmox. Both workers also carry a second, empty 280GB data disk (`scsi1`) — reserved for distributed storage (Longhorn, a later phase; see ADR-0021), formatted and mounted by Ansible in Phase 6, not by Terraform. Total declared: 740G of the 816G thin pool (91%) — the remaining ~9% is deliberate headroom so the pool can never silently fill underneath its guests. Verify:
+After a couple of minutes you'll have three running VMs with static IPs,
+cloud-init-provisioned SSH access, and qemu-guest-agent reporting status back to
+Proxmox. The server is a singleton resource. Both workers come from the same
+typed `workers` map and one `for_each` resource, so host, IP, sizing, and
+datastore are parameters rather than separate implementations. Each worker
+also carries a second empty `scsi1`: 650 GiB from Dell `local-lvm` and 1,300
+GiB from ASRock `longhorn-hdd`. Ansible formats and mounts them in Phase 6;
+Terraform does not create guest filesystems or mounts. Verify:
 ```bash
 ssh harsh@192.168.1.21 "hostname && ip a"
 ssh harsh@192.168.1.22 "hostname && ip a"
-ssh harsh@192.168.1.23 "hostname && ip a"
+ssh harsh@192.168.1.24 "hostname && ip a"
 ```
 
 **Why Terraform here and Ansible next, not one or the other:** provisioning (does this VM exist, with this CPU/disk/IP) is a different problem from configuration (what's installed and running inside it). Terraform is declarative infra state — rerun `apply` and it converges, doesn't reinstall. Ansible is imperative configuration over SSH — it's what actually puts k3s on the box. Using the right tool for each half is also just less to fight with than forcing one tool to do both jobs.
@@ -255,7 +279,7 @@ Expect:
 NAME            STATUS   ROLES                  AGE   VERSION
 k3s-server-1    Ready    control-plane,master   2m    v1.36.2+k3s1
 k3s-worker-1    Ready    <none>                 1m    v1.36.2+k3s1
-k3s-worker-2    Ready    <none>                 1m    v1.36.2+k3s1
+k3s-worker-3    Ready    <none>                 1m    v1.36.2+k3s1
 ```
 
 **Confirm the taint actually landed:**
@@ -282,7 +306,13 @@ ssh harsh@192.168.1.21 "sudo ETCDCTL_API=3 etcdctl \
   endpoint status --write-out=table"
 ```
 
-**Rebuild story, since this is the whole point of the Terraform+Ansible split:** `terraform destroy && terraform apply` followed by `ansible-playbook site.yml --extra-vars "k3s_token=${K3S_TOKEN}"` (same token) gets you back to this exact point, from nothing, without touching the Proxmox UI. That's what "minimal manual intervention" actually buys you — and it's the same muscle you'll use for restore drills later.
+**Rebuild story, since this is the whole point of the Terraform+Ansible split:**
+after the explicit physical-host prerequisites (cluster membership, template,
+and any declared storage bootstrap), `terraform apply` followed by
+`ansible-playbook site.yml --extra-vars "k3s_token=${K3S_TOKEN}"` (same token)
+gets the three VM/OS/k3s roles back to this point without per-worker commands.
+Issues #43, #44, #46, and #47 track the physical/bootstrap gaps that still keep
+this from being a zero-manual-step bare-metal rebuild.
 
 ---
 

@@ -6,21 +6,16 @@
 # fallback documentation).
 #
 # Sizing ledger for pve-dell (14 threads / 30GiB usable / 816GiB thin pool):
-#   CPU  4+12 = 16 vCPU on 14 threads — the former worker-2 allocation moves
-#        to worker-1; total CPU overcommit is unchanged.
+#   CPU  4+12 = 16 vCPU on 14 threads — mild, intentional overcommit.
 #   RAM  6+18 = 24GiB of 30 — host headroom remains unchanged.
-#   DISK 60 server + 60 worker OS + 650 worker data = 770G declared. This
-#        replaces worker-2's 60G OS + 280G data disks and leaves ~46G of the
-#        thin pool undeclared as the safety margin.
+#   DISK 60 server + 60 worker OS + 650 worker data = 770G declared, leaving
+#        about 46G of the thin pool undeclared as the safety margin.
 
 proxmox_cluster_endpoint = "https://pve-dell.egret-pence.ts.net:8006/" # One healthy cluster member; MagicDNS keeps applies available off-LAN.
-proxmox_dell_node        = "pve-dell"
-
-proxmox_dell_template_vm_id          = 9000
-proxmox_dell_storage_pool            = "local-lvm"
-proxmox_asrock_storage_pool          = "local-lvm"
-proxmox_asrock_longhorn_storage_pool = "longhorn-hdd"
-network_bridge                       = "vmbr0"
+template_vm_id           = 9000
+server_node_name         = "pve-dell"
+server_storage_pool      = "local-lvm"
+network_bridge           = "vmbr0"
 
 network_gateway     = "192.168.1.1"
 network_cidr_suffix = "/24"
@@ -35,17 +30,40 @@ server_cores     = 4
 server_memory    = 6144
 server_disk_size = 60
 
-# --- consolidated Dell worker ---
-worker_ip             = "192.168.1.22"
-worker_cores          = 12
-worker_memory         = 18432
-worker_disk_size      = 60
-worker_data_disk_size = 650
+# Every worker uses the same Terraform resource. Host placement, capacity, and
+# storage policy are parameters rather than separate implementations.
+workers = {
+  k3s-worker-1 = {
+    node_name           = "pve-dell"
+    clone_node_name     = null
+    clone_datastore_id  = null
+    ip_address          = "192.168.1.22"
+    cores               = 12
+    memory              = 18432
+    os_datastore_id     = "local-lvm"
+    os_disk_size        = 60
+    os_disk_cache       = "writeback"
+    data_datastore_id   = "local-lvm"
+    data_disk_size      = 650
+    data_disk_cache     = "writeback"
+    data_disk_backup    = true
+    data_disk_replicate = true
+  }
 
-# --- k3s-worker-3 (ASRock managed-HDD worker) ---
-proxmox_asrock_node    = "pve-asrock"
-worker3_ip             = "192.168.1.24"
-worker3_cores          = 6
-worker3_memory         = 12288
-worker3_disk_size      = 40
-worker3_data_disk_size = 1300
+  k3s-worker-3 = {
+    node_name           = "pve-asrock"
+    clone_node_name     = "pve-dell"
+    clone_datastore_id  = "local-lvm"
+    ip_address          = "192.168.1.24"
+    cores               = 6
+    memory              = 12288
+    os_datastore_id     = "local-lvm"
+    os_disk_size        = 40
+    os_disk_cache       = "none"
+    data_datastore_id   = "longhorn-hdd"
+    data_disk_size      = 1300
+    data_disk_cache     = "none"
+    data_disk_backup    = false
+    data_disk_replicate = false
+  }
+}

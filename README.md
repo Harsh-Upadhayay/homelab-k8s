@@ -38,7 +38,7 @@ homelab-k8s/
 ├── terraform/             provisions the current VMs across the Proxmox cluster
 ├── ansible/               configures the OS, installs k3s, and manages the Proxmox host itself
 │   └── roles/
-│       ├── proxmox_host/  host-local repositories and opt-in package maintenance
+│       ├── proxmox_host/  host-local repositories, storage, and opt-in maintenance
 │       ├── proxmox_cluster/ cluster-wide names and Terraform API identity
 │       ├── proxmox_hw_*/  physical-machine-specific safeguards
 │       ├── tailscale_host/ shared host-level tailnet join

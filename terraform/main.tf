@@ -6,11 +6,11 @@ locals {
 resource "proxmox_virtual_environment_vm" "k3s_server_1" {
   name        = "k3s-server-1"
   description = "k3s control plane — embedded etcd. Tainted, no app workloads."
-  node_name   = var.proxmox_dell_node
+  node_name   = var.server_node_name
   tags        = concat(local.common_tags, ["control-plane"])
 
   clone {
-    vm_id = var.proxmox_dell_template_vm_id
+    vm_id = var.template_vm_id
     full  = true
   }
 
@@ -29,7 +29,7 @@ resource "proxmox_virtual_environment_vm" "k3s_server_1" {
   }
 
   disk {
-    datastore_id = var.proxmox_dell_storage_pool
+    datastore_id = var.server_storage_pool
     interface    = "scsi0"
     size         = var.server_disk_size
 
@@ -41,7 +41,7 @@ resource "proxmox_virtual_environment_vm" "k3s_server_1" {
   }
 
   initialization {
-    datastore_id = var.proxmox_dell_storage_pool
+    datastore_id = var.server_storage_pool
 
     ip_config {
       ipv4 {
@@ -65,92 +65,19 @@ resource "proxmox_virtual_environment_vm" "k3s_server_1" {
   }
 }
 
-# ─── k3s-worker-1 — application workloads ───
-resource "proxmox_virtual_environment_vm" "k3s_worker_1" {
-  name        = "k3s-worker-1"
+# ─── k3s workers — one lifecycle, host/storage differences are data ───
+resource "proxmox_virtual_environment_vm" "k3s_worker" {
+  for_each = var.workers
+
+  name        = each.key
   description = "k3s agent — runs project workloads."
-  node_name   = var.proxmox_dell_node
+  node_name   = each.value.node_name
   tags        = concat(local.common_tags, ["worker"])
 
   clone {
-    vm_id = var.proxmox_dell_template_vm_id
-    full  = true
-  }
-
-  agent {
-    enabled = true
-  }
-  stop_on_destroy = true
-
-  cpu {
-    cores = var.worker_cores
-    type  = "x86-64-v2-AES"
-  }
-
-  memory {
-    dedicated = var.worker_memory
-  }
-
-  # OS disk — cloned from the template, grown to size
-  disk {
-    datastore_id = var.proxmox_dell_storage_pool
-    interface    = "scsi0"
-    size         = var.worker_disk_size
-    cache        = "writeback"
-  }
-
-  # Dedicated data disk — reserved for distributed storage (Longhorn later).
-  # Deliberately NOT part of the template clone: created empty, formatted and
-  # mounted by the k3s_agent Ansible role. Thin-provisioned, so it consumes
-  # real space only as written.
-  disk {
-    datastore_id = var.proxmox_dell_storage_pool
-    interface    = "scsi1"
-    size         = var.worker_data_disk_size
-    file_format  = "raw"
-    cache        = "writeback"
-  }
-
-  network_device {
-    bridge = var.network_bridge
-  }
-
-  initialization {
-    datastore_id = var.proxmox_dell_storage_pool
-
-    ip_config {
-      ipv4 {
-        address = "${var.worker_ip}${var.network_cidr_suffix}"
-        gateway = var.network_gateway
-      }
-    }
-
-    dns {
-      servers = var.dns_servers
-    }
-
-    user_account {
-      username = var.vm_user
-      keys     = [var.ssh_public_key]
-    }
-  }
-
-  operating_system {
-    type = "l26"
-  }
-}
-
-# ─── k3s-worker-3 — ASRock managed-HDD worker ───
-resource "proxmox_virtual_environment_vm" "k3s_worker_3" {
-  name        = "k3s-worker-3"
-  description = "k3s agent on pve-asrock — uses the dedicated Proxmox-managed Longhorn HDD datastore."
-  node_name   = var.proxmox_asrock_node
-  tags        = concat(local.common_tags, ["worker"])
-
-  clone {
-    vm_id        = var.proxmox_dell_template_vm_id
-    node_name    = var.proxmox_dell_node
-    datastore_id = var.proxmox_asrock_storage_pool
+    vm_id        = var.template_vm_id
+    node_name    = each.value.clone_node_name
+    datastore_id = each.value.clone_datastore_id
     full         = true
   }
 
@@ -160,31 +87,32 @@ resource "proxmox_virtual_environment_vm" "k3s_worker_3" {
   stop_on_destroy = true
 
   cpu {
-    cores = var.worker3_cores
+    cores = each.value.cores
     type  = "x86-64-v2-AES"
   }
 
   memory {
-    dedicated = var.worker3_memory
+    dedicated = each.value.memory
   }
 
+  # The template supplies scsi0; every worker grows it to its declared size.
   disk {
-    datastore_id = var.proxmox_asrock_storage_pool
+    datastore_id = each.value.os_datastore_id
     interface    = "scsi0"
-    size         = var.worker3_disk_size
+    size         = each.value.os_disk_size
+    cache        = each.value.os_disk_cache
   }
 
-  # Dedicated Longhorn data disk allocated from the separate physical-HDD
-  # datastore. Proxmox owns the block allocation; Ansible owns the guest ext4
-  # filesystem and mount, matching worker-1's lifecycle.
+  # Proxmox owns the empty scsi1 allocation. The shared longhorn_node Ansible
+  # role owns its guest filesystem and /var/lib/longhorn mount.
   disk {
-    datastore_id = var.proxmox_asrock_longhorn_storage_pool
+    datastore_id = each.value.data_datastore_id
     interface    = "scsi1"
-    size         = var.worker3_data_disk_size
+    size         = each.value.data_disk_size
     file_format  = "raw"
-    cache        = "none"
-    backup       = false
-    replicate    = false
+    cache        = each.value.data_disk_cache
+    backup       = each.value.data_disk_backup
+    replicate    = each.value.data_disk_replicate
   }
 
   network_device {
@@ -192,11 +120,11 @@ resource "proxmox_virtual_environment_vm" "k3s_worker_3" {
   }
 
   initialization {
-    datastore_id = var.proxmox_asrock_storage_pool
+    datastore_id = each.value.os_datastore_id
 
     ip_config {
       ipv4 {
-        address = "${var.worker3_ip}${var.network_cidr_suffix}"
+        address = "${each.value.ip_address}${var.network_cidr_suffix}"
         gateway = var.network_gateway
       }
     }

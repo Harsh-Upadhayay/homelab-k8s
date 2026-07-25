@@ -1,0 +1,10 @@
+---
+# Host-topology data, not an ASRock hardware workaround. The generic
+# proxmox_host role consumes this only with the explicit storage-bootstrap tag.
+proxmox_lvmthin_storage:
+  device: "/dev/disk/by-id/wwn-0x50024e920627da0f"
+  volume_group: "longhorn_hdd"
+  thin_pool: "data"
+  thin_pool_size: "95%FREE"
+  storage_id: "longhorn-hdd"
+  owner_vm_id: 103

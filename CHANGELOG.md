@@ -5,6 +5,12 @@ Loosely follows [Keep a Changelog](https://keepachangelog.com/). Dates are when 
 ## [Unreleased]
 
 ### Changed
+- Replaced the duplicated worker-1/worker-3 Terraform resources with one
+  parameterized `for_each` worker lifecycle while preserving VM IDs through
+  state-address moves. Removed HDD provisioning from the ASRock hardware role:
+  the common `proxmox_host` role now owns an explicit-only, host-parameterized
+  LVM-thin bootstrap, while every guest continues through the same
+  `longhorn_node` `/dev/sdb` to `/var/lib/longhorn` configuration.
 - Completed issue #48's two-host storage convergence: evacuated and retired
   `k3s-worker-2`, assigned its Dell CPU/RAM/storage budget to `k3s-worker-1`,
   expanded that worker's Longhorn filesystem, and converted the ASRock 1.4 TiB
