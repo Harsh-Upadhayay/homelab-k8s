@@ -1,0 +1,1084 @@
+{
+  "name": "homelab-k8s",
+  "description": "A production-shaped Kubernetes platform built for hands-on operational learning. Uses Terraform for Proxmox VM provisioning, Ansible for OS configuration and k3s installation, and Kubernetes manifests for workloads including Argo CD, Traefik, Longhorn storage, monitoring, and application deployments. Note: this project has over 100 source files; consider scoping analysis to a subdirectory for faster results.",
+  "languages": [
+    "config",
+    "jinja2",
+    "markdown",
+    "patch",
+    "terraform",
+    "unknown",
+    "yaml"
+  ],
+  "frameworks": [
+    "Ansible",
+    "Argo CD",
+    "Argo Rollouts",
+    "cert-manager",
+    "Cloudflare Tunnel",
+    "K3s",
+    "Kubernetes",
+    "Longhorn",
+    "Prometheus",
+    "Terraform",
+    "Tailscale",
+    "Traefik"
+  ],
+  "files": [
+    {
+      "path": ".ua/.understandignore",
+      "language": "unknown",
+      "sizeLines": 74,
+      "fileCategory": "code"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "language": "markdown",
+      "sizeLines": 72,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "GUIDE.md",
+      "language": "markdown",
+      "sizeLines": 706,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "README.md",
+      "language": "markdown",
+      "sizeLines": 81,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "ROADMAP.md",
+      "language": "markdown",
+      "sizeLines": 54,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "ansible/ansible.cfg",
+      "language": "config",
+      "sizeLines": 10,
+      "fileCategory": "config"
+    },
+    {
+      "path": "ansible/group_vars/all.yml",
+      "language": "yaml",
+      "sizeLines": 25,
+      "fileCategory": "config"
+    },
+    {
+      "path": "ansible/group_vars/k3s_agent.yml",
+      "language": "yaml",
+      "sizeLines": 6,
+      "fileCategory": "config"
+    },
+    {
+      "path": "ansible/group_vars/k3s_cluster.yml",
+      "language": "yaml",
+      "sizeLines": 7,
+      "fileCategory": "config"
+    },
+    {
+      "path": "ansible/group_vars/proxmox_hosts.yml",
+      "language": "yaml",
+      "sizeLines": 25,
+      "fileCategory": "config"
+    },
+    {
+      "path": "ansible/group_vars/proxmox_hw_asrock.yml",
+      "language": "yaml",
+      "sizeLines": 11,
+      "fileCategory": "config"
+    },
+    {
+      "path": "ansible/group_vars/proxmox_hw_dell.yml",
+      "language": "yaml",
+      "sizeLines": 5,
+      "fileCategory": "config"
+    },
+    {
+      "path": "ansible/host_vars/pve-asrock.yml",
+      "language": "yaml",
+      "sizeLines": 10,
+      "fileCategory": "config"
+    },
+    {
+      "path": "ansible/inventory.ini",
+      "language": "config",
+      "sizeLines": 40,
+      "fileCategory": "config"
+    },
+    {
+      "path": "ansible/proxmox.yml",
+      "language": "yaml",
+      "sizeLines": 31,
+      "fileCategory": "config"
+    },
+    {
+      "path": "ansible/requirements.yml",
+      "language": "yaml",
+      "sizeLines": 6,
+      "fileCategory": "config"
+    },
+    {
+      "path": "ansible/roles/k3s_agent/handlers/main.yml",
+      "language": "yaml",
+      "sizeLines": 6,
+      "fileCategory": "config"
+    },
+    {
+      "path": "ansible/roles/k3s_agent/tasks/main.yml",
+      "language": "yaml",
+      "sizeLines": 50,
+      "fileCategory": "config"
+    },
+    {
+      "path": "ansible/roles/k3s_agent/templates/config.yaml.j2",
+      "language": "jinja2",
+      "sizeLines": 4,
+      "fileCategory": "code"
+    },
+    {
+      "path": "ansible/roles/k3s_node/tasks/main.yml",
+      "language": "yaml",
+      "sizeLines": 57,
+      "fileCategory": "config"
+    },
+    {
+      "path": "ansible/roles/k3s_server/handlers/main.yml",
+      "language": "yaml",
+      "sizeLines": 6,
+      "fileCategory": "config"
+    },
+    {
+      "path": "ansible/roles/k3s_server/tasks/main.yml",
+      "language": "yaml",
+      "sizeLines": 84,
+      "fileCategory": "config"
+    },
+    {
+      "path": "ansible/roles/k3s_server/templates/config.yaml.j2",
+      "language": "jinja2",
+      "sizeLines": 53,
+      "fileCategory": "code"
+    },
+    {
+      "path": "ansible/roles/longhorn_node/tasks/main.yml",
+      "language": "yaml",
+      "sizeLines": 67,
+      "fileCategory": "config"
+    },
+    {
+      "path": "ansible/roles/proxmox_cluster/tasks/main.yml",
+      "language": "yaml",
+      "sizeLines": 20,
+      "fileCategory": "config"
+    },
+    {
+      "path": "ansible/roles/proxmox_cluster/tasks/terraform_api.yml",
+      "language": "yaml",
+      "sizeLines": 136,
+      "fileCategory": "config"
+    },
+    {
+      "path": "ansible/roles/proxmox_host/tasks/main.yml",
+      "language": "yaml",
+      "sizeLines": 21,
+      "fileCategory": "config"
+    },
+    {
+      "path": "ansible/roles/proxmox_host/tasks/repositories.yml",
+      "language": "yaml",
+      "sizeLines": 37,
+      "fileCategory": "config"
+    },
+    {
+      "path": "ansible/roles/proxmox_host/tasks/storage.yml",
+      "language": "yaml",
+      "sizeLines": 114,
+      "fileCategory": "config"
+    },
+    {
+      "path": "ansible/roles/proxmox_host/tasks/upgrade.yml",
+      "language": "yaml",
+      "sizeLines": 31,
+      "fileCategory": "config"
+    },
+    {
+      "path": "ansible/roles/proxmox_hw_asrock/tasks/main.yml",
+      "language": "yaml",
+      "sizeLines": 52,
+      "fileCategory": "config"
+    },
+    {
+      "path": "ansible/roles/proxmox_hw_dell/tasks/e1000e_aspm.yml",
+      "language": "yaml",
+      "sizeLines": 39,
+      "fileCategory": "config"
+    },
+    {
+      "path": "ansible/roles/proxmox_hw_dell/tasks/e1000e_offload.yml",
+      "language": "yaml",
+      "sizeLines": 90,
+      "fileCategory": "config"
+    },
+    {
+      "path": "ansible/roles/proxmox_hw_dell/tasks/laptop.yml",
+      "language": "yaml",
+      "sizeLines": 26,
+      "fileCategory": "config"
+    },
+    {
+      "path": "ansible/roles/proxmox_hw_dell/tasks/main.yml",
+      "language": "yaml",
+      "sizeLines": 17,
+      "fileCategory": "config"
+    },
+    {
+      "path": "ansible/roles/tailscale_host/tasks/main.yml",
+      "language": "yaml",
+      "sizeLines": 58,
+      "fileCategory": "config"
+    },
+    {
+      "path": "ansible/site.yml",
+      "language": "yaml",
+      "sizeLines": 25,
+      "fileCategory": "config"
+    },
+    {
+      "path": "claude.md",
+      "language": "markdown",
+      "sizeLines": 62,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/Homelab Learning Map.md",
+      "language": "markdown",
+      "sizeLines": 37,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/Homelab Migration Checklist.md",
+      "language": "markdown",
+      "sizeLines": 64,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/Migration Plan.md",
+      "language": "markdown",
+      "sizeLines": 253,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/adr/README.md",
+      "language": "markdown",
+      "sizeLines": 79,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/adr/v0.1 - Foundation.md",
+      "language": "markdown",
+      "sizeLines": 166,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/adr/v0.2 - Cluster Bootstrap.md",
+      "language": "markdown",
+      "sizeLines": 52,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/adr/v0.3 - Ingress and TLS.md",
+      "language": "markdown",
+      "sizeLines": 44,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/adr/v0.4 - Public and Private Access.md",
+      "language": "markdown",
+      "sizeLines": 70,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/adr/v2.0 - Operability.md",
+      "language": "markdown",
+      "sizeLines": 269,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/concepts/Ansible Concepts.md",
+      "language": "markdown",
+      "sizeLines": 103,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/concepts/Kubernetes Concepts.md",
+      "language": "markdown",
+      "sizeLines": 491,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/concepts/Platform Concepts.md",
+      "language": "markdown",
+      "sizeLines": 161,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/concepts/Terraform Concepts.md",
+      "language": "markdown",
+      "sizeLines": 36,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/incidents/INC-2026-001-longhorn-stale-mount-namespace.md",
+      "language": "markdown",
+      "sizeLines": 232,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/incidents/INC-2026-002-longhorn-stale-snapshot-attachment-tickets.md",
+      "language": "markdown",
+      "sizeLines": 170,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/incidents/INC-2026-003-longhorn-rebuild-starved-etcd.md",
+      "language": "markdown",
+      "sizeLines": 200,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/incidents/INC-2026-004-argocd-repo-server-oom-recovery.md",
+      "language": "markdown",
+      "sizeLines": 120,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/incidents/INC-2026-005-prometheus-tsdb-capacity-exhaustion.md",
+      "language": "markdown",
+      "sizeLines": 120,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/incidents/README.md",
+      "language": "markdown",
+      "sizeLines": 61,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/incidents/TEMPLATE.md",
+      "language": "markdown",
+      "sizeLines": 82,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/migrations/audiobookshelf.md",
+      "language": "markdown",
+      "sizeLines": 318,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/migrations/immich.md",
+      "language": "markdown",
+      "sizeLines": 449,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/migrations/kiroku.md",
+      "language": "markdown",
+      "sizeLines": 85,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/migrations/nextcloud.md",
+      "language": "markdown",
+      "sizeLines": 126,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/troubleshooting/intel-i219v-nvm-recovery-2026-07-23.md",
+      "language": "markdown",
+      "sizeLines": 784,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/BUILD-MANIFEST.md",
+      "language": "markdown",
+      "sizeLines": 177,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/README.md",
+      "language": "markdown",
+      "sizeLines": 317,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/RELEASE_NOTES.md",
+      "language": "markdown",
+      "sizeLines": 56,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/SHA256SUMS",
+      "language": "unknown",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/e1000e-allow-bad-nvm.patch",
+      "language": "patch",
+      "sizeLines": 49,
+      "fileCategory": "code"
+    },
+    {
+      "path": "k8s/apps/homelab/audiobookshelf/deployment.yaml",
+      "language": "yaml",
+      "sizeLines": 100,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/apps/homelab/audiobookshelf/namespace.yaml",
+      "language": "yaml",
+      "sizeLines": 11,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/apps/homelab/audiobookshelf/pvcs.yaml",
+      "language": "yaml",
+      "sizeLines": 69,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/apps/homelab/audiobookshelf/routing.yaml",
+      "language": "yaml",
+      "sizeLines": 40,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/apps/homelab/audiobookshelf/service.yaml",
+      "language": "yaml",
+      "sizeLines": 19,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/apps/homelab/immich/README.md",
+      "language": "markdown",
+      "sizeLines": 104,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/apps/homelab/immich/SECRETS.md",
+      "language": "markdown",
+      "sizeLines": 23,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/apps/homelab/immich/manifests/namespace.yaml",
+      "language": "yaml",
+      "sizeLines": 12,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/apps/homelab/immich/manifests/postgres.yaml",
+      "language": "yaml",
+      "sizeLines": 112,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/apps/homelab/immich/manifests/pvcs.yaml",
+      "language": "yaml",
+      "sizeLines": 39,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/apps/homelab/immich/manifests/routing.yaml",
+      "language": "yaml",
+      "sizeLines": 22,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/apps/homelab/immich/values.yaml",
+      "language": "yaml",
+      "sizeLines": 100,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/apps/homelab/nextcloud/SECRETS.md",
+      "language": "markdown",
+      "sizeLines": 48,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/apps/homelab/nextcloud/manifests/namespace.yaml",
+      "language": "yaml",
+      "sizeLines": 10,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/apps/homelab/nextcloud/manifests/postgres.yaml",
+      "language": "yaml",
+      "sizeLines": 116,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/apps/homelab/nextcloud/manifests/pvcs.yaml",
+      "language": "yaml",
+      "sizeLines": 44,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/apps/homelab/nextcloud/manifests/redis.yaml",
+      "language": "yaml",
+      "sizeLines": 78,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/apps/homelab/nextcloud/manifests/routing.yaml",
+      "language": "yaml",
+      "sizeLines": 55,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/apps/homelab/nextcloud/values.yaml",
+      "language": "yaml",
+      "sizeLines": 131,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/apps/personal/kiroku/limitrange.yaml",
+      "language": "yaml",
+      "sizeLines": 29,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/apps/personal/kiroku/namespace.yaml",
+      "language": "yaml",
+      "sizeLines": 15,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/apps/personal/kiroku/rbac.yaml",
+      "language": "yaml",
+      "sizeLines": 59,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/apps/personal/kiroku/resourcequota.yaml",
+      "language": "yaml",
+      "sizeLines": 26,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/argo-rollouts/manifests/ingressroute.yaml",
+      "language": "yaml",
+      "sizeLines": 28,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/argo-rollouts/values.yaml",
+      "language": "yaml",
+      "sizeLines": 58,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/argocd/apps/alloy.yaml",
+      "language": "yaml",
+      "sizeLines": 29,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/argocd/apps/appprojects.yaml",
+      "language": "yaml",
+      "sizeLines": 35,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/argocd/apps/argo-rollouts.yaml",
+      "language": "yaml",
+      "sizeLines": 41,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/argocd/apps/argocd.yaml",
+      "language": "yaml",
+      "sizeLines": 33,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/argocd/apps/audiobookshelf.yaml",
+      "language": "yaml",
+      "sizeLines": 23,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/argocd/apps/cert-manager.yaml",
+      "language": "yaml",
+      "sizeLines": 54,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/argocd/apps/cloudflared.yaml",
+      "language": "yaml",
+      "sizeLines": 34,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/argocd/apps/immich.yaml",
+      "language": "yaml",
+      "sizeLines": 39,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/argocd/apps/kiroku-governance.yaml",
+      "language": "yaml",
+      "sizeLines": 31,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/argocd/apps/kiroku.yaml",
+      "language": "yaml",
+      "sizeLines": 37,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/argocd/apps/kube-prometheus-stack.yaml",
+      "language": "yaml",
+      "sizeLines": 54,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/argocd/apps/loki.yaml",
+      "language": "yaml",
+      "sizeLines": 28,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/argocd/apps/longhorn.yaml",
+      "language": "yaml",
+      "sizeLines": 33,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/argocd/apps/nextcloud.yaml",
+      "language": "yaml",
+      "sizeLines": 42,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/argocd/apps/tailscale.yaml",
+      "language": "yaml",
+      "sizeLines": 56,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/argocd/apps/traefik.yaml",
+      "language": "yaml",
+      "sizeLines": 34,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/argocd/ingressroute.yaml",
+      "language": "yaml",
+      "sizeLines": 21,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/argocd/namespace.yaml",
+      "language": "yaml",
+      "sizeLines": 4,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/argocd/projects/homelab.yaml",
+      "language": "yaml",
+      "sizeLines": 53,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/argocd/projects/personal.yaml",
+      "language": "yaml",
+      "sizeLines": 50,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/argocd/root-app.yaml",
+      "language": "yaml",
+      "sizeLines": 31,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/argocd/values.yaml",
+      "language": "yaml",
+      "sizeLines": 81,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/cert-manager/manifests/cluster-issuer.yaml",
+      "language": "yaml",
+      "sizeLines": 44,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/cert-manager/manifests/internal-wildcard-certificate.yaml",
+      "language": "yaml",
+      "sizeLines": 25,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/cert-manager/values.yaml",
+      "language": "yaml",
+      "sizeLines": 25,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/cloudflared/deployment.yaml",
+      "language": "yaml",
+      "sizeLines": 65,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/cloudflared/namespace.yaml",
+      "language": "yaml",
+      "sizeLines": 4,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/cloudflared/networkpolicy.yaml",
+      "language": "yaml",
+      "sizeLines": 57,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/cloudflared/service-metrics.yaml",
+      "language": "yaml",
+      "sizeLines": 22,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/cloudflared/servicemonitor.yaml",
+      "language": "yaml",
+      "sizeLines": 18,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/example-app/ingressroute-internal.yaml",
+      "language": "yaml",
+      "sizeLines": 21,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/example-app/ingressroute-preview.yaml",
+      "language": "yaml",
+      "sizeLines": 20,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/example-app/ingressroute.yaml",
+      "language": "yaml",
+      "sizeLines": 24,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/example-app/rollout.yaml",
+      "language": "yaml",
+      "sizeLines": 38,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/example-app/service.yaml",
+      "language": "yaml",
+      "sizeLines": 32,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/longhorn/manifests/ingressroute.yaml",
+      "language": "yaml",
+      "sizeLines": 23,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/longhorn/manifests/storageclass-immich.yaml",
+      "language": "yaml",
+      "sizeLines": 35,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/longhorn/manifests/storageclass-replicated.yaml",
+      "language": "yaml",
+      "sizeLines": 20,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/longhorn/values.yaml",
+      "language": "yaml",
+      "sizeLines": 53,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/monitoring/manifests/ingressroute-grafana.yaml",
+      "language": "yaml",
+      "sizeLines": 23,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/monitoring/manifests/ingressroute-prometheus.yaml",
+      "language": "yaml",
+      "sizeLines": 31,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/monitoring/values-alloy.yaml",
+      "language": "yaml",
+      "sizeLines": 102,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/monitoring/values-kube-prometheus-stack.yaml",
+      "language": "yaml",
+      "sizeLines": 322,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/monitoring/values-loki.yaml",
+      "language": "yaml",
+      "sizeLines": 118,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/tailscale/manifests/api-server-rbac.yaml",
+      "language": "yaml",
+      "sizeLines": 30,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/tailscale/manifests/proxyclass-monitoring.yaml",
+      "language": "yaml",
+      "sizeLines": 32,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/tailscale/values.yaml",
+      "language": "yaml",
+      "sizeLines": 23,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/traefik/manifests/ingressroute-dashboard.yaml",
+      "language": "yaml",
+      "sizeLines": 30,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/traefik/manifests/tailscale-service.yaml",
+      "language": "yaml",
+      "sizeLines": 39,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/traefik/manifests/tlsstore.yaml",
+      "language": "yaml",
+      "sizeLines": 19,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "k8s/traefik/values.yaml",
+      "language": "yaml",
+      "sizeLines": 69,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "terraform/main.tf",
+      "language": "terraform",
+      "sizeLines": 145,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "terraform/outputs.tf",
+      "language": "terraform",
+      "sizeLines": 13,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "terraform/provider.tf",
+      "language": "terraform",
+      "sizeLines": 19,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "terraform/terraform.tfvars",
+      "language": "terraform",
+      "sizeLines": 69,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "terraform/variables.tf",
+      "language": "terraform",
+      "sizeLines": 121,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "terraform/versions.tf",
+      "language": "terraform",
+      "sizeLines": 9,
+      "fileCategory": "infra"
+    }
+  ],
+  "totalFiles": 150,
+  "filteredByIgnore": 0,
+  "estimatedComplexity": "moderate",
+  "importMap": {
+    ".ua/.understandignore": [],
+    "CHANGELOG.md": [],
+    "GUIDE.md": [],
+    "README.md": [],
+    "ROADMAP.md": [],
+    "ansible/ansible.cfg": [],
+    "ansible/group_vars/all.yml": [],
+    "ansible/group_vars/k3s_agent.yml": [],
+    "ansible/group_vars/k3s_cluster.yml": [],
+    "ansible/group_vars/proxmox_hosts.yml": [],
+    "ansible/group_vars/proxmox_hw_asrock.yml": [],
+    "ansible/group_vars/proxmox_hw_dell.yml": [],
+    "ansible/host_vars/pve-asrock.yml": [],
+    "ansible/inventory.ini": [],
+    "ansible/proxmox.yml": [],
+    "ansible/requirements.yml": [],
+    "ansible/roles/k3s_agent/handlers/main.yml": [],
+    "ansible/roles/k3s_agent/tasks/main.yml": [],
+    "ansible/roles/k3s_agent/templates/config.yaml.j2": [],
+    "ansible/roles/k3s_node/tasks/main.yml": [],
+    "ansible/roles/k3s_server/handlers/main.yml": [],
+    "ansible/roles/k3s_server/tasks/main.yml": [],
+    "ansible/roles/k3s_server/templates/config.yaml.j2": [],
+    "ansible/roles/longhorn_node/tasks/main.yml": [],
+    "ansible/roles/proxmox_cluster/tasks/main.yml": [],
+    "ansible/roles/proxmox_cluster/tasks/terraform_api.yml": [],
+    "ansible/roles/proxmox_host/tasks/main.yml": [],
+    "ansible/roles/proxmox_host/tasks/repositories.yml": [],
+    "ansible/roles/proxmox_host/tasks/storage.yml": [],
+    "ansible/roles/proxmox_host/tasks/upgrade.yml": [],
+    "ansible/roles/proxmox_hw_asrock/tasks/main.yml": [],
+    "ansible/roles/proxmox_hw_dell/tasks/e1000e_aspm.yml": [],
+    "ansible/roles/proxmox_hw_dell/tasks/e1000e_offload.yml": [],
+    "ansible/roles/proxmox_hw_dell/tasks/laptop.yml": [],
+    "ansible/roles/proxmox_hw_dell/tasks/main.yml": [],
+    "ansible/roles/tailscale_host/tasks/main.yml": [],
+    "ansible/site.yml": [],
+    "claude.md": [],
+    "docs/Homelab Learning Map.md": [],
+    "docs/Homelab Migration Checklist.md": [],
+    "docs/Migration Plan.md": [],
+    "docs/adr/README.md": [],
+    "docs/adr/v0.1 - Foundation.md": [],
+    "docs/adr/v0.2 - Cluster Bootstrap.md": [],
+    "docs/adr/v0.3 - Ingress and TLS.md": [],
+    "docs/adr/v0.4 - Public and Private Access.md": [],
+    "docs/adr/v2.0 - Operability.md": [],
+    "docs/concepts/Ansible Concepts.md": [],
+    "docs/concepts/Kubernetes Concepts.md": [],
+    "docs/concepts/Platform Concepts.md": [],
+    "docs/concepts/Terraform Concepts.md": [],
+    "docs/incidents/INC-2026-001-longhorn-stale-mount-namespace.md": [],
+    "docs/incidents/INC-2026-002-longhorn-stale-snapshot-attachment-tickets.md": [],
+    "docs/incidents/INC-2026-003-longhorn-rebuild-starved-etcd.md": [],
+    "docs/incidents/INC-2026-004-argocd-repo-server-oom-recovery.md": [],
+    "docs/incidents/INC-2026-005-prometheus-tsdb-capacity-exhaustion.md": [],
+    "docs/incidents/README.md": [],
+    "docs/incidents/TEMPLATE.md": [],
+    "docs/migrations/audiobookshelf.md": [],
+    "docs/migrations/immich.md": [],
+    "docs/migrations/kiroku.md": [],
+    "docs/migrations/nextcloud.md": [],
+    "docs/troubleshooting/intel-i219v-nvm-recovery-2026-07-23.md": [],
+    "docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/BUILD-MANIFEST.md": [],
+    "docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/README.md": [],
+    "docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/RELEASE_NOTES.md": [],
+    "docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/SHA256SUMS": [],
+    "docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/e1000e-allow-bad-nvm.patch": [],
+    "k8s/apps/homelab/audiobookshelf/deployment.yaml": [],
+    "k8s/apps/homelab/audiobookshelf/namespace.yaml": [],
+    "k8s/apps/homelab/audiobookshelf/pvcs.yaml": [],
+    "k8s/apps/homelab/audiobookshelf/routing.yaml": [],
+    "k8s/apps/homelab/audiobookshelf/service.yaml": [],
+    "k8s/apps/homelab/immich/README.md": [],
+    "k8s/apps/homelab/immich/SECRETS.md": [],
+    "k8s/apps/homelab/immich/manifests/namespace.yaml": [],
+    "k8s/apps/homelab/immich/manifests/postgres.yaml": [],
+    "k8s/apps/homelab/immich/manifests/pvcs.yaml": [],
+    "k8s/apps/homelab/immich/manifests/routing.yaml": [],
+    "k8s/apps/homelab/immich/values.yaml": [],
+    "k8s/apps/homelab/nextcloud/SECRETS.md": [],
+    "k8s/apps/homelab/nextcloud/manifests/namespace.yaml": [],
+    "k8s/apps/homelab/nextcloud/manifests/postgres.yaml": [],
+    "k8s/apps/homelab/nextcloud/manifests/pvcs.yaml": [],
+    "k8s/apps/homelab/nextcloud/manifests/redis.yaml": [],
+    "k8s/apps/homelab/nextcloud/manifests/routing.yaml": [],
+    "k8s/apps/homelab/nextcloud/values.yaml": [],
+    "k8s/apps/personal/kiroku/limitrange.yaml": [],
+    "k8s/apps/personal/kiroku/namespace.yaml": [],
+    "k8s/apps/personal/kiroku/rbac.yaml": [],
+    "k8s/apps/personal/kiroku/resourcequota.yaml": [],
+    "k8s/argo-rollouts/manifests/ingressroute.yaml": [],
+    "k8s/argo-rollouts/values.yaml": [],
+    "k8s/argocd/apps/alloy.yaml": [],
+    "k8s/argocd/apps/appprojects.yaml": [],
+    "k8s/argocd/apps/argo-rollouts.yaml": [],
+    "k8s/argocd/apps/argocd.yaml": [],
+    "k8s/argocd/apps/audiobookshelf.yaml": [],
+    "k8s/argocd/apps/cert-manager.yaml": [],
+    "k8s/argocd/apps/cloudflared.yaml": [],
+    "k8s/argocd/apps/immich.yaml": [],
+    "k8s/argocd/apps/kiroku-governance.yaml": [],
+    "k8s/argocd/apps/kiroku.yaml": [],
+    "k8s/argocd/apps/kube-prometheus-stack.yaml": [],
+    "k8s/argocd/apps/loki.yaml": [],
+    "k8s/argocd/apps/longhorn.yaml": [],
+    "k8s/argocd/apps/nextcloud.yaml": [],
+    "k8s/argocd/apps/tailscale.yaml": [],
+    "k8s/argocd/apps/traefik.yaml": [],
+    "k8s/argocd/ingressroute.yaml": [],
+    "k8s/argocd/namespace.yaml": [],
+    "k8s/argocd/projects/homelab.yaml": [],
+    "k8s/argocd/projects/personal.yaml": [],
+    "k8s/argocd/root-app.yaml": [],
+    "k8s/argocd/values.yaml": [],
+    "k8s/cert-manager/manifests/cluster-issuer.yaml": [],
+    "k8s/cert-manager/manifests/internal-wildcard-certificate.yaml": [],
+    "k8s/cert-manager/values.yaml": [],
+    "k8s/cloudflared/deployment.yaml": [],
+    "k8s/cloudflared/namespace.yaml": [],
+    "k8s/cloudflared/networkpolicy.yaml": [],
+    "k8s/cloudflared/service-metrics.yaml": [],
+    "k8s/cloudflared/servicemonitor.yaml": [],
+    "k8s/example-app/ingressroute-internal.yaml": [],
+    "k8s/example-app/ingressroute-preview.yaml": [],
+    "k8s/example-app/ingressroute.yaml": [],
+    "k8s/example-app/rollout.yaml": [],
+    "k8s/example-app/service.yaml": [],
+    "k8s/longhorn/manifests/ingressroute.yaml": [],
+    "k8s/longhorn/manifests/storageclass-immich.yaml": [],
+    "k8s/longhorn/manifests/storageclass-replicated.yaml": [],
+    "k8s/longhorn/values.yaml": [],
+    "k8s/monitoring/manifests/ingressroute-grafana.yaml": [],
+    "k8s/monitoring/manifests/ingressroute-prometheus.yaml": [],
+    "k8s/monitoring/values-alloy.yaml": [],
+    "k8s/monitoring/values-kube-prometheus-stack.yaml": [],
+    "k8s/monitoring/values-loki.yaml": [],
+    "k8s/tailscale/manifests/api-server-rbac.yaml": [],
+    "k8s/tailscale/manifests/proxyclass-monitoring.yaml": [],
+    "k8s/tailscale/values.yaml": [],
+    "k8s/traefik/manifests/ingressroute-dashboard.yaml": [],
+    "k8s/traefik/manifests/tailscale-service.yaml": [],
+    "k8s/traefik/manifests/tlsstore.yaml": [],
+    "k8s/traefik/values.yaml": [],
+    "terraform/main.tf": [],
+    "terraform/outputs.tf": [],
+    "terraform/provider.tf": [],
+    "terraform/terraform.tfvars": [],
+    "terraform/variables.tf": [],
+    "terraform/versions.tf": []
+  }
+}

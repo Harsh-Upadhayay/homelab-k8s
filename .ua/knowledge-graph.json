@@ -1,0 +1,4079 @@
+{
+  "version": "1.0.0",
+  "project": {
+    "name": "homelab-k8s",
+    "languages": [
+      "config",
+      "jinja2",
+      "markdown",
+      "patch",
+      "terraform",
+      "unknown",
+      "yaml"
+    ],
+    "frameworks": [
+      "Ansible",
+      "Argo CD",
+      "Argo Rollouts",
+      "cert-manager",
+      "Cloudflare Tunnel",
+      "K3s",
+      "Kubernetes",
+      "Longhorn",
+      "Prometheus",
+      "Terraform",
+      "Tailscale",
+      "Traefik"
+    ],
+    "description": "A production-shaped Kubernetes platform built for hands-on operational learning. Uses Terraform for Proxmox VM provisioning, Ansible for OS configuration and k3s installation, and Kubernetes manifests for workloads including Argo CD, Traefik, Longhorn storage, monitoring, and application deployments. Note: this project has over 100 source files; consider scoping analysis to a subdirectory for faster results.",
+    "analyzedAt": "2026-07-25T12:00:00Z",
+    "gitCommitHash": "fbbd614414bcd0f13ab2da539d63c64f8f0d716b"
+  },
+  "nodes": [
+    {
+      "id": "document:CHANGELOG.md",
+      "type": "document",
+      "name": "CHANGELOG.md",
+      "filePath": "CHANGELOG.md",
+      "summary": "Chronological record of project changes following Keep a Changelog format. Documents infrastructure consolidation (worker/storage convergence, Immich recovery), incident reports (INC-2026-001, INC-2026-002), Proxmox cluster formation, and platform component additions including Longhorn, GitOps, monitoring, and Tailscale adoption.",
+      "tags": [
+        "changelog",
+        "documentation",
+        "history"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Markdown document with structured sections for Unreleased/Changed/Added/Removed entries. Cross-references GUIDE.md and ROADMAP.md for phase context."
+    },
+    {
+      "id": "document:GUIDE.md",
+      "type": "document",
+      "name": "GUIDE.md",
+      "filePath": "GUIDE.md",
+      "summary": "Comprehensive 13-phase build guide for the Kubernetes platform foundation. Covers Proxmox host setup, Terraform VM provisioning, Ansible OS configuration, k3s cluster bootstrap, Traefik ingress, cert-manager TLS, Cloudflare Tunnel public access, and Tailscale private access. Includes troubleshooting section and repo structure recap.",
+      "tags": [
+        "documentation",
+        "build-guide",
+        "tutorial",
+        "operations"
+      ],
+      "complexity": "complex",
+      "languageNotes": "706-line markdown with 16 major sections. Each phase explains both the 'what' and the 'why' behind architectural decisions. Cross-references ADRs, ROADMAP.md, and supporting documentation."
+    },
+    {
+      "id": "document:README.md",
+      "type": "document",
+      "name": "README.md",
+      "filePath": "README.md",
+      "summary": "Project overview and entry point documentation. Summarizes the two-node Proxmox cluster architecture with k3s server and workers, explains technology choices (Terraform, Ansible, k3s, Traefik, Cloudflare Tunnel, Tailscale), provides repo layout, getting started instructions, and links to detailed documentation.",
+      "tags": [
+        "documentation",
+        "entry-point",
+        "overview",
+        "architecture"
+      ],
+      "complexity": "simple",
+      "languageNotes": "81-line markdown serving as the project map. References GUIDE.md as 'the territory' and itself as 'the map'. Links to wiki, learning map, incidents, and troubleshooting docs."
+    },
+    {
+      "id": "document:ROADMAP.md",
+      "type": "document",
+      "name": "ROADMAP.md",
+      "filePath": "ROADMAP.md",
+      "summary": "Version tracking document mapping completed milestones (v0.1-v2.0) to GUIDE.md phases. Records foundation provisioning, cluster bootstrap, ingress and TLS setup, public/private access paths, GitOps migration, Longhorn storage, monitoring and logging adoption, and explicitly deferred items including secrets management, backup strategy, and Cilium migration.",
+      "tags": [
+        "roadmap",
+        "documentation",
+        "planning",
+        "milestones"
+      ],
+      "complexity": "simple",
+      "languageNotes": "54-line markdown with checkbox-style completed items organized by version milestones. References GitHub Issues and GUIDE.md phase numbers for detailed implementation context."
+    },
+    {
+      "id": "document:claude.md",
+      "type": "document",
+      "name": "claude.md",
+      "filePath": "claude.md",
+      "summary": "Context and decision record for AI-assisted development in this repository. Captures architecture constraints, key design decisions (embedded etcd, control-plane taint, Flannel over Cilium, ClusterIP-only Traefik), hard constraints (NVMe off-limits, ASRock NIC kernel), and working style preferences emphasizing understanding over shortcuts.",
+      "tags": [
+        "documentation",
+        "context",
+        "decisions",
+        "ai-context"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "62-line markdown structured for AI consumption. Distinguishes between 'decisions already made' (do not silently change) and 'explicitly deferred' items. Referenced automatically at session start for Claude Code."
+    },
+    {
+      "id": "config:ansible/ansible.cfg",
+      "type": "config",
+      "name": "ansible.cfg",
+      "filePath": "ansible/ansible.cfg",
+      "summary": "Ansible configuration pointing to inventory.ini, disabling host key checking for Tailscale-based connectivity, and enabling privilege escalation via sudo.",
+      "tags": [
+        "configuration",
+        "ansible",
+        "privilege-escalation"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:ansible/inventory.ini",
+      "type": "config",
+      "name": "inventory.ini",
+      "filePath": "ansible/inventory.ini",
+      "summary": "Ansible inventory defining k3s cluster hosts and Proxmox hypervisors using Tailscale MagicDNS names, with separate SSH key configurations for k3s nodes (harsh user) and Proxmox hosts (root user).",
+      "tags": [
+        "inventory",
+        "tailscale",
+        "ssh",
+        "k3s-cluster"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Uses INI-style grouping with host variables and group-of-groups inheritance. MagicDNS names enable execution from any tailnet device without LAN reachability."
+    },
+    {
+      "id": "config:ansible/proxmox.yml",
+      "type": "config",
+      "name": "proxmox.yml",
+      "filePath": "ansible/proxmox.yml",
+      "summary": "Ansible playbook targeting Proxmox hypervisors (not k3s nodes) to apply hardware-specific safeguards and host configuration, deliberately separate from site.yml due to different blast radius and concerns.",
+      "tags": [
+        "playbook",
+        "proxmox",
+        "hypervisor",
+        "hardware"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:ansible/requirements.yml",
+      "type": "config",
+      "name": "requirements.yml",
+      "filePath": "ansible/requirements.yml",
+      "summary": "Ansible collection requirements specifying pinned versions of community.general (13.2.0) and ansible.posix (2.2.2) for reproducible playbook execution.",
+      "tags": [
+        "dependencies",
+        "ansible-collections",
+        "version-pinned"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:ansible/site.yml",
+      "type": "config",
+      "name": "site.yml",
+      "filePath": "ansible/site.yml",
+      "summary": "Main Ansible playbook for k3s cluster provisioning with three plays: base OS preparation on all nodes, control plane installation on servers, and worker join with Longhorn storage setup.",
+      "tags": [
+        "playbook",
+        "k3s",
+        "bootstrap",
+        "storage"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "step:ansible/proxmox.yml:asrock-hardware-safeguards",
+      "type": "step",
+      "name": "ASRock hardware safeguards",
+      "filePath": "ansible/proxmox.yml",
+      "summary": "Applies ASRock-specific hardware safeguards including the I219-V NIC kernel patch protection on pve-asrock.",
+      "tags": [
+        "hardware",
+        "asrock",
+        "nic-patch"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "step:ansible/proxmox.yml:dell-hardware-safeguards",
+      "type": "step",
+      "name": "Dell hardware safeguards",
+      "filePath": "ansible/proxmox.yml",
+      "summary": "Applies Dell-specific hardware safeguards on pve-dell hypervisor.",
+      "tags": [
+        "hardware",
+        "dell"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "step:ansible/proxmox.yml:proxmox-host-configuration",
+      "type": "step",
+      "name": "Proxmox host configuration",
+      "filePath": "ansible/proxmox.yml",
+      "summary": "Configures Proxmox hosts with base settings, optional Tailscale installation, and cluster membership.",
+      "tags": [
+        "proxmox",
+        "host-config",
+        "tailscale",
+        "clustering"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "step:ansible/site.yml:base-os-prep",
+      "type": "step",
+      "name": "Base OS prep \u2014 every node",
+      "filePath": "ansible/site.yml",
+      "summary": "Prepares all k3s cluster nodes with base OS configuration and optional Tailscale host installation.",
+      "tags": [
+        "bootstrap",
+        "os-prep",
+        "tailscale"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "step:ansible/site.yml:install-control-plane",
+      "type": "step",
+      "name": "Install and bootstrap the k3s control plane",
+      "filePath": "ansible/site.yml",
+      "summary": "Installs and bootstraps the k3s server with embedded etcd on the control plane node.",
+      "tags": [
+        "k3s",
+        "control-plane",
+        "etcd"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "step:ansible/site.yml:join-workers",
+      "type": "step",
+      "name": "Join workers to the cluster",
+      "filePath": "ansible/site.yml",
+      "summary": "Joins worker nodes to the k3s cluster and configures Longhorn storage with data disk mounting.",
+      "tags": [
+        "k3s",
+        "worker",
+        "longhorn",
+        "storage"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:ansible/group_vars/all.yml",
+      "type": "config",
+      "name": "all.yml",
+      "filePath": "ansible/group_vars/all.yml",
+      "summary": "Common k3s cluster variables applied to all hosts: pinned version, server IP, control-plane taint, TLS SANs, and local kubeconfig path.",
+      "tags": [
+        "configuration",
+        "k3s",
+        "cluster",
+        "version-pinned"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Ansible group_vars leverage YAML anchors and Jinja2 templating for runtime interpolation."
+    },
+    {
+      "id": "config:ansible/group_vars/k3s_agent.yml",
+      "type": "config",
+      "name": "k3s_agent.yml",
+      "filePath": "ansible/group_vars/k3s_agent.yml",
+      "summary": "Configures Longhorn storage device parameters for k3s agent nodes: the data disk, filesystem label, and mount path.",
+      "tags": [
+        "configuration",
+        "k3s",
+        "storage",
+        "longhorn"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:ansible/group_vars/k3s_cluster.yml",
+      "type": "config",
+      "name": "k3s_cluster.yml",
+      "filePath": "ansible/group_vars/k3s_cluster.yml",
+      "summary": "Ubuntu codename variable matching the cloud-init template, used for Tailscale apt source selection during k3s cluster setup.",
+      "tags": [
+        "configuration",
+        "k3s",
+        "ubuntu",
+        "tailscale"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:ansible/group_vars/proxmox_hosts.yml",
+      "type": "config",
+      "name": "proxmox_hosts.yml",
+      "filePath": "ansible/group_vars/proxmox_hosts.yml",
+      "summary": "Proxmox host configuration: Debian codename, storage pools, network bridge, cluster name/seed, and LAN hosts file mappings.",
+      "tags": [
+        "configuration",
+        "proxmox",
+        "cluster",
+        "networking"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:ansible/group_vars/proxmox_hw_asrock.yml",
+      "type": "config",
+      "name": "proxmox_hw_asrock.yml",
+      "filePath": "ansible/group_vars/proxmox_hw_asrock.yml",
+      "summary": "Hardware-specific config for ASRock node: apt package holds for kernel versions and I219-V NIC recovery module verification parameters.",
+      "tags": [
+        "configuration",
+        "proxmox",
+        "hardware",
+        "nic-workaround"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:ansible/group_vars/proxmox_hw_dell.yml",
+      "type": "config",
+      "name": "proxmox_hw_dell.yml",
+      "filePath": "ansible/group_vars/proxmox_hw_dell.yml",
+      "summary": "Hardware-specific config for Dell node identifying the e1000e interface targeted by the TX ring hang workaround.",
+      "tags": [
+        "configuration",
+        "proxmox",
+        "hardware",
+        "nic-workaround"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:ansible/roles/proxmox_host/tasks/main.yml",
+      "type": "config",
+      "name": "main.yml",
+      "filePath": "ansible/roles/proxmox_host/tasks/main.yml",
+      "summary": "Entry point orchestration for the proxmox_host role. Imports and tags sub-task files for repository configuration, LVM-thin storage initialization, and explicit package maintenance upgrades.",
+      "tags": [
+        "ansible",
+        "entry-point",
+        "orchestration",
+        "proxmox",
+        "role-tasks"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Uses Ansible's import_tasks with tag-based conditional execution. The 'never' tag on storage-bootstrap and maintenance-upgrade makes these operations opt-in, preventing accidental data destruction or package upgrades during normal runs."
+    },
+    {
+      "id": "config:ansible/roles/proxmox_host/tasks/repositories.yml",
+      "type": "config",
+      "name": "repositories.yml",
+      "filePath": "ansible/roles/proxmox_host/tasks/repositories.yml",
+      "summary": "Configures Proxmox APT repositories by disabling the enterprise and Ceph Squid repos (no subscription) and enabling the pve-no-subscription repo for package updates.",
+      "tags": [
+        "ansible",
+        "apt",
+        "repositories",
+        "proxmox",
+        "package-management"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Uses Ansible's copy module with template content to write DEB822-style sources files. The debian_codename variable is interpolated for the correct suite."
+    },
+    {
+      "id": "config:ansible/roles/proxmox_host/tasks/storage.yml",
+      "type": "config",
+      "name": "storage.yml",
+      "filePath": "ansible/roles/proxmox_host/tasks/storage.yml",
+      "summary": "Generic host-side storage provisioning for Proxmox LVM-thin datastores. Initializes a declared block device as a volume group and thin pool, with safety checks for device identity, volume group ownership, and owner VM state before destructive operations.",
+      "tags": [
+        "ansible",
+        "storage",
+        "lvm",
+        "proxmox",
+        "datastore-provisioning"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Implements a 13-step idempotent storage initialization workflow: read device, resolve path, check existing VG, assert safety conditions, verify VM stopped, wipe signatures, create VG and thin pool, register with Proxmox. Uses community.general.lvg and lvol modules for LVM management."
+    },
+    {
+      "id": "config:ansible/roles/proxmox_host/tasks/upgrade.yml",
+      "type": "config",
+      "name": "upgrade.yml",
+      "filePath": "ansible/roles/proxmox_host/tasks/upgrade.yml",
+      "summary": "Explicit Proxmox package maintenance with safety checks. Reads held APT packages and asserts that hardware-specific kernel holds are present before running apt full-upgrade, protecting critical driver modules from accidental removal.",
+      "tags": [
+        "ansible",
+        "apt",
+        "package-upgrade",
+        "proxmox",
+        "safety-checks"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Uses throttle: 1 to prevent concurrent package maintenance on both Proxmox nodes in the two-node cluster, ensuring one peer remains available while services restart. The assert uses Jinja2 set difference to verify all required holds exist."
+    },
+    {
+      "id": "config:ansible/roles/proxmox_hw_dell/tasks/main.yml",
+      "type": "config",
+      "name": "main.yml",
+      "filePath": "ansible/roles/proxmox_hw_dell/tasks/main.yml",
+      "summary": "Entry point for Dell Proxmox node hardware configuration. Orchestrates three task sets (laptop lid handling, e1000e NIC offload fix, and PCIe ASPM workaround) with tag-based execution control.",
+      "tags": [
+        "entry-point",
+        "orchestration",
+        "hardware-configuration",
+        "network-fix",
+        "ansible"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Ansible task orchestrator using import_tasks with tag guards. The 'never' tag on e1000e-aspm requires explicit invocation to stage the reboot-required change."
+    },
+    {
+      "id": "config:ansible/roles/proxmox_hw_dell/tasks/e1000e_offload.yml",
+      "type": "config",
+      "name": "e1000e_offload.yml",
+      "filePath": "ansible/roles/proxmox_hw_dell/tasks/e1000e_offload.yml",
+      "summary": "Live fix for Intel I219-LM e1000e 'Hardware Unit Hang'. Disables TSO/GSO/GRO offloads immediately and persists via systemd oneshot unit to prevent NIC TX-ring freeze. No reboot required.",
+      "tags": [
+        "network-fix",
+        "systemd-service",
+        "nic-workaround",
+        "live-fix",
+        "hardware-remediation"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Uses conditional idempotence: checks current offload state before applying changes, installs systemd unit only if needed, and validates the final state with assertions."
+    },
+    {
+      "id": "config:ansible/roles/proxmox_hw_dell/tasks/e1000e_aspm.yml",
+      "type": "config",
+      "name": "e1000e_aspm.yml",
+      "filePath": "ansible/roles/proxmox_hw_dell/tasks/e1000e_aspm.yml",
+      "summary": "Optional GRUB-level fix for Intel I219-LM TX-hang. Adds pcie_aspm=off to kernel cmdline to disable PCIe Active State Power Management transitions that trigger the hang. Requires host reboot.",
+      "tags": [
+        "network-fix",
+        "grub-configuration",
+        "nic-workaround",
+        "kernel-parameters",
+        "hardware-remediation"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Uses backreferences in lineinfile to append rather than replace kernel parameters, preserving existing options while adding pcie_aspm=off."
+    },
+    {
+      "id": "config:ansible/roles/proxmox_hw_dell/tasks/laptop.yml",
+      "type": "config",
+      "name": "laptop.yml",
+      "filePath": "ansible/roles/proxmox_hw_dell/tasks/laptop.yml",
+      "summary": "Laptop-as-server hardening (ADR-0022). Configures systemd-logind to ignore lid close events in all scenarios (power, docked, external power) to prevent cluster-wide suspend on pve-dell.",
+      "tags": [
+        "power-management",
+        "systemd-configuration",
+        "hardware-hardening",
+        "laptop-server"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Conditional systemd-logind restart only when configuration changes, avoiding unnecessary service disruption during idempotent runs."
+    },
+    {
+      "id": "document:docs/Homelab Learning Map.md",
+      "type": "document",
+      "name": "Homelab Learning Map.md",
+      "filePath": "docs/Homelab Learning Map.md",
+      "summary": "Entry point and navigation hub for revision notes organized into ADRs (architecture decisions), Concepts (Ansible/Terraform/Kubernetes mechanics), and Incident reviews. Provides wikilink-based access to learning resources by milestone and domain.",
+      "tags": [
+        "documentation",
+        "entry-point",
+        "learning",
+        "hub",
+        "adr"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Uses wikilink syntax for cross-document references. Serves as the central index linking to ADRs by milestone (v0.1-v2.0) and domain-specific concept files."
+    },
+    {
+      "id": "document:docs/Homelab Migration Checklist.md",
+      "type": "document",
+      "name": "Homelab Migration Checklist.md",
+      "filePath": "docs/Homelab Migration Checklist.md",
+      "summary": "Tracking document for service migration from Docker Compose to Kubernetes, categorizing services as Migrated (kiroku, audiobookshelf, nextcloud, immich), Preserve data and migrate later (jobhunt, mediaserver, ollama), or Drop/replaced (homepage, traefik, authelia, jenkins). Reconciled against live cluster state.",
+      "tags": [
+        "documentation",
+        "migration",
+        "checklist",
+        "tracking",
+        "inventory"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:docs/Migration Plan.md",
+      "type": "document",
+      "name": "Migration Plan.md",
+      "filePath": "docs/Migration Plan.md",
+      "summary": "Comprehensive service migration plan from Docker Compose to Kubernetes. Defines scope, namespace conventions, data migration patterns, phased sequence (M0-M7), and acceptance checks. Covers app scaffolds, ArgoCD Application patterns, RBAC boundaries, and the host-to-PVC migration workflow. Integrates CKA learning domains into each phase.",
+      "tags": [
+        "documentation",
+        "migration",
+        "plan",
+        "strategy",
+        "gitops",
+        "argo-cd"
+      ],
+      "complexity": "complex",
+      "languageNotes": "Uses markdown tables extensively for phased sequence tracking and CKA domain mapping. Cross-references migration runbooks in docs/migrations/ for specific apps."
+    },
+    {
+      "id": "document:docs/adr/README.md",
+      "type": "document",
+      "name": "README.md",
+      "filePath": "docs/adr/README.md",
+      "summary": "Index and overview of all Architecture Decision Records, providing a numbered catalog of 53 decisions across release milestones (v0.1, v0.2, v0.3, v0.4, v2.0) with status tracking and links to detailed logs.",
+      "tags": [
+        "documentation",
+        "adr",
+        "index",
+        "architecture"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:docs/adr/v0.1 - Foundation.md",
+      "type": "document",
+      "name": "v0.1 - Foundation.md",
+      "filePath": "docs/adr/v0.1 - Foundation.md",
+      "summary": "Foundation layer ADRs covering infrastructure provisioning decisions: Terraform vs Ansible separation, version pinning, Proxmox automation, worker lifecycle, storage direction, hardware constraints, and cluster growth strategy.",
+      "tags": [
+        "documentation",
+        "adr",
+        "infrastructure",
+        "foundation",
+        "provisioning"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:docs/adr/v0.2 - Cluster Bootstrap.md",
+      "type": "document",
+      "name": "v0.2 - Cluster Bootstrap.md",
+      "filePath": "docs/adr/v0.2 - Cluster Bootstrap.md",
+      "summary": "Cluster bootstrap ADRs covering k3s installation decisions: embedded etcd over SQLite, secrets encryption at rest, control-plane tainting, CNI choice (Flannel defer Cilium), and disabling bundled components.",
+      "tags": [
+        "documentation",
+        "adr",
+        "kubernetes",
+        "bootstrap",
+        "k3s"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:docs/adr/v0.3 - Ingress and TLS.md",
+      "type": "document",
+      "name": "v0.3 - Ingress and TLS.md",
+      "filePath": "docs/adr/v0.3 - Ingress and TLS.md",
+      "summary": "Ingress and TLS ADRs covering Traefik deployment (ClusterIP only), IngressRoute CRD over Gateway API, cert-manager for internal TLS only, and Helm chart version pinning.",
+      "tags": [
+        "documentation",
+        "adr",
+        "ingress",
+        "tls",
+        "traefik"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:docs/adr/v0.4 - Public and Private Access.md",
+      "type": "document",
+      "name": "v0.4 - Public and Private Access.md",
+      "filePath": "docs/adr/v0.4 - Public and Private Access.md",
+      "summary": "Access control ADRs covering Cloudflare Tunnel routing, cloudflared NetworkPolicy lockdown, dual Tailscale mechanisms (host vs operator), OAuth scopes, RBAC, and DNS strategy.",
+      "tags": [
+        "documentation",
+        "adr",
+        "access",
+        "networking",
+        "tailscale"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:docs/adr/v2.0 - Operability.md",
+      "type": "document",
+      "name": "v2.0 - Operability.md",
+      "filePath": "docs/adr/v2.0 - Operability.md",
+      "summary": "Operability ADRs covering monitoring stack (Grafana, Prometheus, Loki, Alloy), GitOps adoption (ArgoCD, Rollouts), storage tiers, Longhorn configuration, and worker lifecycle unification across 23 decisions.",
+      "tags": [
+        "documentation",
+        "adr",
+        "monitoring",
+        "gitops",
+        "storage",
+        "operability"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:docs/concepts/Ansible Concepts.md",
+      "type": "document",
+      "name": "Ansible Concepts.md",
+      "filePath": "docs/concepts/Ansible Concepts.md",
+      "summary": "Explains Ansible fundamentals used for OS configuration and k3s installation in this platform: inventory and connection patterns, playbooks/plays/roles organization, tasks and modules with idempotency, making non-idempotent commands safe through state checks, execution and safety habits, templates/handlers/service lifecycle patterns, and blast-radius-based change splitting with live fix templating (e1000e NIC offload case study).",
+      "tags": [
+        "documentation",
+        "ansible",
+        "configuration-management",
+        "automation",
+        "infrastructure"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Markdown documentation with Wiki-style [[links]] to related concept documents and ADR index. Contains 8 major sections covering practical Ansible patterns exercised in this homelab platform."
+    },
+    {
+      "id": "document:docs/concepts/Kubernetes Concepts.md",
+      "type": "document",
+      "name": "Kubernetes Concepts.md",
+      "filePath": "docs/concepts/Kubernetes Concepts.md",
+      "summary": "Comprehensive Kubernetes concept documentation (491 lines, 45 sections) covering the platform's K8s stack: Helm package management, GitOps with Argo CD (Application, sync policies, waves, hooks), progressive delivery via Argo Rollouts (canary/blue-green with Traefik integration), core objects (Namespace/Deployment/ServiceAccount/RBAC), resource governance (ResourceQuota/LimitRange), the Kubernetes object model and garbage collection, CRDs and the Operator pattern (cert-manager, Tailscale, Prometheus), debugging triage flow, multi-client access via Tailscale proxy, cert-manager ACME automation, Services/ClusterIP/CoreDNS, NetworkPolicy, IngressRoute routing, PV/PVC/StorageClass/CSI storage chain, Longhorn distributed block storage, Prometheus monitoring pull model, Loki logging architecture, DaemonSet vs Deployment placement, StatefulSet with stable identity and storage, and extensive production lessons learned from real incidents (mutable tag trap, RollingUpdate x ResourceQuota collision, omitempty drift, browser CORS misdirection, host-to-PVC mover pattern, etcd survival, Grafana provisioning vs runtime state).",
+      "tags": [
+        "documentation",
+        "kubernetes",
+        "helm",
+        "argocd",
+        "monitoring",
+        "storage",
+        "networking",
+        "production-lessons"
+      ],
+      "complexity": "complex",
+      "languageNotes": "The largest concept document with 45 sections. Documents real production incidents and lessons learned. Contains Wiki-style [[links]] to Platform Concepts and ADR index. Covers specialized topics like Traefik's native IngressRoute CRD, Argo Rollouts traffic-vs-control split, and the mutable image tag GitOps trap."
+    },
+    {
+      "id": "document:docs/concepts/Platform Concepts.md",
+      "type": "document",
+      "name": "Platform Concepts.md",
+      "filePath": "docs/concepts/Platform Concepts.md",
+      "summary": "Platform infrastructure concepts covering Linux, networking, and infra ideas not tied to one specific tool. Covers Proxmox clustering and failure domains (pmxcfs, quorum, independent availability models), SSH configuration patterns and local alias portability, package management (deb822 .sources format, repo GPG keys), mesh VPNs via Tailscale (tailnet architecture, auth keys, OAuth client scopes, MagicDNS resolution, proxy modes, collaborator access patterns), Proxmox templates and cloud-init (inert templates, virt-customize, machine-id handling, qemu-guest-agent, full vs linked clone, synthetic cloud-init drive, cloud-init keys), Proxmox access control (pveum VM/Datastore/SDN privilege buckets, ACL scoping), Cloudflare Tunnel and edge TLS (outbound reverse tunnel, remote-managed config, Universal SSL wildcard limits, DNS record precedence), Proxmox host networking and Linux bridge (NIC as bridge port, link state vs traffic flow), NIC hardware offload and Intel I219-LM e1000e hang symptoms and fix, and disk I/O fundamentals (QEMU cache modes, load average iowait, USB-SSD latency ceiling, etcd as storage canary).",
+      "tags": [
+        "documentation",
+        "proxmox",
+        "networking",
+        "tailscale",
+        "cloudflare",
+        "infrastructure",
+        "storage"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Documents platform-specific patterns and hardware issues encountered (e1000e NIC hang, USB-SSD latency). Contains extensive Tailscale networking details including quad-100 resolver behavior and two complete request path diagrams (public via cloudflared and internal via Tailscale proxy)."
+    },
+    {
+      "id": "document:docs/concepts/Terraform Concepts.md",
+      "type": "document",
+      "name": "Terraform Concepts.md",
+      "filePath": "docs/concepts/Terraform Concepts.md",
+      "summary": "Brief Terraform concepts documentation explaining Proxmox VM provisioning for the homelab platform. Covers the provider-resource relationship (bpg/proxmox API adapter), one clustered API not meaning shared storage or HA endpoints, full clone from reusable template, variables separating reusable shape from concrete inputs (terraform.tfvars vs PROXMOX_VE_API_TOKEN runtime secret), state as the binding between configuration and real objects, plan as review boundary, one worker resource keeping lifecycle identical while the worker map expresses physical differences (node_name, IP, capacity, datastore), and the separation between Terraform-allocated virtual disks and Ansible-managed guest mounts (the longhorn_node role owns /dev/sdb \u2192 /var/lib/longhorn).",
+      "tags": [
+        "documentation",
+        "terraform",
+        "infrastructure-as-code",
+        "proxmox",
+        "provisioning"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Smallest concept document (36 lines, 1 section). Explains the deliberate tool split between Terraform (VM existence) and Ansible (OS configuration), and how ADR-0053 unified two workers on one lifecycle using a for_each resource with a worker map."
+    },
+    {
+      "id": "document:docs/incidents/README.md",
+      "type": "document",
+      "name": "README.md",
+      "filePath": "docs/incidents/README.md",
+      "summary": "Incident review index and guidance explaining when to open incidents, the documentation ritual, severity classification, and links to all recorded incidents.",
+      "tags": [
+        "documentation",
+        "incident-response",
+        "operational-learning",
+        "index"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:docs/incidents/TEMPLATE.md",
+      "type": "document",
+      "name": "TEMPLATE.md",
+      "filePath": "docs/incidents/TEMPLATE.md",
+      "summary": "Standardized template for blameless post-incident reports with sections for metadata, executive summary, impact, timeline, root cause analysis, corrective actions, and evidence.",
+      "tags": [
+        "documentation",
+        "template",
+        "incident-response",
+        "post-mortem"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:docs/incidents/INC-2026-001-longhorn-stale-mount-namespace.md",
+      "type": "document",
+      "name": "INC-2026-001-longhorn-stale-mount-namespace.md",
+      "filePath": "docs/incidents/INC-2026-001-longhorn-stale-mount-namespace.md",
+      "summary": "Post-incident review of a Longhorn instance-manager retaining a stale storage mount that blocked data deletion and required manual intervention to resolve.",
+      "tags": [
+        "incident-report",
+        "longhorn",
+        "storage",
+        "troubleshooting",
+        "post-mortem"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:docs/incidents/INC-2026-002-longhorn-stale-snapshot-attachment-tickets.md",
+      "type": "document",
+      "name": "INC-2026-002-longhorn-stale-snapshot-attachment-tickets.md",
+      "filePath": "docs/incidents/INC-2026-002-longhorn-stale-snapshot-attachment-tickets.md",
+      "summary": "Analysis of stale Longhorn snapshot attachment tickets that prevented worker evacuation during planned maintenance, requiring manual ticket cleanup.",
+      "tags": [
+        "incident-report",
+        "longhorn",
+        "storage",
+        "maintenance",
+        "post-mortem"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:docs/incidents/INC-2026-003-longhorn-rebuild-starved-etcd.md",
+      "type": "document",
+      "name": "INC-2026-003-longhorn-rebuild-starved-etcd.md",
+      "filePath": "docs/incidents/INC-2026-003-longhorn-rebuild-starved-etcd.md",
+      "summary": "Review of how Longhorn volume rebuild I/O starved the single-node etcd, causing API unavailability and revealing the need for I/O scheduling on small clusters.",
+      "tags": [
+        "incident-report",
+        "longhorn",
+        "etcd",
+        "performance",
+        "post-mortem"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:docs/incidents/INC-2026-004-argocd-repo-server-oom-recovery.md",
+      "type": "document",
+      "name": "INC-2026-004-argocd-repo-server-oom-recovery.md",
+      "filePath": "docs/incidents/INC-2026-004-argocd-repo-server-oom-recovery.md",
+      "summary": "Incident report of Argo CD repository server OOM during recovery reconciliation, traced to resource limits and large repo processing.",
+      "tags": [
+        "incident-report",
+        "argocd",
+        "gitops",
+        "oom",
+        "post-mortem"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:docs/incidents/INC-2026-005-prometheus-tsdb-capacity-exhaustion.md",
+      "type": "document",
+      "name": "INC-2026-005-prometheus-tsdb-capacity-exhaustion.md",
+      "filePath": "docs/incidents/INC-2026-005-prometheus-tsdb-capacity-exhaustion.md",
+      "summary": "Analysis of Prometheus TSDB capacity exhaustion on its persistent volume, leading to monitoring downtime and requiring retention policy adjustments.",
+      "tags": [
+        "incident-report",
+        "prometheus",
+        "monitoring",
+        "storage",
+        "post-mortem"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:docs/migrations/audiobookshelf.md",
+      "type": "document",
+      "name": "audiobookshelf.md",
+      "filePath": "docs/migrations/audiobookshelf.md",
+      "summary": "Comprehensive migration plan for Audiobookshelf (M3) from Docker Compose to Kubernetes. Documents source assessment, target design with GitOps packaging, storage strategy using Longhorn PVCs, networking via Traefik and cloudflared, and a detailed 7-step execution plan with rollback procedures. Includes verification baseline data at snapshot 2026-07-14T0149.",
+      "tags": [
+        "migration",
+        "execution-plan",
+        "storage",
+        "gitops",
+        "rollback-procedures"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:docs/migrations/immich.md",
+      "type": "document",
+      "name": "immich.md",
+      "filePath": "docs/migrations/immich.md",
+      "summary": "Immich migration and workstation rebuild runbook documenting the complete Compose to Kubernetes migration, database conversion from pgvecto.rs to VectorChord, upgrade from v2.7.3 to v3.0.3, and post-Proxmox recovery procedures. Covers workstation storage lifecycle, preserved Longhorn disk identities, incident recovery (INC-2026-002), and the storage convergence that consolidated worker resources onto k3s-worker-1 after the control-plane VM migration decision (issue #49).",
+      "tags": [
+        "migration",
+        "incident-recovery",
+        "storage",
+        "database-migration",
+        "workstation-rebuild"
+      ],
+      "complexity": "complex",
+      "languageNotes": "Documents complex multi-phase migration with hardware lifecycle changes, database technology transitions, and Longhorn volume reassociation after Proxmox recovery."
+    },
+    {
+      "id": "document:docs/migrations/kiroku.md",
+      "type": "document",
+      "name": "kiroku.md",
+      "filePath": "docs/migrations/kiroku.md",
+      "summary": "Migration record for kiroku, the first developer-owned custom two-tier app (Next.js frontend + Go API with SQLite/WAL store) migrated Compose to Kubernetes. Documents the Option E dev-owned pattern with app-hosted manifests, M0 mover pattern usage for local-to-PVC data transfer, SQLite WAL quiescence before copy, and an OOMKill incident that required cascading resource limit adjustments across the pod, LimitRange, and ResourceQuota.",
+      "tags": [
+        "migration",
+        "developer-owned",
+        "sqlite",
+        "mover-pattern",
+        "incident-response"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Documents the M0 host-to-PVC mover pattern using a throwaway alpine pod with tar streamed through kubectl exec, and the RollingUpdate surge collision with ResourceQuota limits."
+    },
+    {
+      "id": "document:docs/migrations/nextcloud.md",
+      "type": "document",
+      "name": "nextcloud.md",
+      "filePath": "docs/migrations/nextcloud.md",
+      "summary": "Migration record for nextcloud (M5), the first platform off-the-shelf app deployed via managed Helm chart with own Postgres and Redis on official images. Documents the big decision to use the community chart while avoiding the deprecated bitnamilegacy bundled database, OIDC to local account migration, data migration via logical restore and kubectl exec mover, and autonomous execution with 6 documented incidents including crash loop fixes and CronJob security context reconciliation.",
+      "tags": [
+        "migration",
+        "helm-chart",
+        "postgres",
+        "autonomous-execution",
+        "incident-response"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Documents the external database pattern with Helm charts, config.php byte-exact migration, and the startupProbe necessity for large code copies on RWO Longhorn PVCs."
+    },
+    {
+      "id": "document:docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/BUILD-MANIFEST.md",
+      "type": "document",
+      "name": "BUILD-MANIFEST.md",
+      "filePath": "docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/BUILD-MANIFEST.md",
+      "summary": "Build manifest recording exact source commits, package hashes, toolchain versions, and validation evidence for the Proxmox VE 9.2-1 I219-V recovery installer ISO. Documents the e1000e driver patch integration across early initrd, live installer, and installed kernel package environments.",
+      "tags": [
+        "build-manifest",
+        "kernel-patch",
+        "documentation",
+        "recovery",
+        "e1000e"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/README.md",
+      "type": "document",
+      "name": "README.md",
+      "filePath": "docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/README.md",
+      "summary": "Comprehensive usage guide for the Proxmox VE 9.2-1 I219-V recovery installer. Explains the allow_bad_nvm module parameter workaround, installation procedures, first-boot verification, known v1 initramfs module-selection issues, Secure Boot considerations, kernel upgrade constraints, and rollback steps.",
+      "tags": [
+        "installation-guide",
+        "troubleshooting",
+        "recovery",
+        "kernel-patch",
+        "e1000e"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/RELEASE_NOTES.md",
+      "type": "document",
+      "name": "RELEASE_NOTES.md",
+      "filePath": "docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/RELEASE_NOTES.md",
+      "summary": "Release notes for v1 of the Proxmox VE 9.2-1 I219-V recovery installer. Summarizes the unsigned e1000e module workaround, key caveats (Secure Boot, ABI-specific to 7.0.2-6-pve), known v1 first-boot repair issue, and ISO checksum for verification.",
+      "tags": [
+        "release-notes",
+        "documentation",
+        "recovery",
+        "kernel-patch"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "service:k8s/apps/homelab/audiobookshelf/namespace.yaml",
+      "type": "service",
+      "name": "namespace.yaml",
+      "filePath": "k8s/apps/homelab/audiobookshelf/namespace.yaml",
+      "summary": "Defines the audiobookshelf namespace as a dedicated boundary for the Audiobookshelf application workload, following the operator-owned app policy with no ResourceQuota/LimitRange.",
+      "tags": [
+        "kubernetes",
+        "namespace",
+        "application",
+        "infrastructure"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "service:k8s/apps/homelab/audiobookshelf/pvcs.yaml",
+      "type": "service",
+      "name": "pvcs.yaml",
+      "filePath": "k8s/apps/homelab/audiobookshelf/pvcs.yaml",
+      "summary": "Defines four PersistentVolumeClaims preserving upstream's independent mount boundaries: config (SQLite database), metadata, audiobooks (70Gi), and podcasts. Uses ReadWriteOnce access mode with Longhorn storage classes.",
+      "tags": [
+        "kubernetes",
+        "storage",
+        "persistent-volume",
+        "longhorn",
+        "data-persistence"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Multi-document YAML with sync-wave:0 ensures PVCs are created before the deployment mounts them."
+    },
+    {
+      "id": "service:k8s/apps/homelab/audiobookshelf/deployment.yaml",
+      "type": "service",
+      "name": "deployment.yaml",
+      "filePath": "k8s/apps/homelab/audiobookshelf/deployment.yaml",
+      "summary": "Single-replica Deployment with Recreate strategy for Audiobookshelf, running ghcr.io/advplyr/audiobookshelf:2.35.1. One-replica constraint prevents concurrent SQLite database access; startupProbe gates readiness during first database open.",
+      "tags": [
+        "kubernetes",
+        "deployment",
+        "application",
+        "sqlite",
+        "container"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Recreate strategy is required for single-replica deployments with RWO PVC mounts to prevent overlapping writers during rolling updates."
+    },
+    {
+      "id": "service:k8s/apps/homelab/audiobookshelf/service.yaml",
+      "type": "service",
+      "name": "service.yaml",
+      "filePath": "k8s/apps/homelab/audiobookshelf/service.yaml",
+      "summary": "ClusterIP Service exposing the Audiobookshelf application internally on port 80, selected by app.kubernetes.io/name label with sync-wave:1.",
+      "tags": [
+        "kubernetes",
+        "service",
+        "clusterip",
+        "networking",
+        "exposure"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "service:k8s/apps/homelab/audiobookshelf/routing.yaml",
+      "type": "service",
+      "name": "routing.yaml",
+      "filePath": "k8s/apps/homelab/audiobookshelf/routing.yaml",
+      "summary": "Traefik IngressRoute routing audiobookshelf.neovara.uk to the service via cloudflared, plus secure-headers Middleware for security hardening. No CORS middleware due to upstream login compatibility issues.",
+      "tags": [
+        "kubernetes",
+        "traefik",
+        "ingress",
+        "routing",
+        "middleware",
+        "security"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Multi-document YAML defines both Middleware (headers) and IngressRoute (routing) with sync-wave:2 to ensure dependencies are ready."
+    },
+    {
+      "id": "service:k8s/apps/homelab/audiobookshelf/routing.yaml:secure-headers",
+      "type": "service",
+      "name": "secure-headers",
+      "filePath": "k8s/apps/homelab/audiobookshelf/routing.yaml",
+      "summary": "Traefik Middleware applying security headers including XSS filter, content-type nosniff, frame deny, and strict HSTS configuration with one-year max-age.",
+      "tags": [
+        "kubernetes",
+        "traefik",
+        "middleware",
+        "security",
+        "headers"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "service:k8s/apps/homelab/audiobookshelf/routing.yaml:audiobookshelf",
+      "type": "service",
+      "name": "audiobookshelf IngressRoute",
+      "filePath": "k8s/apps/homelab/audiobookshelf/routing.yaml",
+      "summary": "Traefik IngressRoute routing audiobookshelf.neovara.uk through the web entrypoint to the audiobookshelf service, applying secure-headers middleware.",
+      "tags": [
+        "kubernetes",
+        "traefik",
+        "ingressroute",
+        "routing",
+        "external-access"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "service:k8s/apps/homelab/audiobookshelf/pvcs.yaml:audiobookshelf-config",
+      "type": "service",
+      "name": "audiobookshelf-config PVC",
+      "filePath": "k8s/apps/homelab/audiobookshelf/pvcs.yaml",
+      "summary": "1Gi ReadWriteOnce PVC on longhorn-replicated storage class for the /config mount, containing the SQLite database which requires RWO block filesystem semantics.",
+      "tags": [
+        "kubernetes",
+        "pvc",
+        "storage",
+        "database",
+        "longhorn"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "service:k8s/apps/homelab/audiobookshelf/pvcs.yaml:audiobookshelf-metadata",
+      "type": "service",
+      "name": "audiobookshelf-metadata PVC",
+      "filePath": "k8s/apps/homelab/audiobookshelf/pvcs.yaml",
+      "summary": "2Gi ReadWriteOnce PVC on longhorn-replicated storage class for the /metadata mount, storing application metadata.",
+      "tags": [
+        "kubernetes",
+        "pvc",
+        "storage",
+        "longhorn"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "service:k8s/apps/homelab/audiobookshelf/pvcs.yaml:audiobookshelf-audiobooks-single",
+      "type": "service",
+      "name": "audiobookshelf-audiobooks-single PVC",
+      "filePath": "k8s/apps/homelab/audiobookshelf/pvcs.yaml",
+      "summary": "70Gi ReadWriteOnce PVC on longhorn storage class (default single replica) for the /audiobooks mount, renamed from immutable bound PVC to change storage class.",
+      "tags": [
+        "kubernetes",
+        "pvc",
+        "storage",
+        "longhorn",
+        "media"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "service:k8s/apps/homelab/audiobookshelf/pvcs.yaml:audiobookshelf-podcasts",
+      "type": "service",
+      "name": "audiobookshelf-podcasts PVC",
+      "filePath": "k8s/apps/homelab/audiobookshelf/pvcs.yaml",
+      "summary": "5Gi ReadWriteOnce PVC on longhorn-replicated storage class for the /podcasts mount, storing podcast content.",
+      "tags": [
+        "kubernetes",
+        "pvc",
+        "storage",
+        "longhorn",
+        "media"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:k8s/apps/homelab/immich/README.md",
+      "type": "document",
+      "name": "README.md",
+      "filePath": "k8s/apps/homelab/immich/README.md",
+      "summary": "Comprehensive Immich deployment documentation covering authoritative state, authentication, adoption record, rollout incident analysis, and workstation rebuild recovery with storage migration details.",
+      "tags": [
+        "documentation",
+        "infrastructure",
+        "recovery",
+        "incident-report",
+        "storage-migration"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:k8s/apps/homelab/immich/SECRETS.md",
+      "type": "document",
+      "name": "SECRETS.md",
+      "filePath": "k8s/apps/homelab/immich/SECRETS.md",
+      "summary": "Documents the imperative secret management approach for Immich database credentials, providing exact kubectl commands to recreate the immich-db Secret without committing values to git.",
+      "tags": [
+        "documentation",
+        "secrets",
+        "security",
+        "database",
+        "credentials"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "service:k8s/apps/homelab/immich/values.yaml",
+      "type": "service",
+      "name": "values.yaml",
+      "filePath": "k8s/apps/homelab/immich/values.yaml",
+      "summary": "Helm chart values for Immich v3.0.3 deployment configuring server, machine-learning, and valkey components with resource limits, PVC references, and secret-based database credentials.",
+      "tags": [
+        "configuration",
+        "helm",
+        "deployment",
+        "resources",
+        "persistence"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Uses legacy library mount at /usr/src/app/upload alongside /data for backward compatibility with restored database asset paths."
+    },
+    {
+      "id": "service:k8s/apps/homelab/immich/manifests/namespace.yaml",
+      "type": "service",
+      "name": "namespace.yaml",
+      "filePath": "k8s/apps/homelab/immich/manifests/namespace.yaml",
+      "summary": "Defines the immich namespace with Argo CD prune protection to prevent accidental deletion of retained PVCs.",
+      "tags": [
+        "infrastructure",
+        "namespace",
+        "argo-cd",
+        "gitops"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "service:k8s/apps/homelab/immich/manifests/postgres.yaml",
+      "type": "service",
+      "name": "postgres.yaml",
+      "filePath": "k8s/apps/homelab/immich/manifests/postgres.yaml",
+      "summary": "Immich-compatible PostgreSQL 14 deployment with VectorChord and pgvecto.rs extensions, plus ClusterIP service for internal access.",
+      "tags": [
+        "infrastructure",
+        "database",
+        "postgres",
+        "deployment",
+        "service"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Two-document YAML: Deployment first, then Service. Uses Recreate strategy to prevent data loss during rolling updates. Includes 128Mi memory-backed /dev/shm volume for PostgreSQL shared buffers."
+    },
+    {
+      "id": "resource:k8s/apps/homelab/immich/manifests/postgres.yaml:immich-postgres-deployment",
+      "type": "resource",
+      "name": "immich-postgres-deployment",
+      "filePath": "k8s/apps/homelab/immich/manifests/postgres.yaml",
+      "summary": "PostgreSQL 14 Deployment for Immich with pgvecto.rs and VectorChord extensions, using credentials from immich-db Secret.",
+      "tags": [
+        "deployment",
+        "database",
+        "postgres",
+        "stateful"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "resource:k8s/apps/homelab/immich/manifests/postgres.yaml:immich-postgres-service",
+      "type": "resource",
+      "name": "immich-postgres-service",
+      "filePath": "k8s/apps/homelab/immich/manifests/postgres.yaml",
+      "summary": "ClusterIP Service exposing PostgreSQL on port 5432 for internal cluster access.",
+      "tags": [
+        "service",
+        "database",
+        "internal"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "resource:k8s/apps/homelab/immich/manifests/pvcs.yaml",
+      "type": "resource",
+      "name": "pvcs.yaml",
+      "filePath": "k8s/apps/homelab/immich/manifests/pvcs.yaml",
+      "summary": "Migrated PersistentVolumeClaims for Immich data (350Gi library) and PostgreSQL (10Gi), both using Retain reclaim policy with Argo CD prune protection.",
+      "tags": [
+        "infrastructure",
+        "storage",
+        "persistent-volume",
+        "longhorn",
+        "migration"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "resource:k8s/apps/homelab/immich/manifests/pvcs.yaml:immich-library",
+      "type": "resource",
+      "name": "immich-library",
+      "filePath": "k8s/apps/homelab/immich/manifests/pvcs.yaml",
+      "summary": "350Gi PersistentVolumeClaim for Immich photo library storage using longhorn-immich-hdd-retain storage class.",
+      "tags": [
+        "storage",
+        "persistent-volume",
+        "longhorn",
+        "data"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "resource:k8s/apps/homelab/immich/manifests/pvcs.yaml:immich-postgres",
+      "type": "resource",
+      "name": "immich-postgres",
+      "filePath": "k8s/apps/homelab/immich/manifests/pvcs.yaml",
+      "summary": "10Gi PersistentVolumeClaim for PostgreSQL database using longhorn-immich-db-retain storage class.",
+      "tags": [
+        "storage",
+        "persistent-volume",
+        "longhorn",
+        "database"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "service:k8s/apps/homelab/immich/manifests/routing.yaml",
+      "type": "service",
+      "name": "routing.yaml",
+      "filePath": "k8s/apps/homelab/immich/manifests/routing.yaml",
+      "summary": "Traefik IngressRoute for internal tailnet access to Immich via immich.in.neovara.uk, routing to immich-server service.",
+      "tags": [
+        "infrastructure",
+        "routing",
+        "traefik",
+        "ingress",
+        "tailnet"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "service:k8s/apps/homelab/nextcloud/manifests/namespace.yaml",
+      "type": "service",
+      "name": "namespace.yaml",
+      "filePath": "k8s/apps/homelab/nextcloud/manifests/namespace.yaml",
+      "summary": "Creates the nextcloud namespace as a trusted platform boundary without resource quotas or limit ranges, following ADR-0020's guidance that platform apps don't need fencing.",
+      "tags": [
+        "namespace",
+        "infrastructure",
+        "boundary"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "service:k8s/apps/homelab/nextcloud/manifests/postgres.yaml",
+      "type": "service",
+      "name": "postgres.yaml",
+      "filePath": "k8s/apps/homelab/nextcloud/manifests/postgres.yaml",
+      "summary": "PostgreSQL 16 deployment with Recreate strategy, ClusterIP service, and data PVC for Nextcloud's authoritative database store. Uses fsGroup 70 for volume permissions and includes health probes.",
+      "tags": [
+        "database",
+        "deployment",
+        "storage",
+        "data-tier"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Multi-document YAML containing Deployment, Service, and PersistentVolumeClaim. Uses Recreate strategy to prevent multiple PostgreSQL instances from concurrently accessing the RWO PVC."
+    },
+    {
+      "id": "service:k8s/apps/homelab/nextcloud/manifests/pvcs.yaml",
+      "type": "service",
+      "name": "pvcs.yaml",
+      "filePath": "k8s/apps/homelab/nextcloud/manifests/pvcs.yaml",
+      "summary": "Two PersistentVolumeClaims for Nextcloud data persistence: nextcloud-main (5Gi, code/config/custom_apps) and nextcloud-data (20Gi, user files). Both use longhorn-replicated storage class with RWO access.",
+      "tags": [
+        "storage",
+        "persistence",
+        "longhorn"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "service:k8s/apps/homelab/nextcloud/manifests/redis.yaml",
+      "type": "service",
+      "name": "redis.yaml",
+      "filePath": "k8s/apps/homelab/nextcloud/manifests/redis.yaml",
+      "summary": "Redis 8-alpine deployment for Nextcloud's distributed cache and file locking. Stateless with no PVC, cache-only configuration, and hardened security context (non-root, read-only root filesystem, dropped capabilities).",
+      "tags": [
+        "cache",
+        "deployment",
+        "security",
+        "data-tier"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Multi-document YAML with Deployment and ClusterIP Service. Disables Redis persistence entirely for cache-only use case. Includes comprehensive security hardening."
+    },
+    {
+      "id": "service:k8s/apps/homelab/nextcloud/manifests/routing.yaml",
+      "type": "service",
+      "name": "routing.yaml",
+      "filePath": "k8s/apps/homelab/nextcloud/manifests/routing.yaml",
+      "summary": "Traefik IngressRoute configuration for nextcloud.neovara.uk via cloudflared. Includes secure-headers middleware (HSTS, XSS protection, frame deny) and nextcloud-uploads middleware (10 GiB request buffer).",
+      "tags": [
+        "routing",
+        "ingress",
+        "traefik",
+        "middleware"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "service:k8s/apps/personal/kiroku/limitrange.yaml",
+      "type": "service",
+      "name": "limitrange.yaml",
+      "filePath": "k8s/apps/personal/kiroku/limitrange.yaml",
+      "summary": "LimitRange that injects default CPU/memory requests and limits into containers lacking them, and enforces per-container min/max bounds to prevent any single pod from consuming the entire namespace quota.",
+      "tags": [
+        "kubernetes",
+        "resource-governance",
+        "limitrange",
+        "namespace-policy"
+      ],
+      "complexity": "simple",
+      "languageNotes": "LimitRange operates at admission time, mutating pods without requests/limits before ResourceQuota validation occurs. The pair together enforce mandatory resource declaration while providing sensible defaults."
+    },
+    {
+      "id": "service:k8s/apps/personal/kiroku/namespace.yaml",
+      "type": "service",
+      "name": "namespace.yaml",
+      "filePath": "k8s/apps/personal/kiroku/namespace.yaml",
+      "summary": "Namespace definition for the kiroku application with the 'group: personal' label, following the personal namespace scaffold pattern for dev-owned apps managed via GitOps.",
+      "tags": [
+        "kubernetes",
+        "namespace",
+        "gitops",
+        "personal-apps"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "service:k8s/apps/personal/kiroku/rbac.yaml",
+      "type": "service",
+      "name": "rbac.yaml",
+      "filePath": "k8s/apps/personal/kiroku/rbac.yaml",
+      "summary": "Least-privilege RBAC setup defining a deployer ServiceAccount, Role, and RoleBinding. Grants scoped workload and Traefik routing access without secret permissions, enabling collaborators or CI pipelines to operate directly within the kiroku namespace only.",
+      "tags": [
+        "kubernetes",
+        "rbac",
+        "security",
+        "least-privilege",
+        "serviceaccount"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Avoids built-in 'edit' ClusterRole because it grants secret access. This custom Role explicitly excludes secrets, RBAC objects, ResourceQuota, and LimitRange to prevent privilege escalation."
+    },
+    {
+      "id": "service:k8s/apps/personal/kiroku/resourcequota.yaml",
+      "type": "service",
+      "name": "resourcequota.yaml",
+      "filePath": "k8s/apps/personal/kiroku/resourcequota.yaml",
+      "summary": "ResourceQuota establishing aggregate resource ceiling for the kiroku namespace (1 CPU request, 2 CPU limit, 1Gi memory request, 3Gi limit). Prevents runaway apps from starving other homelab workloads on the never-overcommitted cluster.",
+      "tags": [
+        "kubernetes",
+        "resource-governance",
+        "resourcequota",
+        "namespace-policy"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Once a quota constrains a compute resource, all pods must declare requests+limits. The paired LimitRange supplies defaults so admission succeeds even for bare container specs."
+    },
+    {
+      "id": "file:k8s/argocd/apps/appprojects.yaml",
+      "type": "file",
+      "name": "appprojects.yaml",
+      "filePath": "k8s/argocd/apps/appprojects.yaml",
+      "summary": "Argo CD Application that syncs all AppProject manifests from k8s/argocd/projects/, bringing project governance definitions under GitOps control. Lives in the default project as a bootstrap ordering requirement.",
+      "tags": [
+        "gitops",
+        "argo-cd",
+        "app-project",
+        "bootstrap",
+        "configuration"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:k8s/argocd/apps/argocd.yaml",
+      "type": "file",
+      "name": "argocd.yaml",
+      "filePath": "k8s/argocd/apps/argocd.yaml",
+      "summary": "Self-managing Argo CD Application that resolves the bootstrap paradox \u2014 after the initial manual Helm install, Argo CD now manages its own Helm release through multi-source sync (upstream chart + local values.yaml).",
+      "tags": [
+        "gitops",
+        "argo-cd",
+        "self-management",
+        "helm",
+        "bootstrap"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:k8s/argocd/apps/alloy.yaml",
+      "type": "file",
+      "name": "alloy.yaml",
+      "filePath": "k8s/argocd/apps/alloy.yaml",
+      "summary": "Argo CD Application for Grafana Alloy log agent using two-source sync (upstream Helm chart + local values). Runtime dependency on Loki exists but requires no sync-wave ordering.",
+      "tags": [
+        "gitops",
+        "monitoring",
+        "logging",
+        "helm",
+        "alloy"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:k8s/argocd/apps/argo-rollouts.yaml",
+      "type": "file",
+      "name": "argo-rollouts.yaml",
+      "filePath": "k8s/argocd/apps/argo-rollouts.yaml",
+      "summary": "Argo CD Application for Argo Rollouts controller with three-source sync (chart + values + dashboard IngressRoute). First green-field GitOps deployment with CreateNamespace=true.",
+      "tags": [
+        "gitops",
+        "argo-rollouts",
+        "progressive-delivery",
+        "helm",
+        "dashboard"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:k8s/argocd/apps/audiobookshelf.yaml",
+      "type": "file",
+      "name": "audiobookshelf.yaml",
+      "filePath": "k8s/argocd/apps/audiobookshelf.yaml",
+      "summary": "Argo CD Application for Audiobookshelf homelab workload \u2014 fully hand-authored manifests since no official chart exists. Uses Recreate strategy for safe automated sync.",
+      "tags": [
+        "gitops",
+        "homelab",
+        "workload",
+        "audiobooks",
+        "hand-authored"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:k8s/argocd/apps/cert-manager.yaml",
+      "type": "file",
+      "name": "cert-manager.yaml",
+      "filePath": "k8s/argocd/apps/cert-manager.yaml",
+      "summary": "Argo CD Application for cert-manager with sync-wave ladder (CRDs/controller wave 0, ClusterIssuers wave 1, Certificate wave 2). Bundles chart with companion manifests including cross-namespace Certificate for Traefik.",
+      "tags": [
+        "gitops",
+        "cert-manager",
+        "tls",
+        "sync-wave",
+        "companion-manifests"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Uses Argo CD sync-wave annotations to enforce ordering: CRDs and controller (wave 0) must be healthy before ClusterIssuers (wave 1), which must exist before the wildcard Certificate (wave 2) is created."
+    },
+    {
+      "id": "file:k8s/argocd/apps/cloudflared.yaml",
+      "type": "file",
+      "name": "cloudflared.yaml",
+      "filePath": "k8s/argocd/apps/cloudflared.yaml",
+      "summary": "Simplest GitOps shape \u2014 single directory source for hand-written cloudflared manifests (namespace, deployment, networkpolicy). No Helm chart; tunnel token Secret created imperatively per deferred-secrets policy.",
+      "tags": [
+        "gitops",
+        "cloudflare",
+        "tunnel",
+        "ingress",
+        "hand-authored"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:k8s/argocd/apps/immich.yaml",
+      "type": "file",
+      "name": "immich.yaml",
+      "filePath": "k8s/argocd/apps/immich.yaml",
+      "summary": "Argo CD Application for Immich photo management using three-source OCI sync (upstream OCI Helm chart + values + companion manifests). Adoption complete with automated sync policy.",
+      "tags": [
+        "gitops",
+        "homelab",
+        "immich",
+        "oci-helm",
+        "photos"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:k8s/argocd/apps/kiroku-governance.yaml",
+      "type": "file",
+      "name": "kiroku-governance.yaml",
+      "filePath": "k8s/argocd/apps/kiroku-governance.yaml",
+      "summary": "Platform-owned governance Application for kiroku namespace \u2014 creates namespace, ResourceQuota, LimitRange, and deployer RBAC. Sync-wave 0 ensures governance exists before workload landing. Lives in default project due to RBAC privileges.",
+      "tags": [
+        "gitops",
+        "governance",
+        "resource-quota",
+        "rbac",
+        "sync-wave"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:k8s/argocd/apps/kiroku.yaml",
+      "type": "file",
+      "name": "kiroku.yaml",
+      "filePath": "k8s/argocd/apps/kiroku.yaml",
+      "summary": "Dev-owned pointer Application for kiroku workloads \u2014 manifests sourced from the app's own public repo (deploy/). Locked-down personal project allows only kiroku repo and namespace. Sync-wave 1 waits for governance.",
+      "tags": [
+        "gitops",
+        "pointer",
+        "dev-owned",
+        "multi-repo",
+        "personal-namespace"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:k8s/argocd/apps/kube-prometheus-stack.yaml",
+      "type": "file",
+      "name": "kube-prometheus-stack.yaml",
+      "filePath": "k8s/argocd/apps/kube-prometheus-stack.yaml",
+      "summary": "Argo CD Application for kube-prometheus-stack with skipCrds enabled to avoid Argo managing large monitoring.coreos.com CRDs. Bundles chart with companion IngressRoutes for Grafana and Prometheus.",
+      "tags": [
+        "gitops",
+        "monitoring",
+        "prometheus",
+        "grafana",
+        "helm"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Uses skipCrds to keep Prometheus CRDs out of Argo's managed set \u2014 they're too large (embedded OpenAPI schemas) for client-side apply and have their own upgrade mechanism via Helm hooks."
+    },
+    {
+      "id": "file:k8s/argocd/apps/loki.yaml",
+      "type": "file",
+      "name": "loki.yaml",
+      "filePath": "k8s/argocd/apps/loki.yaml",
+      "summary": "Argo CD Application for Loki log aggregation \u2014 simplest two-source shape (chart + values). No companion manifests needed; IngressRoute lives with kube-prometheus-stack as Grafana consumes Loki.",
+      "tags": [
+        "gitops",
+        "logging",
+        "loki",
+        "helm",
+        "monitoring"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:k8s/argocd/apps/longhorn.yaml",
+      "type": "file",
+      "name": "longhorn.yaml",
+      "filePath": "k8s/argocd/apps/longhorn.yaml",
+      "summary": "Argo CD Application for Longhorn storage with three bundled sources (chart + values + companions). Companions include 2-copy StorageClass, internal UI IngressRoute, and Grafana dashboard ConfigMap.",
+      "tags": [
+        "gitops",
+        "storage",
+        "longhorn",
+        "helm",
+        "block-storage"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:k8s/argocd/apps/nextcloud.yaml",
+      "type": "file",
+      "name": "nextcloud.yaml",
+      "filePath": "k8s/argocd/apps/nextcloud.yaml",
+      "summary": "Argo CD Application for Nextcloud with three-source sync (community chart + values + companion manifests). Companions supply custom Postgres, Redis, PVCs, and Traefik routing \u2014 avoiding the chart's deprecated Bitnami subcharts.",
+      "tags": [
+        "gitops",
+        "homelab",
+        "nextcloud",
+        "helm",
+        "file-sync"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:k8s/argocd/apps/tailscale.yaml",
+      "type": "file",
+      "name": "tailscale.yaml",
+      "filePath": "k8s/argocd/apps/tailscale.yaml",
+      "summary": "Argo CD Application for Tailscale Operator adopting the existing manual Helm install. Uses explicit releaseName to preserve RBAC naming. Sync-wave ordering separates CRDs/operator (wave 0) from ProxyClass (wave 1).",
+      "tags": [
+        "gitops",
+        "tailscale",
+        "operator",
+        "adoption",
+        "vpn"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:k8s/argocd/apps/traefik.yaml",
+      "type": "file",
+      "name": "traefik.yaml",
+      "filePath": "k8s/argocd/apps/traefik.yaml",
+      "summary": "Argo CD Application for Traefik ingress controller \u2014 evolved from chart-only adoption to three-source bundle. Companions include default TLSStore, dashboard/tailscale Services, and Grafana dashboard ConfigMap.",
+      "tags": [
+        "gitops",
+        "traefik",
+        "ingress",
+        "helm",
+        "adoption"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "service:k8s/argocd/ingressroute.yaml",
+      "type": "service",
+      "name": "ingressroute.yaml",
+      "filePath": "k8s/argocd/ingressroute.yaml",
+      "summary": "Internal-only Traefik IngressRoute for ArgoCD UI, routing argocd.in.neovara.uk through Tailscale with TLS termination at the websecure entrypoint.",
+      "tags": [
+        "gitops",
+        "ingress",
+        "routing",
+        "security",
+        "traefik"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Uses Traefik's custom IngressRoute CRD with empty TLS config to serve the default TLSStore wildcard certificate for internal .in.neovara.uk hostnames."
+    },
+    {
+      "id": "service:k8s/argocd/namespace.yaml",
+      "type": "service",
+      "name": "namespace.yaml",
+      "filePath": "k8s/argocd/namespace.yaml",
+      "summary": "Defines the argocd Kubernetes namespace where all ArgoCD components and Applications are deployed.",
+      "tags": [
+        "kubernetes",
+        "namespace",
+        "gitops",
+        "infrastructure"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "pipeline:k8s/argocd/root-app.yaml",
+      "type": "pipeline",
+      "name": "root-app.yaml",
+      "filePath": "k8s/argocd/root-app.yaml",
+      "summary": "The 'app of apps' root Application that auto-discovers all child Applications from k8s/argocd/apps/, enabling automated GitOps management without manual intervention.",
+      "tags": [
+        "gitops",
+        "argocd",
+        "application",
+        "deployment",
+        "automation"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Uses automated sync with prune and selfHeal to ensure cluster state matches Git \u2014 removing a child Application file deletes it from the cluster."
+    },
+    {
+      "id": "config:k8s/argocd/values.yaml",
+      "type": "config",
+      "name": "values.yaml",
+      "filePath": "k8s/argocd/values.yaml",
+      "summary": "ArgoCD Helm chart values defining component names, resource limits, ServiceMonitor configuration, and security settings including server.insecure mode for Traefik TLS termination.",
+      "tags": [
+        "helm",
+        "configuration",
+        "gitops",
+        "monitoring",
+        "resources"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Uses nameOverride for deterministic component names (ADR-0035 pattern) and elevated memory limits for controller and repoServer to prevent OOM during large reconciliations."
+    },
+    {
+      "id": "service:k8s/cloudflared/namespace.yaml",
+      "type": "service",
+      "name": "namespace.yaml",
+      "filePath": "k8s/cloudflared/namespace.yaml",
+      "summary": "Creates the cloudflare namespace to isolate cloudflared tunnel resources from other cluster workloads.",
+      "tags": [
+        "kubernetes",
+        "namespace",
+        "infrastructure",
+        "isolation"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "service:k8s/cloudflared/deployment.yaml",
+      "type": "service",
+      "name": "deployment.yaml",
+      "filePath": "k8s/cloudflared/deployment.yaml",
+      "summary": "Deploys the cloudflared tunnel connector with security hardening (non-root, read-only filesystem, dropped capabilities) and Prometheus metrics enabled for outbound-only tunnel connections to Cloudflare edge.",
+      "tags": [
+        "kubernetes",
+        "deployment",
+        "cloudflare-tunnel",
+        "security",
+        "monitoring"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Pinned cloudflared image version 2026.6.1 for reproducibility. livenessProbe uses the same /ready endpoint on the metrics port."
+    },
+    {
+      "id": "service:k8s/cloudflared/networkpolicy.yaml",
+      "type": "service",
+      "name": "networkpolicy.yaml",
+      "filePath": "k8s/cloudflared/networkpolicy.yaml",
+      "summary": "Restricts cloudflared pod egress to only DNS, Traefik on port 8000, and Cloudflare edge (UDP/TCP 7844, TCP 443) \u2014 prevents a compromised ingress component from reaching other cluster services.",
+      "tags": [
+        "kubernetes",
+        "network-policy",
+        "security",
+        "egress-control",
+        "defense-in-depth"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Port 8000 is the pod targetPort, not Service port 80, because the policy evaluates after kube-proxy DNAT."
+    },
+    {
+      "id": "service:k8s/cloudflared/service-metrics.yaml",
+      "type": "service",
+      "name": "service-metrics.yaml",
+      "filePath": "k8s/cloudflared/service-metrics.yaml",
+      "summary": "ClusterIP Service exposing cloudflared's Prometheus metrics endpoint on port 2000 for scraping by the monitoring stack.",
+      "tags": [
+        "kubernetes",
+        "service",
+        "monitoring",
+        "prometheus",
+        "metrics"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "service:k8s/cloudflared/servicemonitor.yaml",
+      "type": "service",
+      "name": "servicemonitor.yaml",
+      "filePath": "k8s/cloudflared/servicemonitor.yaml",
+      "summary": "Prometheus Operator ServiceMonitor that scrapes cloudflared metrics every 30 seconds for the Grafana cloudflared dashboard (gnetId 24874).",
+      "tags": [
+        "kubernetes",
+        "servicemonitor",
+        "prometheus-operator",
+        "monitoring",
+        "observability"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "service:k8s/example-app/ingressroute.yaml",
+      "type": "service",
+      "name": "ingressroute.yaml",
+      "filePath": "k8s/example-app/ingressroute.yaml",
+      "summary": "Traefik IngressRoute routing public traffic for whoami.neovara.uk to the whoami-stable Service. First IngressRoute in the cluster, demonstrating Traefik's Host-header routing capability.",
+      "tags": [
+        "routing",
+        "ingress",
+        "traefik",
+        "external-access"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "service:k8s/example-app/ingressroute-internal.yaml",
+      "type": "service",
+      "name": "ingressroute-internal.yaml",
+      "filePath": "k8s/example-app/ingressroute-internal.yaml",
+      "summary": "Traefik IngressRoute for internal-only access to whoami via Tailscale at whoami.in.neovara.uk. Uses websecure entrypoint with TLS terminated by Traefik using the cert-manager wildcard cert.",
+      "tags": [
+        "routing",
+        "ingress",
+        "traefik",
+        "internal-access",
+        "tailscale"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "service:k8s/example-app/ingressroute-preview.yaml",
+      "type": "service",
+      "name": "ingressroute-preview.yaml",
+      "filePath": "k8s/example-app/ingressroute-preview.yaml",
+      "summary": "Traefik IngressRoute providing direct internal access to the blueGreen preview Service. Routes whoami-preview.in.neovara.uk to whoami-canary Service, allowing full-scale inspection before promotion.",
+      "tags": [
+        "routing",
+        "ingress",
+        "traefik",
+        "preview",
+        "bluegreen"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "service:k8s/example-app/rollout.yaml",
+      "type": "service",
+      "name": "rollout.yaml",
+      "filePath": "k8s/example-app/rollout.yaml",
+      "summary": "Argo Rollouts resource implementing blueGreen deployment strategy for whoami. Runs 2 replicas using traefik/whoami image, with whoami-stable as activeService and whoami-canary as previewService. Auto-promotion disabled to require explicit promotion.",
+      "tags": [
+        "deployment",
+        "argo-rollouts",
+        "bluegreen",
+        "workload",
+        "progressive-delivery"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "BlueGreen strategy swaps the activeService selector entirely on promotion, enabling instant cutover without weighted traffic blending."
+    },
+    {
+      "id": "service:k8s/example-app/service.yaml",
+      "type": "service",
+      "name": "service.yaml",
+      "filePath": "k8s/example-app/service.yaml",
+      "summary": "Two Kubernetes ClusterIP Services for the whoami Rollout: whoami-stable (active, receives 100% of production traffic) and whoami-canary (preview, for pre-promotion inspection). Rollout controller manages their selectors at runtime.",
+      "tags": [
+        "service",
+        "networking",
+        "clusterip",
+        "bluegreen",
+        "service-discovery"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "service:k8s/longhorn/manifests/ingressroute.yaml",
+      "type": "service",
+      "name": "longhorn-ui-internal",
+      "filePath": "k8s/longhorn/manifests/ingressroute.yaml",
+      "summary": "Internal-only Traefik IngressRoute for the Longhorn UI, routing longhorn.in.neovara.uk to the longhorn-frontend service within the longhorn-system namespace. Uses websecure entrypoint with wildcard TLS, accessible only via Tailscale network.",
+      "tags": [
+        "routing",
+        "internal",
+        "longhorn",
+        "traefik",
+        "ingressroute"
+      ],
+      "complexity": "simple",
+      "languageNotes": "IngressRoute is Traefik's native CRD for HTTP routing. Empty tls {} enables default TLSStore wildcard certificate."
+    },
+    {
+      "id": "resource:k8s/longhorn/manifests/storageclass-immich.yaml",
+      "type": "resource",
+      "name": "longhorn-immich-storageclasses",
+      "filePath": "k8s/longhorn/manifests/storageclass-immich.yaml",
+      "summary": "Two Longhorn StorageClasses retained from the Immich migration: longhorn-immich-hdd-retain and longhorn-immich-db-retain. Both use Retain reclaim policy to protect data, single replica, and ext4 filesystem with v1 data engine.",
+      "tags": [
+        "storage",
+        "longhorn",
+        "storageclass",
+        "immich",
+        "retention"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Multi-document YAML separated by ---. Retain reclaim policy preserves volumes even after PVC deletion."
+    },
+    {
+      "id": "resource:k8s/longhorn/manifests/storageclass-replicated.yaml",
+      "type": "resource",
+      "name": "longhorn-replicated",
+      "filePath": "k8s/longhorn/manifests/storageclass-replicated.yaml",
+      "summary": "General-purpose Longhorn StorageClass with single replica, Delete reclaim policy, and Immediate volume binding. Legacy name preserved for bound PVCs with immutable storageClassName fields.",
+      "tags": [
+        "storage",
+        "longhorn",
+        "storageclass",
+        "replicated"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Immediate volumeBindingMode is safe for Longhorn because volumes aren't node-pinned like local-path."
+    },
+    {
+      "id": "config:k8s/monitoring/values-alloy.yaml",
+      "type": "config",
+      "name": "values-alloy.yaml",
+      "filePath": "k8s/monitoring/values-alloy.yaml",
+      "summary": "Helm values for Grafana Alloy log-shipping agent, configured as a single Deployment that collects pod logs via Kubernetes API and ships them to Loki.",
+      "tags": [
+        "configuration",
+        "monitoring",
+        "logging",
+        "helm-values",
+        "agent"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Uses River configuration language inlined via configMap.content for log discovery, relabeling, and shipping."
+    },
+    {
+      "id": "config:k8s/monitoring/values-kube-prometheus-stack.yaml",
+      "type": "config",
+      "name": "values-kube-prometheus-stack.yaml",
+      "filePath": "k8s/monitoring/values-kube-prometheus-stack.yaml",
+      "summary": "Comprehensive Helm values for kube-prometheus-stack including Prometheus, Alertmanager, Grafana, and control-plane monitoring with dashboard provisioning for the entire platform.",
+      "tags": [
+        "configuration",
+        "monitoring",
+        "helm-values",
+        "observability",
+        "dashboards"
+      ],
+      "complexity": "complex",
+      "languageNotes": "Contains extensive commenting on architectural decisions and references to ADRs. Defines datasource provisioning and dashboard imports from grafana.com and upstream GitHub repos."
+    },
+    {
+      "id": "config:k8s/monitoring/values-loki.yaml",
+      "type": "config",
+      "name": "values-loki.yaml",
+      "filePath": "k8s/monitoring/values-loki.yaml",
+      "summary": "Helm values for Loki log aggregation system in SingleBinary mode with filesystem storage on Longhorn, configured as a single-tenant deployment for homelab scale.",
+      "tags": [
+        "configuration",
+        "monitoring",
+        "logging",
+        "helm-values",
+        "storage"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Uses TSDB schema with filesystem backend. Disables gateway and test components for homelab sizing. Right-sizes Memcached caches from production defaults."
+    },
+    {
+      "id": "service:k8s/traefik/manifests/ingressroute-dashboard.yaml",
+      "type": "service",
+      "name": "ingressroute-dashboard.yaml",
+      "filePath": "k8s/traefik/manifests/ingressroute-dashboard.yaml",
+      "summary": "IngressRoute exposing the Traefik dashboard internally at traefik.in.neovara.uk, reachable only via the Tailscale internal front door.",
+      "tags": [
+        "ingress",
+        "traefik",
+        "internal",
+        "dashboard",
+        "routing"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Uses Traefik's api@internal synthetic service to expose the dashboard, a pattern unique to Traefik's own API."
+    },
+    {
+      "id": "service:k8s/traefik/manifests/tailscale-service.yaml",
+      "type": "service",
+      "name": "tailscale-service.yaml",
+      "filePath": "k8s/traefik/manifests/tailscale-service.yaml",
+      "summary": "Tailscale LoadBalancer Service providing the internal front door for Traefik, exposing websecure (443) to the tailnet via MagicDNS.",
+      "tags": [
+        "tailscale",
+        "loadbalancer",
+        "internal",
+        "networking",
+        "proxy"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Uses Tailscale Kubernetes Operator's loadBalancerClass to create a tailnet device with stable hostname."
+    },
+    {
+      "id": "service:k8s/traefik/manifests/tlsstore.yaml",
+      "type": "service",
+      "name": "tlsstore.yaml",
+      "filePath": "k8s/traefik/manifests/tlsstore.yaml",
+      "summary": "Traefik TLSStore named 'default' that wires the cert-manager wildcard cert as the cluster-wide default serving certificate for all internal IngressRoutes.",
+      "tags": [
+        "tls",
+        "certificate",
+        "cert-manager",
+        "wildcard",
+        "traefik"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Traefik supports exactly one cluster-wide TLSStore named 'default'; empty tls: {} on IngressRoutes uses this cert."
+    },
+    {
+      "id": "resource:terraform/main.tf",
+      "type": "resource",
+      "name": "main.tf",
+      "filePath": "terraform/main.tf",
+      "summary": "Core Terraform configuration defining k3s-server-1 control plane VM and parameterized k3s_worker resource that provisions all worker nodes from a single for_each implementation.",
+      "tags": [
+        "infrastructure",
+        "virtualization",
+        "kubernetes",
+        "k3s"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Uses Terraform for_each to iterate over worker definitions, keeping one implementation regardless of host count. Each VM receives two disks: scsi0 for OS and scsi1 for Longhorn data."
+    },
+    {
+      "id": "resource:terraform/main.tf:k3s_server_1",
+      "type": "resource",
+      "name": "k3s_server_1",
+      "filePath": "terraform/main.tf",
+      "summary": "Proxmox VM resource for k3s-server-1, the control plane node with embedded etcd. Tainted to prevent app workload scheduling. Single VM with 4 cores, 6GB RAM, and 60GB disk.",
+      "tags": [
+        "control-plane",
+        "etcd",
+        "virtual-machine"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "resource:terraform/main.tf:k3s_worker",
+      "type": "resource",
+      "name": "k3s_worker",
+      "filePath": "terraform/main.tf",
+      "summary": "Parameterized Proxmox VM resource instantiated via for_each for each worker definition. Handles both OS disk (scsi0) and data disk (scsi1) allocation, with host placement and storage policies expressed as data.",
+      "tags": [
+        "worker",
+        "storage",
+        "parameterized"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Single resource definition serves all workers through for_each over var.workers map. Enables ADR-0049's two-node topology and ADR-0053's unified worker lifecycle."
+    },
+    {
+      "id": "resource:terraform/variables.tf",
+      "type": "resource",
+      "name": "variables.tf",
+      "filePath": "terraform/variables.tf",
+      "summary": "Terraform variable definitions with 15 inputs covering Proxmox connectivity, network configuration, VM sizing, and the complex workers map that drives the for_each resource.",
+      "tags": [
+        "configuration",
+        "variables",
+        "interface"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Workers map uses object type with optional fields and validation to enforce naming convention (k3s-worker- prefix) and required fields."
+    },
+    {
+      "id": "resource:terraform/terraform.tfvars",
+      "type": "resource",
+      "name": "terraform.tfvars",
+      "filePath": "terraform/terraform.tfvars",
+      "summary": "Source of truth for this deployment's actual values. Defines Proxmox endpoint, network settings, sizing ledger (4+12 cores, 6+18GB RAM), and specifications for k3s-worker-1 (Dell) and k3s-worker-3 (ASRock) with their distinct storage backends.",
+      "tags": [
+        "configuration",
+        "deployment",
+        "source-of-truth"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Contains NO secrets; the one secret (PROXMOX_VE_API_TOKEN) is supplied at runtime via environment variable per ADR-0003's runtime-secret pattern. Sizing ledger preserves 46G thin-pool safety margin."
+    },
+    {
+      "id": "resource:terraform/provider.tf",
+      "type": "resource",
+      "name": "provider.tf",
+      "filePath": "terraform/provider.tf",
+      "summary": "Proxmox provider configuration reading API token from environment variable and enabling SSH agent access for operations not covered by the API.",
+      "tags": [
+        "provider",
+        "authentication",
+        "ssh"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Follows ADR-0003 runtime-secret pattern: endpoint and insecure flag are committed, but the API token is never stored in files. SSH agent enables file uploads and disk resizes."
+    },
+    {
+      "id": "resource:terraform/outputs.tf",
+      "type": "resource",
+      "name": "outputs.tf",
+      "filePath": "terraform/outputs.tf",
+      "summary": "Terraform outputs exposing k3s_server_1_ip, k3s_worker_ips map, and vm_user for consumption by downstream systems like Ansible inventory generation.",
+      "tags": [
+        "outputs",
+        "integration"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "resource:terraform/versions.tf",
+      "type": "resource",
+      "name": "versions.tf",
+      "filePath": "terraform/versions.tf",
+      "summary": "Terraform version and provider version constraints. Requires Terraform >= 1.5 and pins bpg/proxmox provider to ~0.111.",
+      "tags": [
+        "versioning",
+        "dependencies"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:.ua/.understandignore",
+      "type": "file",
+      "name": ".understandignore",
+      "filePath": ".ua/.understandignore",
+      "summary": "Configuration file defining exclusion patterns for codebase analysis, supporting glob patterns and negation rules.",
+      "tags": [
+        "configuration",
+        "analysis",
+        "exclusion-patterns"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Uses .gitignore-compatible syntax with support for ! negation and trailing / for directory-only matches."
+    },
+    {
+      "id": "config:ansible/host_vars/pve-asrock.yml",
+      "type": "config",
+      "name": "pve-asrock.yml",
+      "filePath": "ansible/host_vars/pve-asrock.yml",
+      "summary": "Host-specific variables for pve-asrock Proxmox node, defining the LVM thin storage pool used for VM disk allocation.",
+      "tags": [
+        "configuration",
+        "ansible",
+        "host-variables",
+        "storage"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:ansible/roles/k3s_agent/handlers/main.yml",
+      "type": "config",
+      "name": "main.yml",
+      "filePath": "ansible/roles/k3s_agent/handlers/main.yml",
+      "summary": "Ansible handler that restarts the k3s-agent service when configuration changes occur.",
+      "tags": [
+        "configuration",
+        "ansible",
+        "handlers",
+        "k3s-agent"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:ansible/roles/k3s_agent/tasks/main.yml",
+      "type": "config",
+      "name": "main.yml",
+      "filePath": "ansible/roles/k3s_agent/tasks/main.yml",
+      "summary": "Ansible tasks for k3s agent installation and configuration, including config templating, version-pinned installation, and service enablement.",
+      "tags": [
+        "configuration",
+        "ansible",
+        "k3s-agent",
+        "installation",
+        "tasks"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Idempotent tasks with version detection and conditional installation/upgrade logic."
+    },
+    {
+      "id": "file:ansible/roles/k3s_agent/templates/config.yaml.j2",
+      "type": "file",
+      "name": "config.yaml.j2",
+      "filePath": "ansible/roles/k3s_agent/templates/config.yaml.j2",
+      "summary": "Jinja2 template for k3s agent configuration, specifying server URL and join token for cluster membership.",
+      "tags": [
+        "template",
+        "jinja2",
+        "k3s-agent",
+        "cluster-join"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Minimal two-parameter template (server URL and token) for worker node cluster bootstrap."
+    },
+    {
+      "id": "config:ansible/roles/k3s_node/tasks/main.yml",
+      "type": "config",
+      "name": "main.yml",
+      "filePath": "ansible/roles/k3s_node/tasks/main.yml",
+      "summary": "Ansible tasks preparing k3s nodes with kernel modules, sysctl settings, swap removal, and hostname configuration required for Kubernetes.",
+      "tags": [
+        "configuration",
+        "ansible",
+        "k3s-node",
+        "preparation",
+        "kernel"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Idempotent node preparation including kernel module persistence and sysctl configuration for pod networking."
+    },
+    {
+      "id": "config:ansible/roles/k3s_server/handlers/main.yml",
+      "type": "config",
+      "name": "main.yml",
+      "filePath": "ansible/roles/k3s_server/handlers/main.yml",
+      "summary": "Ansible handler that restarts the k3s server service when configuration changes occur.",
+      "tags": [
+        "configuration",
+        "ansible",
+        "handlers",
+        "k3s-server"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:ansible/roles/k3s_server/tasks/main.yml",
+      "type": "config",
+      "name": "main.yml",
+      "filePath": "ansible/roles/k3s_server/tasks/main.yml",
+      "summary": "Ansible tasks for k3s server installation and cluster bootstrap, including embedded etcd setup, kubeconfig retrieval, and API readiness checks.",
+      "tags": [
+        "configuration",
+        "ansible",
+        "k3s-server",
+        "installation",
+        "etcd"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Bootstrap sequence with API readiness waiting, token retrieval, and kubeconfig extraction for cluster access."
+    },
+    {
+      "id": "file:ansible/roles/k3s_server/templates/config.yaml.j2",
+      "type": "file",
+      "name": "config.yaml.j2",
+      "filePath": "ansible/roles/k3s_server/templates/config.yaml.j2",
+      "summary": "Jinja2 template for k3s server configuration, implementing embedded etcd, secrets encryption, control-plane taint, and metrics exposure for Prometheus.",
+      "tags": [
+        "template",
+        "jinja2",
+        "k3s-server",
+        "etcd",
+        "encryption",
+        "monitoring"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Template encodes key architectural decisions: cluster-init for embedded etcd, secrets-encryption, disabled Traefik/ServiceLB, and metrics binding for kube-prometheus-stack integration."
+    },
+    {
+      "id": "config:ansible/roles/longhorn_node/tasks/main.yml",
+      "type": "config",
+      "name": "main.yml",
+      "filePath": "ansible/roles/longhorn_node/tasks/main.yml",
+      "summary": "Ansible tasks preparing Longhorn storage nodes with disk formatting, mount ordering, iSCSI daemon setup, and k3s agent startup dependencies.",
+      "tags": [
+        "configuration",
+        "ansible",
+        "longhorn",
+        "storage",
+        "iscsi",
+        "filesystem"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Implements ADR-0021 disk layout with systemd ordering to ensure k3s agent starts after the Longhorn data filesystem is mounted."
+    },
+    {
+      "id": "config:ansible/roles/proxmox_cluster/tasks/main.yml",
+      "type": "config",
+      "name": "main.yml",
+      "filePath": "ansible/roles/proxmox_cluster/tasks/main.yml",
+      "summary": "Ansible tasks for Proxmox cluster setup, including stable hostname mappings and Terraform API identity bootstrap across the cluster.",
+      "tags": [
+        "configuration",
+        "ansible",
+        "proxmox-cluster",
+        "networking",
+        "api"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:ansible/roles/proxmox_cluster/tasks/terraform_api.yml",
+      "type": "config",
+      "name": "terraform_api.yml",
+      "filePath": "ansible/roles/proxmox_cluster/tasks/terraform_api.yml",
+      "summary": "Ansible tasks bootstrapping a cluster-wide Terraform API identity with ACL grants for VM administration, storage allocation, and SDN bridge access.",
+      "tags": [
+        "configuration",
+        "ansible",
+        "terraform",
+        "api",
+        "proxmox",
+        "acl"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Idempotent role and token provisioning with conditional creation checks and scoped ACL grants for Terraform automation."
+    },
+    {
+      "id": "config:ansible/roles/proxmox_hw_asrock/tasks/main.yml",
+      "type": "config",
+      "name": "main.yml",
+      "filePath": "ansible/roles/proxmox_hw_asrock/tasks/main.yml",
+      "summary": "Ansible tasks enforcing the ASRock I219-V NIC constraints, including kernel holds, ABI validation, driver module verification, and recovery module checksum enforcement.",
+      "tags": [
+        "configuration",
+        "ansible",
+        "hardware",
+        "nic",
+        "kernel",
+        "validation"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Safety gates for the patched e1000e driver: ensures kernel ABI matches, correct module is loaded, and recovery module content is physically tested."
+    },
+    {
+      "id": "config:ansible/roles/tailscale_host/tasks/main.yml",
+      "type": "config",
+      "name": "main.yml",
+      "filePath": "ansible/roles/tailscale_host/tasks/main.yml",
+      "summary": "Ansible tasks for Tailscale installation and tailnet join, including repository setup, package installation, and auth-key-based authentication.",
+      "tags": [
+        "configuration",
+        "ansible",
+        "tailscale",
+        "vpn",
+        "networking"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Uses runtime auth keys (never stored) for tailnet join; validates connection state before authentication."
+    },
+    {
+      "id": "document:docs/troubleshooting/intel-i219v-nvm-recovery-2026-07-23.md",
+      "type": "document",
+      "name": "intel-i219v-nvm-recovery-2026-07-23.md",
+      "filePath": "docs/troubleshooting/intel-i219v-nvm-recovery-2026-07-23.md",
+      "summary": "Comprehensive 784-line incident report documenting Intel I219-V NIC NVM checksum failure recovery, including driver patch creation, Proxmox installer rebuild, and physical recovery steps.",
+      "tags": [
+        "documentation",
+        "troubleshooting",
+        "incident-report",
+        "hardware",
+        "networking",
+        "kernel"
+      ],
+      "complexity": "complex",
+      "languageNotes": "Structured incident report with evidence capture, decision rationale, and reproducible build steps for custom Proxmox media with patched e1000e driver."
+    },
+    {
+      "id": "file:docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/SHA256SUMS",
+      "type": "file",
+      "name": "SHA256SUMS",
+      "filePath": "docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/SHA256SUMS",
+      "summary": "SHA256 checksum file for the custom Proxmox VE 9.2-1 installer ISO with the patched e1000e driver.",
+      "tags": [
+        "checksum",
+        "verification",
+        "security",
+        "recovery"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/e1000e-allow-bad-nvm.patch",
+      "type": "file",
+      "name": "e1000e-allow-bad-nvm.patch",
+      "filePath": "docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/e1000e-allow-bad-nvm.patch",
+      "summary": "Kernel driver patch adding an allow_bad_nvm module parameter to bypass NVM checksum validation in the Intel e1000e driver for I219-V NICs.",
+      "tags": [
+        "patch",
+        "kernel",
+        "driver",
+        "networking",
+        "workaround"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Unified diff format patch against the e1000e netdev.c driver, introducing a module parameter to skip checksum validation that would otherwise block probe."
+    },
+    {
+      "id": "document:k8s/apps/homelab/nextcloud/SECRETS.md",
+      "type": "document",
+      "name": "SECRETS.md",
+      "filePath": "k8s/apps/homelab/nextcloud/SECRETS.md",
+      "summary": "Documentation for Nextcloud imperative secrets creation, defining database and admin credentials as Kubernetes Secrets not committed to git.",
+      "tags": [
+        "documentation",
+        "secrets",
+        "kubernetes",
+        "nextcloud",
+        "security"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Follows the deferred secrets management approach (no SOPS/age) \u2014 secrets are created imperatively with kubectl and deliberately untracked."
+    },
+    {
+      "id": "service:k8s/apps/homelab/nextcloud/values.yaml",
+      "type": "service",
+      "name": "values.yaml",
+      "filePath": "k8s/apps/homelab/nextcloud/values.yaml",
+      "summary": "Helm values configuration for Nextcloud deployment, specifying PostgreSQL database, Redis cache, Longhorn storage, and Traefik ingress integration.",
+      "tags": [
+        "configuration",
+        "helm",
+        "nextcloud",
+        "postgresql",
+        "redis",
+        "storage"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Configures external database and Redis for production-grade Nextcloud with persistence on Longhorn storage."
+    },
+    {
+      "id": "service:k8s/argo-rollouts/manifests/ingressroute.yaml",
+      "type": "service",
+      "name": "ingressroute.yaml",
+      "filePath": "k8s/argo-rollouts/manifests/ingressroute.yaml",
+      "summary": "Traefik IngressRoute exposing the Argo Rollouts dashboard service via HTTPS with basic authentication middleware.",
+      "tags": [
+        "configuration",
+        "traefik",
+        "ingressroute",
+        "argo-rollouts",
+        "authentication"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Uses Traefik's IngressRoute CRD with middleware chain for basic auth protection of the Rollouts dashboard."
+    },
+    {
+      "id": "service:k8s/argo-rollouts/values.yaml",
+      "type": "service",
+      "name": "values.yaml",
+      "filePath": "k8s/argo-rollouts/values.yaml",
+      "summary": "Helm values for Argo Rollouts deployment, configuring controller replicas, metrics service, and dashboard service exposure.",
+      "tags": [
+        "configuration",
+        "helm",
+        "argo-rollouts",
+        "controller",
+        "dashboard"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Minimal controller configuration with dashboard enabled for visualization of canary and blue/green deployments."
+    },
+    {
+      "id": "service:k8s/argocd/projects/homelab.yaml",
+      "type": "service",
+      "name": "homelab.yaml",
+      "filePath": "k8s/argocd/projects/homelab.yaml",
+      "summary": "Argo CD AppProject defining the homelab project with source repository access and destination namespace restrictions for platform applications.",
+      "tags": [
+        "configuration",
+        "argocd",
+        "project",
+        "gitops",
+        "platform"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Declares the homelab project in Argo CD for organizing platform-level applications (Traefik, Longhorn, monitoring, etc.)."
+    },
+    {
+      "id": "service:k8s/argocd/projects/personal.yaml",
+      "type": "service",
+      "name": "personal.yaml",
+      "filePath": "k8s/argocd/projects/personal.yaml",
+      "summary": "Argo CD AppProject defining the personal project for user applications with separate namespace targeting and cluster-scoped resource access.",
+      "tags": [
+        "configuration",
+        "argocd",
+        "project",
+        "gitops",
+        "applications"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Separates user applications (Nextcloud, Audiobookshelf, etc.) from platform infrastructure into a distinct GitOps project."
+    },
+    {
+      "id": "service:k8s/cert-manager/manifests/cluster-issuer.yaml",
+      "type": "service",
+      "name": "cluster-issuer.yaml",
+      "filePath": "k8s/cert-manager/manifests/cluster-issuer.yaml",
+      "summary": "Cert-manager ClusterIssuer configuration for Let's Encrypt ACME HTTP-01 challenge automation, providing TLS certificate issuance cluster-wide.",
+      "tags": [
+        "configuration",
+        "cert-manager",
+        "tls",
+        "lets-encrypt",
+        "acme"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Enables automated HTTPS for cluster services via Let's Encrypt HTTP-01 challenge through Traefik."
+    },
+    {
+      "id": "service:k8s/cert-manager/manifests/internal-wildcard-certificate.yaml",
+      "type": "service",
+      "name": "internal-wildcard-certificate.yaml",
+      "filePath": "k8s/cert-manager/manifests/internal-wildcard-certificate.yaml",
+      "summary": "Cluster-scoped wildcard Certificate for internal services, using the self-referential ClusterIssuer for internal DNS names.",
+      "tags": [
+        "configuration",
+        "cert-manager",
+        "certificate",
+        "internal",
+        "wildcard"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Provides a single wildcard certificate for *.neovara.internal services, signed by the internal ClusterIssuer."
+    },
+    {
+      "id": "config:k8s/cert-manager/values.yaml",
+      "type": "config",
+      "name": "values.yaml",
+      "filePath": "k8s/cert-manager/values.yaml",
+      "summary": "Helm values enabling cert-manager CRDs and Prometheus ServiceMonitor integration for GitOps deployment.",
+      "tags": [
+        "configuration",
+        "helm-values",
+        "cert-manager",
+        "monitoring",
+        "gitops"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:k8s/longhorn/values.yaml",
+      "type": "config",
+      "name": "values.yaml",
+      "filePath": "k8s/longhorn/values.yaml",
+      "summary": "Helm values configuring Longhorn storage with single replica on dedicated data disk, CSI sidecars, and ServiceMonitor metrics.",
+      "tags": [
+        "configuration",
+        "helm-values",
+        "storage",
+        "longhorn",
+        "csi"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "config:k8s/monitoring/manifests/ingressroute-grafana.yaml",
+      "type": "config",
+      "name": "ingressroute-grafana.yaml",
+      "filePath": "k8s/monitoring/manifests/ingressroute-grafana.yaml",
+      "summary": "Internal-only Traefik IngressRoute exposing Grafana dashboard on grafana.in.neovara.uk through the Tailscale internal service.",
+      "tags": [
+        "configuration",
+        "ingressroute",
+        "traefik",
+        "monitoring",
+        "internal"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:k8s/monitoring/manifests/ingressroute-prometheus.yaml",
+      "type": "config",
+      "name": "ingressroute-prometheus.yaml",
+      "filePath": "k8s/monitoring/manifests/ingressroute-prometheus.yaml",
+      "summary": "Internal-only Traefik IngressRoute exposing Prometheus on prometheus.in.neovara.uk through the Tailscale internal service.",
+      "tags": [
+        "configuration",
+        "ingressroute",
+        "traefik",
+        "monitoring",
+        "internal"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:k8s/tailscale/manifests/api-server-rbac.yaml",
+      "type": "config",
+      "name": "api-server-rbac.yaml",
+      "filePath": "k8s/tailscale/manifests/api-server-rbac.yaml",
+      "summary": "ClusterRoleBinding granting cluster-admin to the Tailscale-authenticated user for kubectl access through the API server proxy.",
+      "tags": [
+        "configuration",
+        "rbac",
+        "tailscale",
+        "kubectl",
+        "security"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:k8s/tailscale/manifests/proxyclass-monitoring.yaml",
+      "type": "config",
+      "name": "proxyclass-monitoring.yaml",
+      "filePath": "k8s/tailscale/manifests/proxyclass-monitoring.yaml",
+      "summary": "ProxyClass enabling Prometheus metrics collection for the traefik-internal Tailscale proxy via ServiceMonitor.",
+      "tags": [
+        "configuration",
+        "proxyclass",
+        "tailscale",
+        "monitoring",
+        "metrics"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:k8s/tailscale/values.yaml",
+      "type": "config",
+      "name": "values.yaml",
+      "filePath": "k8s/tailscale/values.yaml",
+      "summary": "Helm values configuring Tailscale Operator with API server proxy enabled for tailnet kubectl access and info-level logging.",
+      "tags": [
+        "configuration",
+        "helm-values",
+        "tailscale",
+        "operator",
+        "networking"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:k8s/traefik/values.yaml",
+      "type": "config",
+      "name": "values.yaml",
+      "filePath": "k8s/traefik/values.yaml",
+      "summary": "Helm values configuring Traefik as ClusterIP ingress controller with IngressRoute provider support and Prometheus metrics via ServiceMonitor.",
+      "tags": [
+        "configuration",
+        "helm-values",
+        "traefik",
+        "ingress",
+        "monitoring"
+      ],
+      "complexity": "moderate"
+    }
+  ],
+  "edges": [
+    {
+      "source": "document:README.md",
+      "target": "document:GUIDE.md",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:README.md",
+      "target": "document:ROADMAP.md",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:README.md",
+      "target": "document:CHANGELOG.md",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:README.md",
+      "target": "document:claude.md",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:GUIDE.md",
+      "target": "document:ROADMAP.md",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:CHANGELOG.md",
+      "target": "document:GUIDE.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:CHANGELOG.md",
+      "target": "document:ROADMAP.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:ROADMAP.md",
+      "target": "document:GUIDE.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:ROADMAP.md",
+      "target": "document:claude.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:ansible/ansible.cfg",
+      "target": "config:ansible/inventory.ini",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:ansible/proxmox.yml",
+      "target": "config:ansible/inventory.ini",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:ansible/site.yml",
+      "target": "config:ansible/inventory.ini",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:ansible/site.yml",
+      "target": "config:ansible/requirements.yml",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:ansible/proxmox.yml",
+      "target": "config:ansible/requirements.yml",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:ansible/proxmox.yml",
+      "target": "step:ansible/proxmox.yml:asrock-hardware-safeguards",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "config:ansible/proxmox.yml",
+      "target": "step:ansible/proxmox.yml:dell-hardware-safeguards",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "config:ansible/proxmox.yml",
+      "target": "step:ansible/proxmox.yml:proxmox-host-configuration",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "config:ansible/site.yml",
+      "target": "step:ansible/site.yml:base-os-prep",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "config:ansible/site.yml",
+      "target": "step:ansible/site.yml:install-control-plane",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "config:ansible/site.yml",
+      "target": "step:ansible/site.yml:join-workers",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "step:ansible/site.yml:base-os-prep",
+      "target": "step:ansible/site.yml:install-control-plane",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "step:ansible/site.yml:install-control-plane",
+      "target": "step:ansible/site.yml:join-workers",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:ansible/roles/proxmox_host/tasks/main.yml",
+      "target": "config:ansible/roles/proxmox_host/tasks/repositories.yml",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:ansible/roles/proxmox_host/tasks/main.yml",
+      "target": "config:ansible/roles/proxmox_host/tasks/storage.yml",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:ansible/roles/proxmox_host/tasks/main.yml",
+      "target": "config:ansible/roles/proxmox_host/tasks/upgrade.yml",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:ansible/roles/proxmox_hw_dell/tasks/main.yml",
+      "target": "config:ansible/roles/proxmox_hw_dell/tasks/e1000e_offload.yml",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:ansible/roles/proxmox_hw_dell/tasks/main.yml",
+      "target": "config:ansible/roles/proxmox_hw_dell/tasks/e1000e_aspm.yml",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:ansible/roles/proxmox_hw_dell/tasks/main.yml",
+      "target": "config:ansible/roles/proxmox_hw_dell/tasks/laptop.yml",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:ansible/roles/proxmox_hw_dell/tasks/e1000e_offload.yml",
+      "target": "config:ansible/roles/proxmox_hw_dell/tasks/e1000e_aspm.yml",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/Homelab Learning Map.md",
+      "target": "document:docs/Migration Plan.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/Homelab Migration Checklist.md",
+      "target": "document:docs/Migration Plan.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/adr/README.md",
+      "target": "document:docs/adr/v0.1 - Foundation.md",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/adr/README.md",
+      "target": "document:docs/adr/v0.2 - Cluster Bootstrap.md",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/adr/README.md",
+      "target": "document:docs/adr/v0.3 - Ingress and TLS.md",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/adr/README.md",
+      "target": "document:docs/adr/v0.4 - Public and Private Access.md",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/adr/README.md",
+      "target": "document:docs/adr/v2.0 - Operability.md",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/concepts/Ansible Concepts.md",
+      "target": "document:docs/concepts/Platform Concepts.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/concepts/Kubernetes Concepts.md",
+      "target": "document:docs/concepts/Platform Concepts.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/incidents/README.md",
+      "target": "document:docs/incidents/TEMPLATE.md",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/incidents/README.md",
+      "target": "document:docs/incidents/INC-2026-001-longhorn-stale-mount-namespace.md",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/incidents/README.md",
+      "target": "document:docs/incidents/INC-2026-002-longhorn-stale-snapshot-attachment-tickets.md",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/incidents/README.md",
+      "target": "document:docs/incidents/INC-2026-003-longhorn-rebuild-starved-etcd.md",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/incidents/README.md",
+      "target": "document:docs/incidents/INC-2026-004-argocd-repo-server-oom-recovery.md",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/incidents/README.md",
+      "target": "document:docs/incidents/INC-2026-005-prometheus-tsdb-capacity-exhaustion.md",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/incidents/INC-2026-001-longhorn-stale-mount-namespace.md",
+      "target": "document:docs/incidents/TEMPLATE.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/incidents/INC-2026-002-longhorn-stale-snapshot-attachment-tickets.md",
+      "target": "document:docs/incidents/TEMPLATE.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/incidents/INC-2026-003-longhorn-rebuild-starved-etcd.md",
+      "target": "document:docs/incidents/TEMPLATE.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/incidents/INC-2026-004-argocd-repo-server-oom-recovery.md",
+      "target": "document:docs/incidents/TEMPLATE.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/incidents/INC-2026-005-prometheus-tsdb-capacity-exhaustion.md",
+      "target": "document:docs/incidents/TEMPLATE.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/incidents/INC-2026-001-longhorn-stale-mount-namespace.md",
+      "target": "document:docs/incidents/INC-2026-002-longhorn-stale-snapshot-attachment-tickets.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/incidents/INC-2026-001-longhorn-stale-mount-namespace.md",
+      "target": "document:docs/incidents/INC-2026-003-longhorn-rebuild-starved-etcd.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/incidents/INC-2026-002-longhorn-stale-snapshot-attachment-tickets.md",
+      "target": "document:docs/incidents/INC-2026-003-longhorn-rebuild-starved-etcd.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/migrations/audiobookshelf.md",
+      "target": "document:docs/migrations/kiroku.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/migrations/audiobookshelf.md",
+      "target": "document:docs/migrations/nextcloud.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/migrations/kiroku.md",
+      "target": "document:docs/migrations/nextcloud.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/migrations/immich.md",
+      "target": "document:docs/migrations/audiobookshelf.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/README.md",
+      "target": "document:docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/BUILD-MANIFEST.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/README.md",
+      "target": "document:docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/RELEASE_NOTES.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/RELEASE_NOTES.md",
+      "target": "document:docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/README.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/BUILD-MANIFEST.md",
+      "target": "document:docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/README.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "service:k8s/apps/homelab/audiobookshelf/namespace.yaml",
+      "target": "service:k8s/apps/homelab/audiobookshelf/deployment.yaml",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "service:k8s/apps/homelab/audiobookshelf/namespace.yaml",
+      "target": "service:k8s/apps/homelab/audiobookshelf/service.yaml",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "service:k8s/apps/homelab/audiobookshelf/namespace.yaml",
+      "target": "service:k8s/apps/homelab/audiobookshelf/pvcs.yaml",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "service:k8s/apps/homelab/audiobookshelf/namespace.yaml",
+      "target": "service:k8s/apps/homelab/audiobookshelf/routing.yaml",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "service:k8s/apps/homelab/audiobookshelf/pvcs.yaml",
+      "target": "service:k8s/apps/homelab/audiobookshelf/pvcs.yaml:audiobookshelf-config",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "service:k8s/apps/homelab/audiobookshelf/pvcs.yaml",
+      "target": "service:k8s/apps/homelab/audiobookshelf/pvcs.yaml:audiobookshelf-metadata",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "service:k8s/apps/homelab/audiobookshelf/pvcs.yaml",
+      "target": "service:k8s/apps/homelab/audiobookshelf/pvcs.yaml:audiobookshelf-audiobooks-single",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "service:k8s/apps/homelab/audiobookshelf/pvcs.yaml",
+      "target": "service:k8s/apps/homelab/audiobookshelf/pvcs.yaml:audiobookshelf-podcasts",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "service:k8s/apps/homelab/audiobookshelf/deployment.yaml",
+      "target": "service:k8s/apps/homelab/audiobookshelf/pvcs.yaml:audiobookshelf-config",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "service:k8s/apps/homelab/audiobookshelf/deployment.yaml",
+      "target": "service:k8s/apps/homelab/audiobookshelf/pvcs.yaml:audiobookshelf-metadata",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "service:k8s/apps/homelab/audiobookshelf/deployment.yaml",
+      "target": "service:k8s/apps/homelab/audiobookshelf/pvcs.yaml:audiobookshelf-audiobooks-single",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "service:k8s/apps/homelab/audiobookshelf/deployment.yaml",
+      "target": "service:k8s/apps/homelab/audiobookshelf/pvcs.yaml:audiobookshelf-podcasts",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "service:k8s/apps/homelab/audiobookshelf/service.yaml",
+      "target": "service:k8s/apps/homelab/audiobookshelf/deployment.yaml",
+      "type": "serves",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "service:k8s/apps/homelab/audiobookshelf/routing.yaml",
+      "target": "service:k8s/apps/homelab/audiobookshelf/routing.yaml:secure-headers",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "service:k8s/apps/homelab/audiobookshelf/routing.yaml",
+      "target": "service:k8s/apps/homelab/audiobookshelf/routing.yaml:audiobookshelf",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "service:k8s/apps/homelab/audiobookshelf/routing.yaml:audiobookshelf",
+      "target": "service:k8s/apps/homelab/audiobookshelf/service.yaml",
+      "type": "routes",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "service:k8s/apps/homelab/audiobookshelf/routing.yaml:audiobookshelf",
+      "target": "service:k8s/apps/homelab/audiobookshelf/routing.yaml:secure-headers",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "document:k8s/apps/homelab/immich/README.md",
+      "target": "service:k8s/apps/homelab/immich/values.yaml",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:k8s/apps/homelab/immich/SECRETS.md",
+      "target": "service:k8s/apps/homelab/immich/values.yaml",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "service:k8s/apps/homelab/immich/manifests/namespace.yaml",
+      "target": "service:k8s/apps/homelab/immich/manifests/postgres.yaml",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "service:k8s/apps/homelab/immich/manifests/namespace.yaml",
+      "target": "resource:k8s/apps/homelab/immich/manifests/pvcs.yaml",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "service:k8s/apps/homelab/immich/manifests/namespace.yaml",
+      "target": "service:k8s/apps/homelab/immich/manifests/routing.yaml",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "service:k8s/apps/homelab/immich/manifests/postgres.yaml",
+      "target": "resource:k8s/apps/homelab/immich/manifests/postgres.yaml:immich-postgres-deployment",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "service:k8s/apps/homelab/immich/manifests/postgres.yaml",
+      "target": "resource:k8s/apps/homelab/immich/manifests/postgres.yaml:immich-postgres-service",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "resource:k8s/apps/homelab/immich/manifests/postgres.yaml:immich-postgres-deployment",
+      "target": "resource:k8s/apps/homelab/immich/manifests/pvcs.yaml:immich-postgres",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "resource:k8s/apps/homelab/immich/manifests/postgres.yaml:immich-postgres-service",
+      "target": "resource:k8s/apps/homelab/immich/manifests/postgres.yaml:immich-postgres-deployment",
+      "type": "serves",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "resource:k8s/apps/homelab/immich/manifests/pvcs.yaml",
+      "target": "resource:k8s/apps/homelab/immich/manifests/pvcs.yaml:immich-library",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "resource:k8s/apps/homelab/immich/manifests/pvcs.yaml",
+      "target": "resource:k8s/apps/homelab/immich/manifests/pvcs.yaml:immich-postgres",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "service:k8s/apps/homelab/nextcloud/manifests/postgres.yaml",
+      "target": "service:k8s/apps/homelab/nextcloud/manifests/pvcs.yaml",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "service:k8s/apps/homelab/nextcloud/manifests/redis.yaml",
+      "target": "service:k8s/apps/homelab/nextcloud/manifests/postgres.yaml",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "service:k8s/apps/homelab/nextcloud/manifests/namespace.yaml",
+      "target": "service:k8s/apps/homelab/nextcloud/manifests/postgres.yaml",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "service:k8s/apps/homelab/nextcloud/manifests/namespace.yaml",
+      "target": "service:k8s/apps/homelab/nextcloud/manifests/pvcs.yaml",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "service:k8s/apps/homelab/nextcloud/manifests/namespace.yaml",
+      "target": "service:k8s/apps/homelab/nextcloud/manifests/redis.yaml",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "service:k8s/apps/homelab/nextcloud/manifests/namespace.yaml",
+      "target": "service:k8s/apps/homelab/nextcloud/manifests/routing.yaml",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "service:k8s/apps/personal/kiroku/limitrange.yaml",
+      "target": "service:k8s/apps/personal/kiroku/namespace.yaml",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "service:k8s/apps/personal/kiroku/resourcequota.yaml",
+      "target": "service:k8s/apps/personal/kiroku/namespace.yaml",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "service:k8s/apps/personal/kiroku/rbac.yaml",
+      "target": "service:k8s/apps/personal/kiroku/namespace.yaml",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "service:k8s/apps/personal/kiroku/limitrange.yaml",
+      "target": "service:k8s/apps/personal/kiroku/resourcequota.yaml",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "pipeline:k8s/argocd/root-app.yaml",
+      "target": "service:k8s/argocd/namespace.yaml",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "service:k8s/argocd/ingressroute.yaml",
+      "target": "config:k8s/argocd/values.yaml",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "service:k8s/cloudflared/namespace.yaml",
+      "target": "service:k8s/cloudflared/deployment.yaml",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "service:k8s/cloudflared/namespace.yaml",
+      "target": "service:k8s/cloudflared/networkpolicy.yaml",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "service:k8s/cloudflared/namespace.yaml",
+      "target": "service:k8s/cloudflared/service-metrics.yaml",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "service:k8s/cloudflared/namespace.yaml",
+      "target": "service:k8s/cloudflared/servicemonitor.yaml",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "service:k8s/cloudflared/deployment.yaml",
+      "target": "service:k8s/cloudflared/networkpolicy.yaml",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "service:k8s/cloudflared/networkpolicy.yaml",
+      "target": "service:k8s/cloudflared/deployment.yaml",
+      "type": "routes",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "service:k8s/cloudflared/deployment.yaml",
+      "target": "service:k8s/cloudflared/service-metrics.yaml",
+      "type": "serves",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "service:k8s/cloudflared/service-metrics.yaml",
+      "target": "service:k8s/cloudflared/servicemonitor.yaml",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "service:k8s/cloudflared/servicemonitor.yaml",
+      "target": "service:k8s/cloudflared/service-metrics.yaml",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "service:k8s/example-app/ingressroute.yaml",
+      "target": "service:k8s/example-app/service.yaml",
+      "type": "routes",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "service:k8s/example-app/ingressroute-internal.yaml",
+      "target": "service:k8s/example-app/service.yaml",
+      "type": "routes",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "service:k8s/example-app/ingressroute-preview.yaml",
+      "target": "service:k8s/example-app/service.yaml",
+      "type": "routes",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "service:k8s/example-app/rollout.yaml",
+      "target": "service:k8s/example-app/service.yaml",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "service:k8s/longhorn/manifests/ingressroute.yaml",
+      "target": "resource:k8s/longhorn/manifests/storageclass-immich.yaml",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "service:k8s/longhorn/manifests/ingressroute.yaml",
+      "target": "resource:k8s/longhorn/manifests/storageclass-replicated.yaml",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "resource:k8s/longhorn/manifests/storageclass-immich.yaml",
+      "target": "resource:k8s/longhorn/manifests/storageclass-replicated.yaml",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:k8s/monitoring/values-alloy.yaml",
+      "target": "config:k8s/monitoring/values-loki.yaml",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:k8s/monitoring/values-kube-prometheus-stack.yaml",
+      "target": "config:k8s/monitoring/values-alloy.yaml",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:k8s/monitoring/values-kube-prometheus-stack.yaml",
+      "target": "config:k8s/monitoring/values-loki.yaml",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "service:k8s/traefik/manifests/tlsstore.yaml",
+      "target": "service:k8s/traefik/manifests/ingressroute-dashboard.yaml",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "service:k8s/traefik/manifests/tailscale-service.yaml",
+      "target": "service:k8s/traefik/manifests/ingressroute-dashboard.yaml",
+      "type": "serves",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "service:k8s/traefik/manifests/ingressroute-dashboard.yaml",
+      "target": "service:k8s/traefik/manifests/tlsstore.yaml",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "service:k8s/traefik/manifests/tailscale-service.yaml",
+      "target": "service:k8s/traefik/manifests/tlsstore.yaml",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "resource:terraform/main.tf",
+      "target": "resource:terraform/main.tf:k3s_server_1",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "resource:terraform/main.tf",
+      "target": "resource:terraform/main.tf:k3s_worker",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "resource:terraform/main.tf",
+      "target": "resource:terraform/variables.tf",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "resource:terraform/main.tf",
+      "target": "resource:terraform/provider.tf",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "resource:terraform/terraform.tfvars",
+      "target": "resource:terraform/variables.tf",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "resource:terraform/provider.tf",
+      "target": "resource:terraform/variables.tf",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "resource:terraform/outputs.tf",
+      "target": "resource:terraform/main.tf",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "resource:terraform/outputs.tf",
+      "target": "resource:terraform/variables.tf",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "resource:terraform/versions.tf",
+      "target": "resource:terraform/provider.tf",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:ansible/roles/proxmox_cluster/tasks/main.yml",
+      "target": "config:ansible/roles/proxmox_cluster/tasks/terraform_api.yml",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "config:ansible/roles/k3s_agent/tasks/main.yml",
+      "target": "config:ansible/roles/k3s_agent/handlers/main.yml",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:ansible/roles/k3s_agent/tasks/main.yml",
+      "target": "file:ansible/roles/k3s_agent/templates/config.yaml.j2",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:ansible/roles/k3s_server/tasks/main.yml",
+      "target": "config:ansible/roles/k3s_server/handlers/main.yml",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:ansible/roles/k3s_server/tasks/main.yml",
+      "target": "file:ansible/roles/k3s_server/templates/config.yaml.j2",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "document:docs/troubleshooting/intel-i219v-nvm-recovery-2026-07-23.md",
+      "target": "file:docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/e1000e-allow-bad-nvm.patch",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/troubleshooting/intel-i219v-nvm-recovery-2026-07-23.md",
+      "target": "file:docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/SHA256SUMS",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:ansible/roles/proxmox_hw_asrock/tasks/main.yml",
+      "target": "document:docs/troubleshooting/intel-i219v-nvm-recovery-2026-07-23.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/e1000e-allow-bad-nvm.patch",
+      "target": "file:docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/SHA256SUMS",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:k8s/apps/homelab/nextcloud/SECRETS.md",
+      "target": "service:k8s/apps/homelab/nextcloud/values.yaml",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "service:k8s/argo-rollouts/manifests/ingressroute.yaml",
+      "target": "service:k8s/argo-rollouts/values.yaml",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "service:k8s/cert-manager/manifests/cluster-issuer.yaml",
+      "target": "service:k8s/cert-manager/manifests/internal-wildcard-certificate.yaml",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "service:k8s/argocd/projects/homelab.yaml",
+      "target": "service:k8s/argocd/projects/personal.yaml",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:ansible/roles/k3s_node/tasks/main.yml",
+      "target": "config:ansible/roles/k3s_agent/tasks/main.yml",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:ansible/roles/k3s_node/tasks/main.yml",
+      "target": "config:ansible/roles/k3s_server/tasks/main.yml",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:ansible/roles/longhorn_node/tasks/main.yml",
+      "target": "config:ansible/roles/k3s_agent/tasks/main.yml",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "service:k8s/argo-rollouts/values.yaml",
+      "target": "service:k8s/argo-rollouts/manifests/ingressroute.yaml",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "document:docs/concepts/Terraform Concepts.md",
+      "target": "document:docs/Homelab Learning Map.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/concepts/Ansible Concepts.md",
+      "target": "document:docs/adr/README.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/concepts/Kubernetes Concepts.md",
+      "target": "document:docs/adr/README.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/concepts/Platform Concepts.md",
+      "target": "document:docs/adr/README.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/concepts/Ansible Concepts.md",
+      "target": "config:ansible/inventory.ini",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/concepts/Ansible Concepts.md",
+      "target": "config:ansible/roles/proxmox_host/tasks/main.yml",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/concepts/Ansible Concepts.md",
+      "target": "config:ansible/roles/k3s_server/tasks/main.yml",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/concepts/Ansible Concepts.md",
+      "target": "config:ansible/roles/longhorn_node/tasks/main.yml",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/concepts/Kubernetes Concepts.md",
+      "target": "config:k8s/traefik/values.yaml",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/concepts/Kubernetes Concepts.md",
+      "target": "config:k8s/tailscale/values.yaml",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/concepts/Platform Concepts.md",
+      "target": "config:ansible/roles/proxmox_host/tasks/main.yml",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/concepts/Platform Concepts.md",
+      "target": "config:ansible/roles/tailscale_host/tasks/main.yml",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/concepts/Terraform Concepts.md",
+      "target": "resource:terraform/main.tf",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/concepts/Terraform Concepts.md",
+      "target": "resource:terraform/variables.tf",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/concepts/Ansible Concepts.md",
+      "target": "config:ansible/roles/tailscale_host/tasks/main.yml",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/concepts/Platform Concepts.md",
+      "target": "service:k8s/traefik/manifests/tailscale-service.yaml",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:docs/concepts/Platform Concepts.md",
+      "target": "service:k8s/cloudflared/deployment.yaml",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    }
+  ],
+  "layers": [
+    {
+      "id": "layer:provisioning",
+      "name": "Infrastructure Provisioning",
+      "description": "Terraform configuration that provisions the Proxmox VMs for the neovara cluster (k3s-server-1 and the parameterized k3s-worker resource) \u2014 VM existence, not OS state.",
+      "nodeIds": [
+        "resource:terraform/main.tf",
+        "resource:terraform/main.tf:k3s_server_1",
+        "resource:terraform/main.tf:k3s_worker",
+        "resource:terraform/variables.tf",
+        "resource:terraform/terraform.tfvars",
+        "resource:terraform/provider.tf",
+        "resource:terraform/outputs.tf",
+        "resource:terraform/versions.tf"
+      ]
+    },
+    {
+      "id": "layer:configuration-management",
+      "name": "Configuration Management",
+      "description": "Ansible playbooks, roles, and inventory that configure the Proxmox hosts and k3s nodes: base OS prep, hardware-specific NIC/kernel safeguards, k3s server/agent bootstrap, and the shared longhorn_node data-disk mount.",
+      "nodeIds": [
+        "config:ansible/ansible.cfg",
+        "config:ansible/inventory.ini",
+        "config:ansible/proxmox.yml",
+        "config:ansible/requirements.yml",
+        "config:ansible/site.yml",
+        "config:ansible/group_vars/all.yml",
+        "config:ansible/group_vars/k3s_agent.yml",
+        "config:ansible/group_vars/k3s_cluster.yml",
+        "config:ansible/group_vars/proxmox_hosts.yml",
+        "config:ansible/group_vars/proxmox_hw_asrock.yml",
+        "config:ansible/group_vars/proxmox_hw_dell.yml",
+        "config:ansible/roles/proxmox_host/tasks/main.yml",
+        "config:ansible/roles/proxmox_host/tasks/repositories.yml",
+        "config:ansible/roles/proxmox_host/tasks/storage.yml",
+        "config:ansible/roles/proxmox_host/tasks/upgrade.yml",
+        "config:ansible/roles/proxmox_hw_dell/tasks/main.yml",
+        "config:ansible/roles/proxmox_hw_dell/tasks/e1000e_offload.yml",
+        "config:ansible/roles/proxmox_hw_dell/tasks/e1000e_aspm.yml",
+        "config:ansible/roles/proxmox_hw_dell/tasks/laptop.yml",
+        "config:ansible/host_vars/pve-asrock.yml",
+        "config:ansible/roles/k3s_agent/handlers/main.yml",
+        "config:ansible/roles/k3s_agent/tasks/main.yml",
+        "file:ansible/roles/k3s_agent/templates/config.yaml.j2",
+        "config:ansible/roles/k3s_node/tasks/main.yml",
+        "config:ansible/roles/k3s_server/handlers/main.yml",
+        "config:ansible/roles/k3s_server/tasks/main.yml",
+        "file:ansible/roles/k3s_server/templates/config.yaml.j2",
+        "config:ansible/roles/longhorn_node/tasks/main.yml",
+        "config:ansible/roles/proxmox_cluster/tasks/main.yml",
+        "config:ansible/roles/proxmox_cluster/tasks/terraform_api.yml",
+        "config:ansible/roles/proxmox_hw_asrock/tasks/main.yml",
+        "config:ansible/roles/tailscale_host/tasks/main.yml"
+      ]
+    },
+    {
+      "id": "layer:gitops",
+      "name": "GitOps Layer",
+      "description": "Argo CD's own app-of-apps definitions \u2014 the self-managing Argo CD Application, child Applications for each platform component and workload, and AppProject governance manifests that drive continuous reconciliation of the cluster.",
+      "nodeIds": [
+        "file:k8s/argocd/apps/appprojects.yaml",
+        "file:k8s/argocd/apps/argocd.yaml",
+        "file:k8s/argocd/apps/alloy.yaml",
+        "file:k8s/argocd/apps/argo-rollouts.yaml",
+        "file:k8s/argocd/apps/audiobookshelf.yaml",
+        "file:k8s/argocd/apps/cert-manager.yaml",
+        "file:k8s/argocd/apps/cloudflared.yaml",
+        "file:k8s/argocd/apps/immich.yaml",
+        "file:k8s/argocd/apps/kiroku-governance.yaml",
+        "file:k8s/argocd/apps/kiroku.yaml",
+        "file:k8s/argocd/apps/kube-prometheus-stack.yaml",
+        "file:k8s/argocd/apps/loki.yaml",
+        "file:k8s/argocd/apps/longhorn.yaml",
+        "file:k8s/argocd/apps/nextcloud.yaml",
+        "file:k8s/argocd/apps/tailscale.yaml",
+        "file:k8s/argocd/apps/traefik.yaml",
+        "service:k8s/argocd/ingressroute.yaml",
+        "service:k8s/argocd/namespace.yaml",
+        "pipeline:k8s/argocd/root-app.yaml",
+        "config:k8s/argocd/values.yaml",
+        "service:k8s/argocd/projects/homelab.yaml",
+        "service:k8s/argocd/projects/personal.yaml"
+      ]
+    },
+    {
+      "id": "layer:platform-infrastructure",
+      "name": "Platform Infrastructure",
+      "description": "Shared cluster platform components reconciled by Argo CD: Traefik ingress, cert-manager TLS, cloudflared tunnel with NetworkPolicy lockdown, Longhorn storage classes, the Prometheus/Loki/Alloy monitoring stack, Tailscale operator, Argo Rollouts, and the example-app canary/blue-green demo.",
+      "nodeIds": [
+        "service:k8s/cloudflared/namespace.yaml",
+        "service:k8s/cloudflared/deployment.yaml",
+        "service:k8s/cloudflared/networkpolicy.yaml",
+        "service:k8s/cloudflared/service-metrics.yaml",
+        "service:k8s/cloudflared/servicemonitor.yaml",
+        "service:k8s/example-app/ingressroute.yaml",
+        "service:k8s/example-app/ingressroute-internal.yaml",
+        "service:k8s/example-app/ingressroute-preview.yaml",
+        "service:k8s/example-app/rollout.yaml",
+        "service:k8s/example-app/service.yaml",
+        "service:k8s/longhorn/manifests/ingressroute.yaml",
+        "resource:k8s/longhorn/manifests/storageclass-immich.yaml",
+        "resource:k8s/longhorn/manifests/storageclass-replicated.yaml",
+        "config:k8s/monitoring/values-alloy.yaml",
+        "config:k8s/monitoring/values-kube-prometheus-stack.yaml",
+        "config:k8s/monitoring/values-loki.yaml",
+        "service:k8s/traefik/manifests/ingressroute-dashboard.yaml",
+        "service:k8s/traefik/manifests/tailscale-service.yaml",
+        "service:k8s/traefik/manifests/tlsstore.yaml",
+        "service:k8s/argo-rollouts/manifests/ingressroute.yaml",
+        "service:k8s/argo-rollouts/values.yaml",
+        "service:k8s/cert-manager/manifests/cluster-issuer.yaml",
+        "service:k8s/cert-manager/manifests/internal-wildcard-certificate.yaml",
+        "config:k8s/cert-manager/values.yaml",
+        "config:k8s/longhorn/values.yaml",
+        "config:k8s/monitoring/manifests/ingressroute-grafana.yaml",
+        "config:k8s/monitoring/manifests/ingressroute-prometheus.yaml",
+        "config:k8s/tailscale/manifests/api-server-rbac.yaml",
+        "config:k8s/tailscale/manifests/proxyclass-monitoring.yaml",
+        "config:k8s/tailscale/values.yaml",
+        "config:k8s/traefik/values.yaml"
+      ]
+    },
+    {
+      "id": "layer:application-workloads",
+      "name": "Application Workloads",
+      "description": "Kubernetes manifests for the homelab and personal applications running on the platform \u2014 Audiobookshelf, Immich (with its Postgres/VectorChord backend), Nextcloud (with Postgres and Redis), and the developer-owned kiroku app with its RBAC/quota scaffold.",
+      "nodeIds": [
+        "service:k8s/apps/homelab/audiobookshelf/namespace.yaml",
+        "service:k8s/apps/homelab/audiobookshelf/pvcs.yaml",
+        "service:k8s/apps/homelab/audiobookshelf/deployment.yaml",
+        "service:k8s/apps/homelab/audiobookshelf/service.yaml",
+        "service:k8s/apps/homelab/audiobookshelf/routing.yaml",
+        "service:k8s/apps/homelab/audiobookshelf/routing.yaml:secure-headers",
+        "service:k8s/apps/homelab/audiobookshelf/routing.yaml:audiobookshelf",
+        "service:k8s/apps/homelab/audiobookshelf/pvcs.yaml:audiobookshelf-config",
+        "service:k8s/apps/homelab/audiobookshelf/pvcs.yaml:audiobookshelf-metadata",
+        "service:k8s/apps/homelab/audiobookshelf/pvcs.yaml:audiobookshelf-audiobooks-single",
+        "service:k8s/apps/homelab/audiobookshelf/pvcs.yaml:audiobookshelf-podcasts",
+        "document:k8s/apps/homelab/immich/README.md",
+        "document:k8s/apps/homelab/immich/SECRETS.md",
+        "service:k8s/apps/homelab/immich/values.yaml",
+        "service:k8s/apps/homelab/immich/manifests/namespace.yaml",
+        "service:k8s/apps/homelab/immich/manifests/postgres.yaml",
+        "resource:k8s/apps/homelab/immich/manifests/postgres.yaml:immich-postgres-deployment",
+        "resource:k8s/apps/homelab/immich/manifests/postgres.yaml:immich-postgres-service",
+        "resource:k8s/apps/homelab/immich/manifests/pvcs.yaml",
+        "resource:k8s/apps/homelab/immich/manifests/pvcs.yaml:immich-library",
+        "resource:k8s/apps/homelab/immich/manifests/pvcs.yaml:immich-postgres",
+        "service:k8s/apps/homelab/immich/manifests/routing.yaml",
+        "service:k8s/apps/homelab/nextcloud/manifests/namespace.yaml",
+        "service:k8s/apps/homelab/nextcloud/manifests/postgres.yaml",
+        "service:k8s/apps/homelab/nextcloud/manifests/pvcs.yaml",
+        "service:k8s/apps/homelab/nextcloud/manifests/redis.yaml",
+        "service:k8s/apps/homelab/nextcloud/manifests/routing.yaml",
+        "service:k8s/apps/personal/kiroku/limitrange.yaml",
+        "service:k8s/apps/personal/kiroku/namespace.yaml",
+        "service:k8s/apps/personal/kiroku/rbac.yaml",
+        "service:k8s/apps/personal/kiroku/resourcequota.yaml",
+        "document:k8s/apps/homelab/nextcloud/SECRETS.md",
+        "service:k8s/apps/homelab/nextcloud/values.yaml"
+      ]
+    },
+    {
+      "id": "layer:documentation",
+      "name": "Documentation",
+      "description": "Project documentation and knowledge base: root-level guides (README, GUIDE, ROADMAP, CHANGELOG, claude.md), ADRs, concept explainers, incident post-mortems, migration runbooks, the ASRock NIC recovery troubleshooting kit, and the Understand-Anything tooling ignore file.",
+      "nodeIds": [
+        "document:CHANGELOG.md",
+        "document:GUIDE.md",
+        "document:README.md",
+        "document:ROADMAP.md",
+        "document:claude.md",
+        "document:docs/Homelab Learning Map.md",
+        "document:docs/Homelab Migration Checklist.md",
+        "document:docs/Migration Plan.md",
+        "document:docs/adr/README.md",
+        "document:docs/adr/v0.1 - Foundation.md",
+        "document:docs/adr/v0.2 - Cluster Bootstrap.md",
+        "document:docs/adr/v0.3 - Ingress and TLS.md",
+        "document:docs/adr/v0.4 - Public and Private Access.md",
+        "document:docs/adr/v2.0 - Operability.md",
+        "document:docs/concepts/Ansible Concepts.md",
+        "document:docs/concepts/Kubernetes Concepts.md",
+        "document:docs/concepts/Platform Concepts.md",
+        "document:docs/concepts/Terraform Concepts.md",
+        "document:docs/incidents/README.md",
+        "document:docs/incidents/TEMPLATE.md",
+        "document:docs/incidents/INC-2026-001-longhorn-stale-mount-namespace.md",
+        "document:docs/incidents/INC-2026-002-longhorn-stale-snapshot-attachment-tickets.md",
+        "document:docs/incidents/INC-2026-003-longhorn-rebuild-starved-etcd.md",
+        "document:docs/incidents/INC-2026-004-argocd-repo-server-oom-recovery.md",
+        "document:docs/incidents/INC-2026-005-prometheus-tsdb-capacity-exhaustion.md",
+        "document:docs/migrations/audiobookshelf.md",
+        "document:docs/migrations/immich.md",
+        "document:docs/migrations/kiroku.md",
+        "document:docs/migrations/nextcloud.md",
+        "document:docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/BUILD-MANIFEST.md",
+        "document:docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/README.md",
+        "document:docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/RELEASE_NOTES.md",
+        "file:.ua/.understandignore",
+        "document:docs/troubleshooting/intel-i219v-nvm-recovery-2026-07-23.md",
+        "file:docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/SHA256SUMS",
+        "file:docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/e1000e-allow-bad-nvm.patch"
+      ]
+    }
+  ],
+  "tour": [
+    {
+      "order": 1,
+      "title": "Project Overview",
+      "description": "README.md is the map to this repository: a production-shaped homelab Kubernetes platform built for hands-on operational learning rather than the fastest path to 'it works'. It explains the two-node Proxmox cluster (a laptop and an ASRock box), lists the core technology choices (Terraform, Ansible, k3s, Traefik, Cloudflare Tunnel, Tailscale), and points to GUIDE.md and docs/ for depth. Every later step in this tour traces back to a component introduced here.",
+      "nodeIds": [
+        "document:README.md"
+      ]
+    },
+    {
+      "order": 2,
+      "title": "The Build Walkthrough",
+      "description": "GUIDE.md is the 'territory' the README's 'map' points to: a 13-phase, 700-line sequential build guide from bare Proxmox hosts to a working cluster with ingress, TLS, and remote access. Unlike a typical README, it explains both what each phase does and why that architectural choice was made, and it is the document this whole tour's ordering mirrors. Treat it as the narrative spine \u2014 provisioning, then configuration, then platform services, then applications.",
+      "nodeIds": [
+        "document:GUIDE.md"
+      ]
+    },
+    {
+      "order": 3,
+      "title": "Provisioning the VMs with Terraform",
+      "description": "main.tf is where cluster infrastructure first comes into existence: it defines the k3s-server-1 control-plane VM directly and a parameterized k3s_worker resource that uses for_each to stamp out both worker VMs (on the Dell and the ASRock host) from one block of code. variables.tf supplies the 15 typed inputs \u2014 Proxmox connection details, network, sizing \u2014 that keep placement and capacity expressed as parameters rather than duplicated resource blocks. This is deliberately VM existence only; nothing here touches the OS.",
+      "nodeIds": [
+        "resource:terraform/main.tf",
+        "resource:terraform/main.tf:k3s_server_1",
+        "resource:terraform/main.tf:k3s_worker",
+        "resource:terraform/variables.tf"
+      ],
+      "languageLesson": "Terraform's for_each turns one resource block into a family of resources keyed by a map, so adding a new worker later means adding a map entry, not duplicating HCL. This is why the repo can say 'one Terraform resource provisions both workers.'"
+    },
+    {
+      "order": 4,
+      "title": "Configuring the OS and Bootstrapping k3s",
+      "description": "Once Terraform's VMs exist, site.yml is the main Ansible playbook that turns them into a running cluster: base OS prep, then k3s server bootstrap, then agent join, run as ordered plays. The k3s_server role enables embedded etcd (cluster-init: true) and secrets encryption rather than the simpler SQLite datastore \u2014 a deliberate choice that keeps a real path to 3-node HA later. The k3s_agent role handles the worker side of the same join.",
+      "nodeIds": [
+        "config:ansible/site.yml",
+        "config:ansible/roles/k3s_server/tasks/main.yml",
+        "config:ansible/roles/k3s_agent/tasks/main.yml"
+      ],
+      "languageLesson": "Ansible roles separate 'what to configure' (tasks/main.yml) from 'what values to use' (group_vars/host_vars), so the same k3s_agent role runs unmodified against both the Dell and ASRock workers with only their variables differing."
+    },
+    {
+      "order": 5,
+      "title": "Hardware-Specific Safeguards",
+      "description": "Not every node is generic hardware, and this repo encodes that explicitly rather than papering over it. The proxmox_hw_asrock role holds three kernel packages in place so the host never silently upgrades past the exact kernel its unsigned Intel I219-V NIC patch was built for, and the e1000e_offload task applies a live fix for a known 'Hardware Unit Hang' on the Dell's onboard NIC. Both exist because generic Ansible defaults would have broken networking on this specific hardware.",
+      "nodeIds": [
+        "config:ansible/roles/proxmox_hw_asrock/tasks/main.yml",
+        "config:ansible/roles/proxmox_hw_dell/tasks/e1000e_offload.yml"
+      ]
+    },
+    {
+      "order": 6,
+      "title": "Longhorn's Shared Data-Disk Role",
+      "description": "Building on the k3s bootstrap from Step 4, the longhorn_node role is the shared Ansible role that every worker runs to prepare its dedicated data disk: formatting it ext4 with the label k3s-data, mounting it at /var/lib/longhorn, and ordering the k3s service to start after that mount succeeds. One role, parameterized per node, handles both the Dell worker's local-lvm disk and the ASRock worker's independent HDD-backed datastore \u2014 the same 'one role, many placements' pattern seen in Terraform's k3s_worker resource.",
+      "nodeIds": [
+        "config:ansible/roles/longhorn_node/tasks/main.yml"
+      ]
+    },
+    {
+      "order": 7,
+      "title": "GitOps Bootstrap with Argo CD",
+      "description": "With the cluster itself running, root-app.yaml is the 'app of apps' root Application that auto-discovers every child Application manifest under k8s/argocd/apps/ \u2014 this is how new platform components and workloads get reconciled without manually running Helm or kubectl apply. argocd.yaml resolves the bootstrap paradox by making Argo CD manage its own Helm release once it exists, and the homelab AppProject scopes which repositories and destinations child Applications are allowed to use. Every platform and application step from here forward is reconciled through this mechanism, not applied by hand.",
+      "nodeIds": [
+        "pipeline:k8s/argocd/root-app.yaml",
+        "file:k8s/argocd/apps/argocd.yaml",
+        "service:k8s/argocd/projects/homelab.yaml"
+      ]
+    },
+    {
+      "order": 8,
+      "title": "Ingress and TLS: Traefik and cert-manager",
+      "description": "Traefik's values.yaml configures it as a ClusterIP Service \u2014 deliberately never LoadBalancer or NodePort, since there is no MetalLB or Cilium LB-IPAM in this design \u2014 and wires up IngressRoute, Traefik's native CRD, as the routing mechanism. cert-manager's cluster-issuer.yaml handles Let's Encrypt ACME HTTP-01 challenges so every IngressRoute gets real TLS. Together these are the layer every application's routing.yaml (seen later) depends on.",
+      "nodeIds": [
+        "config:k8s/traefik/values.yaml",
+        "service:k8s/cert-manager/manifests/cluster-issuer.yaml"
+      ]
+    },
+    {
+      "order": 9,
+      "title": "Public Access via Cloudflare Tunnel",
+      "description": "cloudflared's deployment.yaml runs the tunnel connector with security hardening (non-root, read-only filesystem) so every public hostname reaches Traefik's ClusterIP Service entirely inside the cluster \u2014 no LAN LoadBalancer IP needed anywhere. The networkpolicy.yaml is the enforcement mechanism that keeps this safe: it locks cloudflared's egress down to only DNS, Traefik, and Cloudflare's edge, closing off what would otherwise be default access to every Service in every namespace.",
+      "nodeIds": [
+        "service:k8s/cloudflared/deployment.yaml",
+        "service:k8s/cloudflared/networkpolicy.yaml"
+      ],
+      "languageLesson": "Kubernetes NetworkPolicy is default-deny-by-selection: once a policy selects a pod, only the traffic it explicitly allows gets through, which is why this one file is what stops cloudflared from being a lateral-movement risk."
+    },
+    {
+      "order": 10,
+      "title": "Persistent Storage with Longhorn",
+      "description": "Longhorn's values.yaml configures single-replica replicated storage on the dedicated data disks that Step 6's Ansible role mounted, turning those raw disks into a Kubernetes storage layer. The storageclass-replicated.yaml is the general-purpose StorageClass most workloads use, while storageclass-immich.yaml preserves two StorageClasses retained specifically from the Immich migration \u2014 a reminder that storage classes, once workloads depend on them, aren't casually renamed or removed.",
+      "nodeIds": [
+        "config:k8s/longhorn/values.yaml",
+        "resource:k8s/longhorn/manifests/storageclass-replicated.yaml",
+        "resource:k8s/longhorn/manifests/storageclass-immich.yaml"
+      ]
+    },
+    {
+      "order": 11,
+      "title": "Observability: Prometheus, Loki, and Tailscale",
+      "description": "The kube-prometheus-stack values configure metrics collection and alerting across the cluster, and Loki's values configure log aggregation in SingleBinary mode with filesystem storage \u2014 together the monitoring stack referenced throughout the incident reports later in this tour. Tailscale's values enable the Kubernetes Operator's API-server proxy, and api-server-rbac.yaml grants the Tailscale-authenticated user cluster-admin for kubectl access \u2014 a second, distinct Tailscale mechanism from the host-level tailscaled agents installed back in Step 4-5's Ansible roles.",
+      "nodeIds": [
+        "config:k8s/monitoring/values-kube-prometheus-stack.yaml",
+        "config:k8s/monitoring/values-loki.yaml",
+        "config:k8s/tailscale/values.yaml",
+        "config:k8s/tailscale/manifests/api-server-rbac.yaml"
+      ]
+    },
+    {
+      "order": 12,
+      "title": "Application Workloads: Immich",
+      "description": "With the whole platform layer in place, Immich is one of the migrated homelab applications running on top of it. Its postgres.yaml deploys an Immich-compatible PostgreSQL 14 with the VectorChord extension for similarity search, its pvcs.yaml claims a 350Gi Longhorn volume for the photo library using the StorageClasses from Step 10, and its own README.md documents authoritative state and migration history in more depth than any other app in the repo \u2014 reflecting that Immich went through a full incident-driven recovery.",
+      "nodeIds": [
+        "service:k8s/apps/homelab/immich/manifests/postgres.yaml",
+        "resource:k8s/apps/homelab/immich/manifests/pvcs.yaml",
+        "document:k8s/apps/homelab/immich/README.md"
+      ]
+    },
+    {
+      "order": 13,
+      "title": "Multi-Tenant Guardrails: kiroku",
+      "description": "kiroku is a developer-owned personal app, and its manifests demonstrate the multi-tenancy guardrails the homelab apps don't need: rbac.yaml defines a least-privilege deployer ServiceAccount/Role/RoleBinding scoped to just this namespace, resourcequota.yaml caps the namespace's total resource consumption, and limitrange.yaml injects default CPU/memory requests and limits so a container without explicit resources can't silently starve its neighbors. This pattern only shows up for the personal/kiroku app, not the homelab apps, because it's the namespace one operator doesn't fully trust with unlimited scheduling.",
+      "nodeIds": [
+        "service:k8s/apps/personal/kiroku/rbac.yaml",
+        "service:k8s/apps/personal/kiroku/resourcequota.yaml",
+        "service:k8s/apps/personal/kiroku/limitrange.yaml"
+      ]
+    },
+    {
+      "order": 14,
+      "title": "Architecture Decision Records",
+      "description": "docs/adr/README.md is the numbered catalog of every architecture decision made across this project \u2014 the durable, Status/Context/Decision/Consequences record that CLAUDE.md's condensed summary is generated from. The 'Public and Private Access' ADR specifically documents the reasoning behind Step 9's Cloudflare Tunnel routing and NetworkPolicy lockdown, showing how a design choice that looks simple in the manifest was actually argued through and recorded before being built.",
+      "nodeIds": [
+        "document:docs/adr/README.md",
+        "document:docs/adr/v0.4 - Public and Private Access.md"
+      ]
+    },
+    {
+      "order": 15,
+      "title": "Incidents as Learning Artifacts",
+      "description": "docs/incidents/README.md explains this project's practice of treating outages as blameless learning artifacts rather than just fixing and forgetting them. INC-2026-003 is a concrete example directly tied to Step 6 and Step 10: a Longhorn volume rebuild's I/O load starved the single-node embedded etcd from Step 4, causing cluster instability \u2014 a failure mode that only exists because of the deliberate single-server-etcd tradeoff documented back in Step 1's README and not yet resolved by the planned control-plane HA work.",
+      "nodeIds": [
+        "document:docs/incidents/README.md",
+        "document:docs/incidents/INC-2026-003-longhorn-rebuild-starved-etcd.md"
+      ]
+    }
+  ]
+}

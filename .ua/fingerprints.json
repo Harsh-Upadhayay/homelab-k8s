@@ -1,0 +1,1507 @@
+{
+  "version": "1.0.0",
+  "gitCommitHash": "fbbd614414bcd0f13ab2da539d63c64f8f0d716b",
+  "generatedAt": "2026-07-25T04:17:10.530Z",
+  "files": {
+    ".ua/.understandignore": {
+      "filePath": ".ua/.understandignore",
+      "contentHash": "5056c2b796f7d8810643c4474b292417cbb2c80e44e73ba3fd61dc048479d72b",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 75,
+      "hasStructuralAnalysis": false
+    },
+    "CHANGELOG.md": {
+      "filePath": "CHANGELOG.md",
+      "contentHash": "41630757eac94deaf3261704f4cad574b6fac79f3e3fb3ed7e3fa07a47825cf3",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 73,
+      "hasStructuralAnalysis": true
+    },
+    "GUIDE.md": {
+      "filePath": "GUIDE.md",
+      "contentHash": "2a66699714b50e311816ea2477ec2f1357b2754c355aebfbe117db513ade9e88",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 707,
+      "hasStructuralAnalysis": true
+    },
+    "README.md": {
+      "filePath": "README.md",
+      "contentHash": "2ddff9070e70aa32fd2f773f4f8c1068012ac168ace2137b00200681103aad09",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 82,
+      "hasStructuralAnalysis": true
+    },
+    "ROADMAP.md": {
+      "filePath": "ROADMAP.md",
+      "contentHash": "4afd3427b15587cd56db7b3686c7e680ada03e687774351c0afe4683df673e0e",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 55,
+      "hasStructuralAnalysis": true
+    },
+    "ansible/ansible.cfg": {
+      "filePath": "ansible/ansible.cfg",
+      "contentHash": "991859e7f1fed1a84d2fa98b395e09efaea209bd1929bc930d67aa3097f5b99d",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 11,
+      "hasStructuralAnalysis": false
+    },
+    "ansible/group_vars/all.yml": {
+      "filePath": "ansible/group_vars/all.yml",
+      "contentHash": "d9bc7b1a0fcb756490357a30351c8796aaaa8a5025987effbff753865ff08c10",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 26,
+      "hasStructuralAnalysis": true
+    },
+    "ansible/group_vars/k3s_agent.yml": {
+      "filePath": "ansible/group_vars/k3s_agent.yml",
+      "contentHash": "2f56943f1d58076b1b7308d1c11134b563158fb8a9f204f53652a6da176236c5",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 7,
+      "hasStructuralAnalysis": true
+    },
+    "ansible/group_vars/k3s_cluster.yml": {
+      "filePath": "ansible/group_vars/k3s_cluster.yml",
+      "contentHash": "893ab96bc9b2cf4f155839ad0305ebe5f7873387aec0204505c4b9e0ea361211",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 8,
+      "hasStructuralAnalysis": true
+    },
+    "ansible/group_vars/proxmox_hosts.yml": {
+      "filePath": "ansible/group_vars/proxmox_hosts.yml",
+      "contentHash": "74e3252c2d5223e93e162c2c657b9dce3ff8b40291dfbe1fd55906c2f8f3e0c4",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 26,
+      "hasStructuralAnalysis": true
+    },
+    "ansible/group_vars/proxmox_hw_asrock.yml": {
+      "filePath": "ansible/group_vars/proxmox_hw_asrock.yml",
+      "contentHash": "1c913083704c7f7417b844e495a4aca02781dadc53e64395a6913433d3cb4548",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 12,
+      "hasStructuralAnalysis": true
+    },
+    "ansible/group_vars/proxmox_hw_dell.yml": {
+      "filePath": "ansible/group_vars/proxmox_hw_dell.yml",
+      "contentHash": "534d816a496966df1a226d858e27d12483ecc7d187e6fb29bfde4a87b639198d",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 6,
+      "hasStructuralAnalysis": true
+    },
+    "ansible/host_vars/pve-asrock.yml": {
+      "filePath": "ansible/host_vars/pve-asrock.yml",
+      "contentHash": "2fe273887d97011f562b41d78b53a2946e70b7f90c61a25c76cf4770d9c481c8",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 11,
+      "hasStructuralAnalysis": true
+    },
+    "ansible/inventory.ini": {
+      "filePath": "ansible/inventory.ini",
+      "contentHash": "91ccc8867a76f56645f62d7c2619539242c0173940438589e03d5fd31022fabf",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 41,
+      "hasStructuralAnalysis": false
+    },
+    "ansible/proxmox.yml": {
+      "filePath": "ansible/proxmox.yml",
+      "contentHash": "e9773364f415c599a0f159b08d4f2f9f58dd72f6909b446df9b9655ed3416143",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 32,
+      "hasStructuralAnalysis": true
+    },
+    "ansible/requirements.yml": {
+      "filePath": "ansible/requirements.yml",
+      "contentHash": "ad76ccdfc283da1372f0ebd5131badced612281b2e992f9471106610d8b217aa",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 7,
+      "hasStructuralAnalysis": true
+    },
+    "ansible/roles/k3s_agent/handlers/main.yml": {
+      "filePath": "ansible/roles/k3s_agent/handlers/main.yml",
+      "contentHash": "bb30168a51f573adf58cccf28ec96ca1ee9ffdac03c9514755f6bf84d797b7fb",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 7,
+      "hasStructuralAnalysis": true
+    },
+    "ansible/roles/k3s_agent/tasks/main.yml": {
+      "filePath": "ansible/roles/k3s_agent/tasks/main.yml",
+      "contentHash": "c2c7379281bbedd13132ef242e146ef9b055ee77498beb9466be23154096e724",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 51,
+      "hasStructuralAnalysis": true
+    },
+    "ansible/roles/k3s_agent/templates/config.yaml.j2": {
+      "filePath": "ansible/roles/k3s_agent/templates/config.yaml.j2",
+      "contentHash": "17d0a74af8a4960825730c1600f6ca422af46ad2a1f14d3017f1c787b4b2ac2b",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 5,
+      "hasStructuralAnalysis": false
+    },
+    "ansible/roles/k3s_node/tasks/main.yml": {
+      "filePath": "ansible/roles/k3s_node/tasks/main.yml",
+      "contentHash": "60ef9640012a1a3c14fd10e26ffd7f16abec06fdf38cbf0a2af4dede40a2f198",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 58,
+      "hasStructuralAnalysis": true
+    },
+    "ansible/roles/k3s_server/handlers/main.yml": {
+      "filePath": "ansible/roles/k3s_server/handlers/main.yml",
+      "contentHash": "085dc9fb39f4ef2a02d7d293e1c1331c271fd1d9c52f8ebc213995258490f369",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 7,
+      "hasStructuralAnalysis": true
+    },
+    "ansible/roles/k3s_server/tasks/main.yml": {
+      "filePath": "ansible/roles/k3s_server/tasks/main.yml",
+      "contentHash": "8787a3e4497f4b078fbe1dc731b7d328483db6869702d769cd17b5513c96d365",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 85,
+      "hasStructuralAnalysis": true
+    },
+    "ansible/roles/k3s_server/templates/config.yaml.j2": {
+      "filePath": "ansible/roles/k3s_server/templates/config.yaml.j2",
+      "contentHash": "c020c31d70e56b238372ac7332fd08f742ea3f75e36070afe97d0247009d5426",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 54,
+      "hasStructuralAnalysis": false
+    },
+    "ansible/roles/longhorn_node/tasks/main.yml": {
+      "filePath": "ansible/roles/longhorn_node/tasks/main.yml",
+      "contentHash": "3e2e51fc5e91092163214a3cd01737c623cb9e188eeee853238d52b18dab2e80",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 68,
+      "hasStructuralAnalysis": true
+    },
+    "ansible/roles/proxmox_cluster/tasks/main.yml": {
+      "filePath": "ansible/roles/proxmox_cluster/tasks/main.yml",
+      "contentHash": "528c2d9f4f9e1f1345716235c9662048ec260a556bd9bb6f0c9cc43ec0ec4f6e",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 21,
+      "hasStructuralAnalysis": true
+    },
+    "ansible/roles/proxmox_cluster/tasks/terraform_api.yml": {
+      "filePath": "ansible/roles/proxmox_cluster/tasks/terraform_api.yml",
+      "contentHash": "73a1725372a3a08b68d70e1c4cc062281564ed8f7300d4c73ce18946cb8323e4",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 137,
+      "hasStructuralAnalysis": true
+    },
+    "ansible/roles/proxmox_host/tasks/main.yml": {
+      "filePath": "ansible/roles/proxmox_host/tasks/main.yml",
+      "contentHash": "32ae1cb0f33cad546534b855ed3b6b52f7dbef4073ec4dd2490e093f8cb84b16",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 22,
+      "hasStructuralAnalysis": true
+    },
+    "ansible/roles/proxmox_host/tasks/repositories.yml": {
+      "filePath": "ansible/roles/proxmox_host/tasks/repositories.yml",
+      "contentHash": "29879668fdb7aade899a4bada5ed3f49d571398a2cac5f170e7c2a7847b9d62b",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 38,
+      "hasStructuralAnalysis": true
+    },
+    "ansible/roles/proxmox_host/tasks/storage.yml": {
+      "filePath": "ansible/roles/proxmox_host/tasks/storage.yml",
+      "contentHash": "b473bc8da24058fd24ebbb2013fcc9a8b667a54fa5fb620361a029995a6f0950",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 115,
+      "hasStructuralAnalysis": true
+    },
+    "ansible/roles/proxmox_host/tasks/upgrade.yml": {
+      "filePath": "ansible/roles/proxmox_host/tasks/upgrade.yml",
+      "contentHash": "7b580f75f2a740f3bfd55e201e7f26aab06b39856ebf2a7502ac8fdfc3d7d50d",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 32,
+      "hasStructuralAnalysis": true
+    },
+    "ansible/roles/proxmox_hw_asrock/tasks/main.yml": {
+      "filePath": "ansible/roles/proxmox_hw_asrock/tasks/main.yml",
+      "contentHash": "a5b98fd79d6b71f39c10305aa8afd3b3c9dac1bdbfa5e5142111b738fea1e653",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 53,
+      "hasStructuralAnalysis": true
+    },
+    "ansible/roles/proxmox_hw_dell/tasks/e1000e_aspm.yml": {
+      "filePath": "ansible/roles/proxmox_hw_dell/tasks/e1000e_aspm.yml",
+      "contentHash": "f2895cffaf9edfe78d5654928bd6c08a5ecfc7bc0dc75f70554c0c159b8dcd8e",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 40,
+      "hasStructuralAnalysis": true
+    },
+    "ansible/roles/proxmox_hw_dell/tasks/e1000e_offload.yml": {
+      "filePath": "ansible/roles/proxmox_hw_dell/tasks/e1000e_offload.yml",
+      "contentHash": "3f38f9ed8e08393f2461c62fecd677aebf2655b2af92e70be283b3ceff044d0e",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 91,
+      "hasStructuralAnalysis": true
+    },
+    "ansible/roles/proxmox_hw_dell/tasks/laptop.yml": {
+      "filePath": "ansible/roles/proxmox_hw_dell/tasks/laptop.yml",
+      "contentHash": "21696a41dc76320f3e3e745e65ebcfd1807e1ce62a21222497233dedb2509ca8",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 27,
+      "hasStructuralAnalysis": true
+    },
+    "ansible/roles/proxmox_hw_dell/tasks/main.yml": {
+      "filePath": "ansible/roles/proxmox_hw_dell/tasks/main.yml",
+      "contentHash": "006b123d6074914e77b800079af0415f30253ebc2a45cf86c1423b6927516313",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 18,
+      "hasStructuralAnalysis": true
+    },
+    "ansible/roles/tailscale_host/tasks/main.yml": {
+      "filePath": "ansible/roles/tailscale_host/tasks/main.yml",
+      "contentHash": "4bc8470f863205136c1e5302e39c110b3d33ea9c76649f6a219ef052682aa659",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 59,
+      "hasStructuralAnalysis": true
+    },
+    "ansible/site.yml": {
+      "filePath": "ansible/site.yml",
+      "contentHash": "941d65e3d73a0f5d59539d9af74b2b4a4519513f43300139e520a9f412314d4e",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 26,
+      "hasStructuralAnalysis": true
+    },
+    "claude.md": {
+      "filePath": "claude.md",
+      "contentHash": "8993433cc3bfeddf4923692c1682c6b2fc4a99a384acc8c3796a1b384ec1e579",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 63,
+      "hasStructuralAnalysis": true
+    },
+    "docs/Homelab Learning Map.md": {
+      "filePath": "docs/Homelab Learning Map.md",
+      "contentHash": "d47cc281840542fc166ecd4e7fb57422f367ddbbb481ced31fe7230dd8e903dd",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 38,
+      "hasStructuralAnalysis": true
+    },
+    "docs/Homelab Migration Checklist.md": {
+      "filePath": "docs/Homelab Migration Checklist.md",
+      "contentHash": "8ff39c972bd7c590ed04559848590eb8146c6456169e9104c49d87cb28bc94e7",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 65,
+      "hasStructuralAnalysis": true
+    },
+    "docs/Migration Plan.md": {
+      "filePath": "docs/Migration Plan.md",
+      "contentHash": "b7680e78964cc3f2887f5f21260d61d1b3860ee94ecb5e18ff266078bd65404f",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 254,
+      "hasStructuralAnalysis": true
+    },
+    "docs/adr/README.md": {
+      "filePath": "docs/adr/README.md",
+      "contentHash": "6f9886383806c1088ad2045255baf0f5bbbe42f00dcc6e150af7361fbd5bb7b4",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 80,
+      "hasStructuralAnalysis": true
+    },
+    "docs/adr/v0.1 - Foundation.md": {
+      "filePath": "docs/adr/v0.1 - Foundation.md",
+      "contentHash": "4610efdeb0d6a8a48e906ef93965b76e31eb462c1493d03941df1fcf9de34972",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 167,
+      "hasStructuralAnalysis": true
+    },
+    "docs/adr/v0.2 - Cluster Bootstrap.md": {
+      "filePath": "docs/adr/v0.2 - Cluster Bootstrap.md",
+      "contentHash": "47a764222a2c7580902a6ac9120e8a1615b4b4cdec4e8f62a67eba5d2d324ad2",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 53,
+      "hasStructuralAnalysis": true
+    },
+    "docs/adr/v0.3 - Ingress and TLS.md": {
+      "filePath": "docs/adr/v0.3 - Ingress and TLS.md",
+      "contentHash": "3fc4a99964eb7ccfafaf8ed04223d7d6d1f91e6e7633dd5677580c4b62bb20e3",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 45,
+      "hasStructuralAnalysis": true
+    },
+    "docs/adr/v0.4 - Public and Private Access.md": {
+      "filePath": "docs/adr/v0.4 - Public and Private Access.md",
+      "contentHash": "297fd1692bd412812342da7ac227db9aae841175a8bc1f33c4a759494b2a7d71",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 71,
+      "hasStructuralAnalysis": true
+    },
+    "docs/adr/v2.0 - Operability.md": {
+      "filePath": "docs/adr/v2.0 - Operability.md",
+      "contentHash": "68e5b8e3463640ec64e98cb7cda8df4c1acf33634a00b72353415ff713e5146a",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 270,
+      "hasStructuralAnalysis": true
+    },
+    "docs/concepts/Ansible Concepts.md": {
+      "filePath": "docs/concepts/Ansible Concepts.md",
+      "contentHash": "7a730cac53d2b84e8982b42402e34097e965bd20243f981dcf3a9e5e9e5ef406",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 104,
+      "hasStructuralAnalysis": true
+    },
+    "docs/concepts/Kubernetes Concepts.md": {
+      "filePath": "docs/concepts/Kubernetes Concepts.md",
+      "contentHash": "fdec7eec3b4426c1aefb202fdb856afd5026ed269db4c5d12307844b7383c1f7",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 492,
+      "hasStructuralAnalysis": true
+    },
+    "docs/concepts/Platform Concepts.md": {
+      "filePath": "docs/concepts/Platform Concepts.md",
+      "contentHash": "c5c0ae90e075ec2fd223248753d126aeb7bd550bfcf2e7d9b6e13c98a73450c0",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 162,
+      "hasStructuralAnalysis": true
+    },
+    "docs/concepts/Terraform Concepts.md": {
+      "filePath": "docs/concepts/Terraform Concepts.md",
+      "contentHash": "b75703854029d8f43af01e52b57c0fe236b684b5eb4b6e1cdc3dbfe2410f04a2",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 37,
+      "hasStructuralAnalysis": true
+    },
+    "docs/incidents/INC-2026-001-longhorn-stale-mount-namespace.md": {
+      "filePath": "docs/incidents/INC-2026-001-longhorn-stale-mount-namespace.md",
+      "contentHash": "f7043d6012def0e94f3d11d188ea414ff03d347481e897ec4d3eb5f7ca4d9564",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 233,
+      "hasStructuralAnalysis": true
+    },
+    "docs/incidents/INC-2026-002-longhorn-stale-snapshot-attachment-tickets.md": {
+      "filePath": "docs/incidents/INC-2026-002-longhorn-stale-snapshot-attachment-tickets.md",
+      "contentHash": "f96bb647b2a11c630fd956d144740e7066c57dc3c7b181e164ae3924eaa4f4e2",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 171,
+      "hasStructuralAnalysis": true
+    },
+    "docs/incidents/INC-2026-003-longhorn-rebuild-starved-etcd.md": {
+      "filePath": "docs/incidents/INC-2026-003-longhorn-rebuild-starved-etcd.md",
+      "contentHash": "4d934144866d25e66fcce187458f4cf4cd19513ce79df307b8c1753f51f22208",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 201,
+      "hasStructuralAnalysis": true
+    },
+    "docs/incidents/INC-2026-004-argocd-repo-server-oom-recovery.md": {
+      "filePath": "docs/incidents/INC-2026-004-argocd-repo-server-oom-recovery.md",
+      "contentHash": "a3ba5bf22f49c75e2951b66d2df9159479757b493a2be10a96935970c4f72b02",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 121,
+      "hasStructuralAnalysis": true
+    },
+    "docs/incidents/INC-2026-005-prometheus-tsdb-capacity-exhaustion.md": {
+      "filePath": "docs/incidents/INC-2026-005-prometheus-tsdb-capacity-exhaustion.md",
+      "contentHash": "8b371c8131b3a48cc774403fc967c595bbd0f92466861d20179a30aab6d2b315",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 121,
+      "hasStructuralAnalysis": true
+    },
+    "docs/incidents/README.md": {
+      "filePath": "docs/incidents/README.md",
+      "contentHash": "e2471c9f6e709e467b8500dabe49446dc666235f2e904271ba23f68837917a96",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 62,
+      "hasStructuralAnalysis": true
+    },
+    "docs/incidents/TEMPLATE.md": {
+      "filePath": "docs/incidents/TEMPLATE.md",
+      "contentHash": "c81bbca951ff1d9c47c1d22618c1a4501b27de80107592855eb2bc43e606e66d",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 83,
+      "hasStructuralAnalysis": true
+    },
+    "docs/migrations/audiobookshelf.md": {
+      "filePath": "docs/migrations/audiobookshelf.md",
+      "contentHash": "a58c965498e1d997167dcb5a30bc8c1997104feb6d3b9727f648e1844a634a54",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 319,
+      "hasStructuralAnalysis": true
+    },
+    "docs/migrations/immich.md": {
+      "filePath": "docs/migrations/immich.md",
+      "contentHash": "bd1d0c73ccc01e04a0ac92fd779c1e16494fc05a51de023c39d1823df8cb56c2",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 450,
+      "hasStructuralAnalysis": true
+    },
+    "docs/migrations/kiroku.md": {
+      "filePath": "docs/migrations/kiroku.md",
+      "contentHash": "dee679e233d5bd8927054e0cd2822feeef1154c061081a075c470a7f5302fba1",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 86,
+      "hasStructuralAnalysis": true
+    },
+    "docs/migrations/nextcloud.md": {
+      "filePath": "docs/migrations/nextcloud.md",
+      "contentHash": "5ca6cda5b1b3a57da0f9211c1a0ef8c4bf100e9e468a8a8b670bbf765521dc35",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 127,
+      "hasStructuralAnalysis": true
+    },
+    "docs/troubleshooting/intel-i219v-nvm-recovery-2026-07-23.md": {
+      "filePath": "docs/troubleshooting/intel-i219v-nvm-recovery-2026-07-23.md",
+      "contentHash": "399f8f5c8ec14634b09c3157db125f297d919774a7910bcfa55595bfd9404b1a",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 785,
+      "hasStructuralAnalysis": true
+    },
+    "docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/BUILD-MANIFEST.md": {
+      "filePath": "docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/BUILD-MANIFEST.md",
+      "contentHash": "f2ec0aeee716258a6943c9c90d60116e70d69582bce4014569cb36be682967e0",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 178,
+      "hasStructuralAnalysis": true
+    },
+    "docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/README.md": {
+      "filePath": "docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/README.md",
+      "contentHash": "cab5711bb04a998488f813c27bedee69bc8641804e7f5324403d28e88ed2d801",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 318,
+      "hasStructuralAnalysis": true
+    },
+    "docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/RELEASE_NOTES.md": {
+      "filePath": "docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/RELEASE_NOTES.md",
+      "contentHash": "7a99deb086d22edc81fa2e4abdea6b9b67b3a38be4537c5427d6ecb01fcdb39c",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 57,
+      "hasStructuralAnalysis": true
+    },
+    "docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/SHA256SUMS": {
+      "filePath": "docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/SHA256SUMS",
+      "contentHash": "2f1c5ebddf19480322feba37234cf6d3a1faca9ee47d837d168b4225005dbd47",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 2,
+      "hasStructuralAnalysis": false
+    },
+    "docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/e1000e-allow-bad-nvm.patch": {
+      "filePath": "docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/e1000e-allow-bad-nvm.patch",
+      "contentHash": "9c5f8e31bb13eb7eaf5e4a3d86a52e453f350cf3f6c0f59ea3a4f88d2242f269",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 50,
+      "hasStructuralAnalysis": false
+    },
+    "k8s/apps/homelab/audiobookshelf/deployment.yaml": {
+      "filePath": "k8s/apps/homelab/audiobookshelf/deployment.yaml",
+      "contentHash": "f5c0dc6e999b0a8e3c6703f0363077afc9f6d2e664a3eb0d8c1554186b076d60",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 101,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/apps/homelab/audiobookshelf/namespace.yaml": {
+      "filePath": "k8s/apps/homelab/audiobookshelf/namespace.yaml",
+      "contentHash": "10bf4ac7792e5b52a2fa011caa62c0dbbbf4bfae277fd54a97bcdfe355cf2ed5",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 12,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/apps/homelab/audiobookshelf/pvcs.yaml": {
+      "filePath": "k8s/apps/homelab/audiobookshelf/pvcs.yaml",
+      "contentHash": "e56d91304839429d067303cb689b5b84a80920cfaca1ec5b45ae9c6b04e4981a",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 70,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/apps/homelab/audiobookshelf/routing.yaml": {
+      "filePath": "k8s/apps/homelab/audiobookshelf/routing.yaml",
+      "contentHash": "90d40cc468defef3258650a9f1a05dc6ee5b88169b86fd18920a33bdf91db7ec",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 41,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/apps/homelab/audiobookshelf/service.yaml": {
+      "filePath": "k8s/apps/homelab/audiobookshelf/service.yaml",
+      "contentHash": "c5e455551e3e42b5443cbb65bee236c56ef506795d0be2247aababe301cdafc0",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 20,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/apps/homelab/immich/README.md": {
+      "filePath": "k8s/apps/homelab/immich/README.md",
+      "contentHash": "cda3323c7e76b5137c77015f719afb8153e5095664949abf2c79d0b5217641f0",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 105,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/apps/homelab/immich/SECRETS.md": {
+      "filePath": "k8s/apps/homelab/immich/SECRETS.md",
+      "contentHash": "4ebc2da17def1574fd3c2918c9a89956f31fa6cd7e2b9ab5d18f228e8d996046",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 24,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/apps/homelab/immich/manifests/namespace.yaml": {
+      "filePath": "k8s/apps/homelab/immich/manifests/namespace.yaml",
+      "contentHash": "f16567e396529304960fc7fdbad789dfdc48cbabdce01de49eebb5ef99601e7a",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 13,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/apps/homelab/immich/manifests/postgres.yaml": {
+      "filePath": "k8s/apps/homelab/immich/manifests/postgres.yaml",
+      "contentHash": "0d101b6d80103efbff5c1a7287be84ed8bc5c23652465efa2547887ac77b4b03",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 113,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/apps/homelab/immich/manifests/pvcs.yaml": {
+      "filePath": "k8s/apps/homelab/immich/manifests/pvcs.yaml",
+      "contentHash": "6fccec9a9d34711b34dfb19f200184efdfda7ecffd47773ae7b8e1f8e0fe91b3",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 40,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/apps/homelab/immich/manifests/routing.yaml": {
+      "filePath": "k8s/apps/homelab/immich/manifests/routing.yaml",
+      "contentHash": "5223441d6091f0a33714e572f665d4a31346cb98bdb799c18037516eaec03380",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 23,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/apps/homelab/immich/values.yaml": {
+      "filePath": "k8s/apps/homelab/immich/values.yaml",
+      "contentHash": "b77f43da0de2b3a12d0efa6838bf2970e5ba9c419be4ceb7f12ceae380e8ee8e",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 101,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/apps/homelab/nextcloud/SECRETS.md": {
+      "filePath": "k8s/apps/homelab/nextcloud/SECRETS.md",
+      "contentHash": "4b07517e5db88f04e30a9d7878a132397e0b1fc2e3837f54b553917ccc4ec192",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 49,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/apps/homelab/nextcloud/manifests/namespace.yaml": {
+      "filePath": "k8s/apps/homelab/nextcloud/manifests/namespace.yaml",
+      "contentHash": "8577096aea1958b450e0fddc3aa16df7465d87724e040621cd056aa11224efd1",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 11,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/apps/homelab/nextcloud/manifests/postgres.yaml": {
+      "filePath": "k8s/apps/homelab/nextcloud/manifests/postgres.yaml",
+      "contentHash": "130babab17c43de788a7149f14ea631647cd161da1ae7c4d94b5e7512e0dd6a5",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 117,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/apps/homelab/nextcloud/manifests/pvcs.yaml": {
+      "filePath": "k8s/apps/homelab/nextcloud/manifests/pvcs.yaml",
+      "contentHash": "25e87ce59beb074607835f8101ad17654c04b11edc133fa5e42c4dff39e2868c",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 45,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/apps/homelab/nextcloud/manifests/redis.yaml": {
+      "filePath": "k8s/apps/homelab/nextcloud/manifests/redis.yaml",
+      "contentHash": "426e04f079124088af341cb81c38fb7c8c64457d204ddb8867adaf8834dcc9c9",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 79,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/apps/homelab/nextcloud/manifests/routing.yaml": {
+      "filePath": "k8s/apps/homelab/nextcloud/manifests/routing.yaml",
+      "contentHash": "f39500c77df49ee7c370c91adebb559f300a25c4fa2b162819aadcd68c17c5f4",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 56,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/apps/homelab/nextcloud/values.yaml": {
+      "filePath": "k8s/apps/homelab/nextcloud/values.yaml",
+      "contentHash": "040b4c290ea5c0cf559a67cb6208c5e91f56805df9bc18b43bca1ddf882e35e6",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 132,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/apps/personal/kiroku/limitrange.yaml": {
+      "filePath": "k8s/apps/personal/kiroku/limitrange.yaml",
+      "contentHash": "402b382e81163c2abef56460a8953a28e6e6e094e137221f4f537ea3a6f6d65d",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 30,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/apps/personal/kiroku/namespace.yaml": {
+      "filePath": "k8s/apps/personal/kiroku/namespace.yaml",
+      "contentHash": "78a4cedba7db549ffb3747f07b9f99d301cf4b26d6bc4d5053e7c83b0aa055d5",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 16,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/apps/personal/kiroku/rbac.yaml": {
+      "filePath": "k8s/apps/personal/kiroku/rbac.yaml",
+      "contentHash": "4a10881739849ce955dabf45110f0b117c25c9f8bc4367969737a6928723a67a",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 60,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/apps/personal/kiroku/resourcequota.yaml": {
+      "filePath": "k8s/apps/personal/kiroku/resourcequota.yaml",
+      "contentHash": "68fe4101a5f9d00d56d317e50475a1f82ec9de3a39d93c19ba5f040c81cd6265",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 27,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/argo-rollouts/manifests/ingressroute.yaml": {
+      "filePath": "k8s/argo-rollouts/manifests/ingressroute.yaml",
+      "contentHash": "3a1372ea8bf1c22b8e3cbe79501c0f723bfb9b17fda591f23b4d1c545ea81a40",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 29,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/argo-rollouts/values.yaml": {
+      "filePath": "k8s/argo-rollouts/values.yaml",
+      "contentHash": "479cfbfb69e0e7ad1cf8875f2c89b67af1480f36f89b855a11771150c7793437",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 59,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/argocd/apps/alloy.yaml": {
+      "filePath": "k8s/argocd/apps/alloy.yaml",
+      "contentHash": "6e6198407d191158eff99b2b895ef7ad9269bdc7ba9f319e286c5beae34199b7",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 30,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/argocd/apps/appprojects.yaml": {
+      "filePath": "k8s/argocd/apps/appprojects.yaml",
+      "contentHash": "b1d1d2a75a8342422a03c2d08dbd118b8ba93037c9c74127c2decca4297694f2",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 36,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/argocd/apps/argo-rollouts.yaml": {
+      "filePath": "k8s/argocd/apps/argo-rollouts.yaml",
+      "contentHash": "b43c9e41529277ab018bb3072bcfa2f9884f2bd0aa79cf715d8c85e79993f882",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 42,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/argocd/apps/argocd.yaml": {
+      "filePath": "k8s/argocd/apps/argocd.yaml",
+      "contentHash": "cfa12554407083254e0ff036039229026530b0f9f2d31637fa0b128c8d7c4ea9",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 34,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/argocd/apps/audiobookshelf.yaml": {
+      "filePath": "k8s/argocd/apps/audiobookshelf.yaml",
+      "contentHash": "3529cf0dc6d44f94e5031a00e110d361761460c7c90b687252329e57f57868a1",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 24,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/argocd/apps/cert-manager.yaml": {
+      "filePath": "k8s/argocd/apps/cert-manager.yaml",
+      "contentHash": "2e0efd5d6cd964ccfcaa7b0c20c6fbaa8a78a0269fc6e0235cc9d7de844abc6d",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 55,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/argocd/apps/cloudflared.yaml": {
+      "filePath": "k8s/argocd/apps/cloudflared.yaml",
+      "contentHash": "c3ee13780639ae266ee28934f5f71d653e2993fa2ad630ec7efe6cc7adf9bb7d",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 35,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/argocd/apps/immich.yaml": {
+      "filePath": "k8s/argocd/apps/immich.yaml",
+      "contentHash": "b41ecb22a7e322b2445542c6afe1412d2251095d73dca2f8f03de7f96c122372",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 40,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/argocd/apps/kiroku-governance.yaml": {
+      "filePath": "k8s/argocd/apps/kiroku-governance.yaml",
+      "contentHash": "84c384f61382fd89899c40519396611cf89380f6238810b80b5168489d6fb178",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 32,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/argocd/apps/kiroku.yaml": {
+      "filePath": "k8s/argocd/apps/kiroku.yaml",
+      "contentHash": "fcf599e080462958c663f992617215f1577219f67f57f0deb12def24a425c701",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 38,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/argocd/apps/kube-prometheus-stack.yaml": {
+      "filePath": "k8s/argocd/apps/kube-prometheus-stack.yaml",
+      "contentHash": "fed819c2f343db2fad675505b5ddfb7438706b9f0604869cf4802a303d86ad3f",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 55,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/argocd/apps/loki.yaml": {
+      "filePath": "k8s/argocd/apps/loki.yaml",
+      "contentHash": "714bcd0e9eb57d0f21a841c7027db9c35da871818eb530b111dd83cde1ed048e",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 29,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/argocd/apps/longhorn.yaml": {
+      "filePath": "k8s/argocd/apps/longhorn.yaml",
+      "contentHash": "ccd072d89aac8f885acc6eca6e1227f3aed158ec6cea60a0990a8021e30ae372",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 34,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/argocd/apps/nextcloud.yaml": {
+      "filePath": "k8s/argocd/apps/nextcloud.yaml",
+      "contentHash": "90f9e9530c98485bcf23b43ea76d837dd1afac540f83e36130a883b5ea9d33fa",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 43,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/argocd/apps/tailscale.yaml": {
+      "filePath": "k8s/argocd/apps/tailscale.yaml",
+      "contentHash": "029c24b2d3b0024f004de021ddc5d77fd5c03e67362d8cb6f2e74796f9212b6e",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 57,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/argocd/apps/traefik.yaml": {
+      "filePath": "k8s/argocd/apps/traefik.yaml",
+      "contentHash": "4b1566275bcee41aecf67c4ef15fac9c45c7845253b0d52d5c9eeae166c3a318",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 35,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/argocd/ingressroute.yaml": {
+      "filePath": "k8s/argocd/ingressroute.yaml",
+      "contentHash": "716ad84881f182ba03356f32fdd23f608418c37c10179fba89ab787b93de59e4",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 22,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/argocd/namespace.yaml": {
+      "filePath": "k8s/argocd/namespace.yaml",
+      "contentHash": "0a2c5ac85283184d1392ae712f7e8bd4b8d19f837e28055664399046532f7844",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 5,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/argocd/projects/homelab.yaml": {
+      "filePath": "k8s/argocd/projects/homelab.yaml",
+      "contentHash": "f97a18a57c7d66fe4836eb988dce1d4ab071f05cbe52fa65c00bb1254b64d532",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 54,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/argocd/projects/personal.yaml": {
+      "filePath": "k8s/argocd/projects/personal.yaml",
+      "contentHash": "61f49737337f26edcd16541d9ae5921544af4778284ac2d7792f50364f5b8c02",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 51,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/argocd/root-app.yaml": {
+      "filePath": "k8s/argocd/root-app.yaml",
+      "contentHash": "5b3aa1b2c9bb5277389a6eee43fe8c8c5971fdf88a2385a2cc2a5ec7caee0d4c",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 32,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/argocd/values.yaml": {
+      "filePath": "k8s/argocd/values.yaml",
+      "contentHash": "ead9a1a52bd09ac35ddfb206e032c7022575c66cba4334d2bc5ff2ebc0f8c9c6",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 82,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/cert-manager/manifests/cluster-issuer.yaml": {
+      "filePath": "k8s/cert-manager/manifests/cluster-issuer.yaml",
+      "contentHash": "6b0be6d2ae14f21ee404124af96bdb6017bb72255f1fded283712dd2d174a2a6",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 45,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/cert-manager/manifests/internal-wildcard-certificate.yaml": {
+      "filePath": "k8s/cert-manager/manifests/internal-wildcard-certificate.yaml",
+      "contentHash": "38d3180fa2351ce419ee9761ff69aed0acbb980ce7a924d5c4e063e32356696c",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 26,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/cert-manager/values.yaml": {
+      "filePath": "k8s/cert-manager/values.yaml",
+      "contentHash": "1560a83fed35ad6bd53780025a8f55178d5b495f78344e334d5a8c434fefd9d1",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 26,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/cloudflared/deployment.yaml": {
+      "filePath": "k8s/cloudflared/deployment.yaml",
+      "contentHash": "99873148bcdafafc53dd3361bf29e34580d83d7a949a2e492a540bf60cfa5400",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 66,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/cloudflared/namespace.yaml": {
+      "filePath": "k8s/cloudflared/namespace.yaml",
+      "contentHash": "cf8ce6234ac3c455c8d6ac179b564e8025253ca5bc43849ddcecbf624cf1b551",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 5,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/cloudflared/networkpolicy.yaml": {
+      "filePath": "k8s/cloudflared/networkpolicy.yaml",
+      "contentHash": "692ec325535854f267f28d2cafe4a61b53b8e81c0836a43081631cf7b508a109",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 58,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/cloudflared/service-metrics.yaml": {
+      "filePath": "k8s/cloudflared/service-metrics.yaml",
+      "contentHash": "534b98a1a6766c010aea0d984829a09dd85a23e71318589b049cf40c257c82bc",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 23,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/cloudflared/servicemonitor.yaml": {
+      "filePath": "k8s/cloudflared/servicemonitor.yaml",
+      "contentHash": "dcc2695e5bb2c8a8ecab0d6491502f942aabb7ffd792cdcd5b3b627bde052265",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 19,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/example-app/ingressroute-internal.yaml": {
+      "filePath": "k8s/example-app/ingressroute-internal.yaml",
+      "contentHash": "8ea51ab203ef3ce32388c20f423fe9a85a08d1902f3024b2d9ffb67fb3b71207",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 22,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/example-app/ingressroute-preview.yaml": {
+      "filePath": "k8s/example-app/ingressroute-preview.yaml",
+      "contentHash": "fc0fe0e4078def649adf59d84dca03a03b44ede8b7df63dc207e9c7e524e5330",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 21,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/example-app/ingressroute.yaml": {
+      "filePath": "k8s/example-app/ingressroute.yaml",
+      "contentHash": "8b121bb422578b60a60ff6ea358515234bd08ba761a18577f26dacf32ae87c89",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 25,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/example-app/rollout.yaml": {
+      "filePath": "k8s/example-app/rollout.yaml",
+      "contentHash": "5b1247fe332e697d0d9d4417ebd0567a3103f4833e33489975915b7cf8a31508",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 39,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/example-app/service.yaml": {
+      "filePath": "k8s/example-app/service.yaml",
+      "contentHash": "8d63021877d105dacc361cb80161b846b3e37e45e760b67eaf5d9b4b031b5297",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 33,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/longhorn/manifests/ingressroute.yaml": {
+      "filePath": "k8s/longhorn/manifests/ingressroute.yaml",
+      "contentHash": "39a751e5b58171f65f409a2f2708a0d9ae6aa987eeba21a04ab9f11bd42f2b5f",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 24,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/longhorn/manifests/storageclass-immich.yaml": {
+      "filePath": "k8s/longhorn/manifests/storageclass-immich.yaml",
+      "contentHash": "e8d33054b67f5d2721dfa02ce3cc5d14c63242e7ad3b7baabb8376aec3a47ef0",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 36,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/longhorn/manifests/storageclass-replicated.yaml": {
+      "filePath": "k8s/longhorn/manifests/storageclass-replicated.yaml",
+      "contentHash": "31e56a6c0473fa24c7b20830f8dbf88fb1c319da6f05edc062032eb55665130e",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 21,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/longhorn/values.yaml": {
+      "filePath": "k8s/longhorn/values.yaml",
+      "contentHash": "44374f48ad596e7fe8e334dfda06339c2cb1a6fbeea9ae53c6d21b92752695f4",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 54,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/monitoring/manifests/ingressroute-grafana.yaml": {
+      "filePath": "k8s/monitoring/manifests/ingressroute-grafana.yaml",
+      "contentHash": "ebf55cb446566a43686edbeb047cae9bc6062f6abec0a5ef831860e4cd7e5ed2",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 24,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/monitoring/manifests/ingressroute-prometheus.yaml": {
+      "filePath": "k8s/monitoring/manifests/ingressroute-prometheus.yaml",
+      "contentHash": "683a5dbde046168b2b7e9f31937c9cec1e83dacef6c79b452e3e37752a8dcc49",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 32,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/monitoring/values-alloy.yaml": {
+      "filePath": "k8s/monitoring/values-alloy.yaml",
+      "contentHash": "1d6d83d23f40a78487972717833a93061d5b17cce7d2c61f6ee7737b9451528c",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 103,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/monitoring/values-kube-prometheus-stack.yaml": {
+      "filePath": "k8s/monitoring/values-kube-prometheus-stack.yaml",
+      "contentHash": "4f358a5c13389d56dd3a01d460d5212aec705bb8545392d90e221b85404e23c1",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 323,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/monitoring/values-loki.yaml": {
+      "filePath": "k8s/monitoring/values-loki.yaml",
+      "contentHash": "9787d5172006692044fa2e87d02f350308fb851b2f0a60122c50db95b53cbaac",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 119,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/tailscale/manifests/api-server-rbac.yaml": {
+      "filePath": "k8s/tailscale/manifests/api-server-rbac.yaml",
+      "contentHash": "9ec77ad87b87e12789285ef4cdf6ec357c01fbc3cfd9eefb853be50ea75e5c75",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 31,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/tailscale/manifests/proxyclass-monitoring.yaml": {
+      "filePath": "k8s/tailscale/manifests/proxyclass-monitoring.yaml",
+      "contentHash": "aaa512e7faa02d120109b5345e1c3d296bd60d6a5e22747cbd0599e632aa84be",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 33,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/tailscale/values.yaml": {
+      "filePath": "k8s/tailscale/values.yaml",
+      "contentHash": "83ad123139df864b317a78ee62b356446858bf17efe7ad046fc7554f458e1918",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 24,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/traefik/manifests/ingressroute-dashboard.yaml": {
+      "filePath": "k8s/traefik/manifests/ingressroute-dashboard.yaml",
+      "contentHash": "8af0ece3bce0751bc8852a04c6c97c7c95831b8db6a2506f6d29f0bf752db01e",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 31,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/traefik/manifests/tailscale-service.yaml": {
+      "filePath": "k8s/traefik/manifests/tailscale-service.yaml",
+      "contentHash": "ca1e1a96095c8c03a5b1af3ee806a415ac54949fca1dda0e9038b4925155784c",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 40,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/traefik/manifests/tlsstore.yaml": {
+      "filePath": "k8s/traefik/manifests/tlsstore.yaml",
+      "contentHash": "3b562b6fbc19faf1edea6df20d92174811c771c03f4199742dc40f2d22923f13",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 20,
+      "hasStructuralAnalysis": true
+    },
+    "k8s/traefik/values.yaml": {
+      "filePath": "k8s/traefik/values.yaml",
+      "contentHash": "f67b1405053c44f1264b97b9e2785de72bcf30c801425a46a308296baa10e223",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 70,
+      "hasStructuralAnalysis": true
+    },
+    "terraform/main.tf": {
+      "filePath": "terraform/main.tf",
+      "contentHash": "22f57850407cc689ec52fe13c868e176c5c4f457d8900ed5e4f73d64c50da89b",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 146,
+      "hasStructuralAnalysis": true
+    },
+    "terraform/outputs.tf": {
+      "filePath": "terraform/outputs.tf",
+      "contentHash": "2df6e64eade2a6fcdb757b2c3927b0656fd16a0febd5457f92e5c31c2afa97b0",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 14,
+      "hasStructuralAnalysis": true
+    },
+    "terraform/provider.tf": {
+      "filePath": "terraform/provider.tf",
+      "contentHash": "cda3fa3b75ead7f6a406d2b1ef0e8fd045321c146286a1ed42fb8690813fa3fa",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 20,
+      "hasStructuralAnalysis": true
+    },
+    "terraform/terraform.tfvars": {
+      "filePath": "terraform/terraform.tfvars",
+      "contentHash": "c71e85aac0a0e0ca450200a3fc6da4bdfee08a9d65c8c3780ea66cc608d7c009",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 70,
+      "hasStructuralAnalysis": true
+    },
+    "terraform/variables.tf": {
+      "filePath": "terraform/variables.tf",
+      "contentHash": "c491d9607710bfb0a2122e52faa097ff99323a0fba5acdd2890e30868c71a6e8",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 122,
+      "hasStructuralAnalysis": true
+    },
+    "terraform/versions.tf": {
+      "filePath": "terraform/versions.tf",
+      "contentHash": "f5b416f5ff19ff5d0093fff85a69fb6c595ad2c826072d4e07c1b4e8a998ab2a",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 10,
+      "hasStructuralAnalysis": true
+    }
+  }
+}
