@@ -6,11 +6,11 @@
 | --- | --- |
 | Date | 2026-07-25 JST |
 | Severity | SEV-3 |
-| Status | Mitigated; recovery validation in progress |
+| Status | Resolved; preventive actions open |
 | Systems | Argo CD, Helm-based applications, monitoring, Loki |
 | Start | 2026-07-25 09:59 JST |
-| End | In progress |
-| Duration | In progress |
+| End | 2026-07-25 10:13 JST |
+| Duration | Approximately 14 minutes |
 | Detection | Argo CD applications reported `Unknown` and sync operations failed while restoring GitOps |
 | Data impact | No application data loss; Loki's intentionally discarded history had not yet been recreated |
 
@@ -48,6 +48,7 @@ Times are JST on 2026-07-25.
 | 10:01 | Application operations failed with repository-server timeouts and connection refusals. |
 | 10:02 | Pod evidence confirmed repeated exit-137 OOM kills at the 256 MiB limit. |
 | 10:02 | Recovery changed the repository-server request to 128 MiB and limit to 1 GiB. |
+| 10:13 | The Git-managed limit was active; the replacement pod remained Ready with zero restarts. |
 
 ## Technical root cause
 
@@ -97,7 +98,7 @@ timeouts or connection refusals, and the next restart repeated the same workload
 | Priority | Action | Owner | Status | Completion evidence |
 | --- | --- | --- | --- | --- |
 | P0 | Raise repo-server memory request to 128 MiB and limit to 1 GiB | Repository owner | Done | `k8s/argocd/values.yaml` and Ready replacement pod |
-| P0 | Retry failed reconciliation and recreate Loki on Longhorn | Repository owner | In progress | All Applications Synced/Healthy and Loki PVC Bound |
+| P0 | Retry failed reconciliation and recreate Loki on Longhorn | Repository owner | Done | Loki PVC Bound, Loki Ready, and unaffected applications Synced/Healthy |
 | P1 | Alert on Argo CD component restarts and OOM kills | Repository owner | Open ([#53](https://github.com/Harsh-Upadhayay/homelab-k8s/issues/53)) | Tested Prometheus alert |
 | P2 | Exercise a cold-cache full reconciliation after future Argo CD resource changes | Repository owner | Open ([#53](https://github.com/Harsh-Upadhayay/homelab-k8s/issues/53)) | Runbook evidence with stable memory and zero restarts |
 

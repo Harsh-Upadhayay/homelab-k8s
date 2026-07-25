@@ -33,6 +33,10 @@ prometheus:
     podMonitorSelectorNilUsesHelmValues: false
     probeSelectorNilUsesHelmValues: false
     ruleSelectorNilUsesHelmValues: false
+    # Keep Prometheus stopped while it shares pve-dell's physical SSD with
+    # single-node etcd. Its WAL replay/compaction reproduced INC-2026-003 even
+    # after the PVC expansion. Restore to 1 only after control-plane issue #49.
+    replicas: 0
     retention: 15d
     storageSpec:
       volumeClaimTemplate:

@@ -6,11 +6,11 @@
 | --- | --- |
 | Date | 2026-07-25 JST |
 | Severity | SEV-3 |
-| Status | Mitigated; WAL recovery in progress |
+| Status | Resolved; Prometheus intentionally stopped pending #49 |
 | Systems | Prometheus, kube-prometheus-stack, Longhorn |
 | Start | 2026-07-25 10:00 JST |
-| End | In progress |
-| Duration | In progress |
+| End | 2026-07-25 10:11 JST |
+| Duration | Approximately 11 minutes |
 | Detection | Prometheus remained unready after monitoring was restored |
 | Data impact | Healthy compacted blocks retained; Prometheus discarded inconsistent mmap head chunks created around the out-of-space crash |
 
@@ -48,6 +48,8 @@ Times are JST on 2026-07-25.
 | 10:07 | The Git-managed request and live PVC were increased from 10 GiB to 20 GiB. |
 | 10:07 | Longhorn completed block and filesystem expansion; the pod was recreated. |
 | 10:08 | Prometheus retained healthy blocks, discarded inconsistent mmap head chunks, and began WAL replay. |
+| 10:11 | WAL replay completed; Prometheus became `2/2 Ready` with zero container restarts. |
+| 10:17 | Subsequent TSDB compaction reproduced the separate shared-disk etcd failure in INC-2026-003; Prometheus was intentionally stopped pending #49. |
 
 ## Technical root cause
 
@@ -72,6 +74,8 @@ inconsistent transient chunk files and replayed the WAL.
 3. Expanded the existing Longhorn PVC online, preserving compacted metrics blocks.
 4. Recreated the pod so kubelet completed filesystem expansion.
 5. Monitored mmap cleanup, WAL replay, readiness, and filesystem headroom.
+6. Left Prometheus at zero replicas after its recovered compaction workload reproduced INC-2026-003;
+   the 20 GiB volume remains intact for restart after #49.
 
 ## What went well
 
@@ -96,7 +100,7 @@ inconsistent transient chunk files and replayed the WAL.
 | Priority | Action | Owner | Status | Completion evidence |
 | --- | --- | --- | --- | --- |
 | P0 | Expand the Prometheus PVC from 10 GiB to 20 GiB | Repository owner | Done | PVC reports 20 GiB and Prometheus filesystem has free space |
-| P0 | Complete WAL recovery and verify readiness | Repository owner | In progress | Pod `2/2 Ready` and `/-/ready` succeeds |
+| P0 | Complete WAL recovery and verify readiness | Repository owner | Done | Pod reached `2/2 Ready` with zero restarts before the intentional stop |
 | P1 | Alert on persistent-volume free space before exhaustion | Repository owner | Open ([#54](https://github.com/Harsh-Upadhayay/homelab-k8s/issues/54)) | Tested alert fires with actionable volume and namespace labels |
 | P2 | Revisit 15-day retention against measured ingestion and available capacity | Repository owner | Open ([#54](https://github.com/Harsh-Upadhayay/homelab-k8s/issues/54)) | Capacity calculation recorded in the monitoring runbook |
 

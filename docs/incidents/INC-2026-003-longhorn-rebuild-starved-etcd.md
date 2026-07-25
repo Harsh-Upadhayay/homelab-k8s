@@ -6,10 +6,10 @@
 | --- | --- |
 | Date | 2026-07-24 to 2026-07-25 JST |
 | Severity | SEV-3 |
-| Status | Resolved; preventive actions open |
+| Status | Resolved; recurrence mitigated; preventive actions open |
 | Systems | k3s control plane, embedded etcd, Longhorn, `k3s-worker-1`, `pve-dell` |
 | Start | 2026-07-24 23:52 JST (first observed API failure) |
-| End | 2026-07-25 09:52 JST (final offline rebuild complete and API restored) |
+| End | 2026-07-25 10:19 JST (Prometheus stopped after recurrence; API stable) |
 | Duration | Two intermittent failure windows followed by explicitly accepted maintenance outages |
 | Detection | The Immich rebuild monitor received API discovery failures; direct `/readyz` then reported etcd failure |
 | Data impact | No loss observed; the original Immich replica remained RW on `k3s-worker-3`, and the incomplete worker-1 replica was rebuilt again |
@@ -27,7 +27,10 @@ latency bound: k3s restarted an eighth time about 48 minutes later. Even 10 and 
 produced multi-second `fdatasync` latency. Because Kubernetes downtime was explicitly acceptable,
 the final mitigation cleanly stopped k3s/etcd while leaving both worker agents and the already
 running Longhorn rebuild alive. The engine was monitored directly from its network namespace and
-the worker-1 data disk was capped at 30 MB/s for the offline copy.
+the worker-1 data disk was capped at 30 MB/s for the offline copy. During application recovery,
+Prometheus WAL replay and compaction reproduced the same physical-disk contention and restarted
+k3s once more. Prometheus was then stopped declaratively until the control-plane VM is moved to
+ASRock under issue #49.
 
 ## Impact
 
@@ -71,6 +74,9 @@ behind these entries.
 | 00:52–00:54 | The ceiling was reduced first to 10 and then 5 MB/s. Readiness recovered, but etcd still logged multi-second `fdatasync` and transaction latency. |
 | 00:56 | k3s was cleanly stopped for an intentional API maintenance outage; worker agents and the in-flight Longhorn engine remained active. |
 | 00:58 | Direct engine-namespace monitoring proved rebuild progress continued without the API. The offline-copy ceiling was raised to 30 MB/s. |
+| 10:17 | After storage convergence, Prometheus WAL recovery and compaction drove etcd `fdatasync` latency as high as 5.8 seconds and made the API unready. |
+| 10:17–10:18 | Cloud-controller-manager lost leader election; k3s exited and systemd restarted it once. |
+| 10:19 | Prometheus was scaled to zero. Six direct readiness checks passed and the k3s restart count remained stable. |
 
 ## Technical root cause
 
@@ -120,6 +126,8 @@ or missing raft leader was observed. The etcd initial corruption check passed af
    and the in-flight Longhorn engine alive.
 7. Verified the rebuild directly with the engine CLI inside its network namespace, then used a
    30 MB/s offline-copy ceiling without exposing etcd to the bulk-write workload.
+8. After Prometheus later reproduced the same contention, stopped it and made zero replicas the
+   temporary Git-managed state until the control-plane move in #49.
 
 ## What went well
 
@@ -152,7 +160,8 @@ or missing raft leader was observed. The etcd initial corruption check passed af
 | Priority | Action | Owner | Status | Completion evidence |
 | --- | --- | --- | --- | --- |
 | P0 | Do not run a bulk rebuild concurrently with etcd on this physical SSD; use an intentional control-plane maintenance outage or move etcd first | Repository owner | Done for this migration | k3s stopped cleanly while the engine continued under direct monitoring |
-| P0 | Keep the authoritative source replica until the throttled target is RW and the volume Healthy | Repository owner | In progress | Longhorn reports the worker-1 replica RW before ASRock evacuation |
+| P0 | Keep the authoritative source replica until the throttled target is RW and the volume Healthy | Repository owner | Done | Storage convergence gate passed and all retained volumes are Healthy |
+| P0 | Keep Prometheus stopped while etcd shares the Dell SSD | Repository owner | Done until #49 | `prometheusSpec.replicas: 0` and stable direct API readiness |
 | P1 | Add etcd/API health and k3s restart-count checks to every long-running rebuild monitor | Repository owner | Done | Migration monitor checks `/readyz` and `NRestarts` alongside rebuild progress |
 | P1 | Record physical datastore co-tenancy in migration capacity reviews, not only VM and Longhorn topology | Repository owner | Done | Immich convergence runbook and this incident review |
 | P1 | Rate-limit both reads and writes when rebuilding back out of the Dell datastore | Repository owner | Open | Temporary `mbps_rd`/`mbps_wr` limits verified during reverse rebuild |
@@ -186,4 +195,6 @@ or missing raft leader was observed. The etcd initial corruption check passed af
   control; 5 MB/s still produced a 2.4-second `fdatasync`.
 - With k3s intentionally stopped, direct `longhorn rebuild-status` inside the engine network
   namespace continued advancing with no error under a 30 MB/s worker-data-disk ceiling.
+- Prometheus recovery later produced a 5.8-second etcd `fdatasync`, leader-election loss, and one
+  k3s restart; stopping Prometheus stabilized direct `/readyz` checks.
 - Related migration runbook: [Immich migration and workstation rebuild](../migrations/immich.md).
