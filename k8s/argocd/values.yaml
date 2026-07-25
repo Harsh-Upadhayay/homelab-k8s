@@ -63,9 +63,12 @@ repoServer:
   resources:
     requests:
       cpu: 100m
-      memory: 64Mi
+      memory: 128Mi
     limits:
-      memory: 256Mi
+      # Rendering several large Helm applications after a controller outage
+      # exceeded 256Mi and repeatedly OOM-killed the repo server (INC-2026-004).
+      # 1Gi keeps recovery reconciliation from taking GitOps itself offline.
+      memory: 1Gi
   metrics:
     enabled: true
     serviceMonitor:

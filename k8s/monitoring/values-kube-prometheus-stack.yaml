@@ -41,7 +41,9 @@ prometheus:
           accessModes: ["ReadWriteOnce"]
           resources:
             requests:
-              storage: 10Gi
+              # The original 10Gi filled during the first 19 days and caused
+              # Prometheus to crash-loop on WAL replay (INC-2026-005).
+              storage: 20Gi
     resources:
       requests:
         cpu: 250m
