@@ -14,6 +14,8 @@ No agents, no daemons on the target — Ansible SSHs in, runs small Python-backe
 
 **`group_vars/<groupname>.yml` auto-loading.** Ansible automatically loads `group_vars/proxmox_hosts.yml` for any host in the `proxmox_hosts` group — no explicit include, the filename *is* the wiring. That's where `debian_codename: "trixie"` lives, used later via Jinja2 templating (`ansible/group_vars/proxmox_hosts.yml`).
 
+**`host_vars/<hostname>.yml` is for topology parameters that belong to one host, not for a new implementation.** `pve-asrock.yml` declares the physical device and LVM-thin datastore names consumed by the generic `proxmox_host` storage workflow. The ASRock hardware role remains limited to the patched-NIC safeguard. This is the same data-versus-implementation split used by Terraform's worker map.
+
 **`ansible.cfg` defaults.** Sets the default inventory file, roles path, and privilege-escalation behavior so you don't pass `-i inventory.ini` on every invocation (`ansible/ansible.cfg`).
 
 ## Playbooks, plays, and roles
@@ -24,7 +26,7 @@ No agents, no daemons on the target — Ansible SSHs in, runs small Python-backe
 
 **Roles are a directory convention, not special syntax.** `roles/<name>/tasks/main.yml` is the entry point Ansible looks for automatically when a playbook lists that role — no explicit file path needed (`ansible/roles/proxmox_host/`).
 
-**Split a role only where the split preserves a real lifecycle boundary.** `proxmox_host` keeps repository configuration and disruptive package maintenance in separate task files because maintenance is explicit-only and fail-closed. Tailscale is a separate reusable role because it applies to both Debian hypervisors and Ubuntu k3s guests. The one-task hostname mapping stays inline in `proxmox_cluster/tasks/main.yml`; a separate file would add navigation without cohesion.
+**Split a role only where the split preserves a real lifecycle boundary.** `proxmox_host` keeps repository configuration, destructive physical-storage bootstrap, and disruptive package maintenance in separate task files because the latter two are explicit-only and fail-closed. Tailscale is a separate reusable role because it applies to both Debian hypervisors and Ubuntu k3s guests. The one-task hostname mapping stays inline in `proxmox_cluster/tasks/main.yml`; a separate file would add navigation without cohesion.
 
 ## Tasks, modules, and idempotency
 
@@ -34,7 +36,13 @@ No agents, no daemons on the target — Ansible SSHs in, runs small Python-backe
 
 **Package-state modules check before acting.** `ansible.builtin.apt` with `upgrade: full` inspects installed vs. available versions and only acts on the delta — rerun it on an up-to-date system and it reports no change, every time.
 
-**Tags select lifecycle operations, and `never` makes opt-in intent real.** `tailscale`, `terraform-api`, `maintenance-upgrade`, and `e1000e-aspm` all carry `never`, so a bare playbook cannot request a secret, reveal a one-time token, upgrade packages, or stage a reboot. Safe configuration still runs by default.
+**Tags select lifecycle operations, and `never` makes opt-in intent real.** `tailscale`, `terraform-api`, `storage-bootstrap`, `maintenance-upgrade`, and `e1000e-aspm` all carry `never`, so a bare playbook cannot request a secret, reveal a one-time token, erase a declared physical datastore device, upgrade packages, or stage a reboot. Safe configuration still runs by default.
+
+**The shared worker storage role starts where Terraform stops.** Terraform presents every worker
+with an empty `scsi1`; `group_vars/k3s_agent.yml` declares the common `/dev/sdb`, `k3s-data`, and
+`/var/lib/longhorn` values once. `longhorn_node` formats only a device without a filesystem, mounts
+it by label, installs Longhorn client prerequisites, and adds `RequiresMountsFor=` so k3s cannot
+start against the OS disk by accident. There is no worker-1 or worker-3 task file.
 
 ## Making non-idempotent commands safe
 
