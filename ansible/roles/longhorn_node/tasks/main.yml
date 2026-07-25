@@ -4,7 +4,6 @@
 # prerequisites. It must never target a physical Proxmox host.
 
 - name: Require an explicit Longhorn data device
-  when: longhorn_manage_clean_disk | default(true) | bool
   ansible.builtin.assert:
     that:
       - longhorn_data_device is defined
@@ -14,20 +13,42 @@
     fail_msg: "Set longhorn_data_device for every Longhorn worker."
 
 - name: Format the Longhorn data device if it has no filesystem
-  when: longhorn_manage_clean_disk | default(true) | bool
   community.general.filesystem:
     fstype: ext4
     dev: "{{ longhorn_data_device }}"
     opts: "-L {{ longhorn_data_label }}"
 
 - name: Mount the Longhorn data filesystem by label
-  when: longhorn_manage_clean_disk | default(true) | bool
   ansible.posix.mount:
-    path: /var/lib/longhorn
+    path: "{{ longhorn_mount_path }}"
     src: "LABEL={{ longhorn_data_label }}"
     fstype: ext4
     opts: defaults
     state: mounted
+
+- name: Create the k3s agent systemd drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/k3s-agent.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Order k3s agent startup after its Longhorn filesystem
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/k3s-agent.service.d/10-longhorn-mount.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Unit]
+      RequiresMountsFor={{ longhorn_mount_path }}
+  register: longhorn_k3s_mount_order
+
+- name: Reload systemd after changing Longhorn mount ordering
+  when: longhorn_k3s_mount_order.changed
+  ansible.builtin.systemd:
+    daemon_reload: true
 
 - name: Install Longhorn node prerequisites
   ansible.builtin.apt:

@@ -140,84 +140,10 @@ resource "proxmox_virtual_environment_vm" "k3s_worker_1" {
   }
 }
 
-# ─── k3s-worker-2 — identical twin of worker-1 ───
-# Exists so node-agnostic behaviour is actually observable: with one worker,
-# "the pod can reschedule anywhere" is untestable. Kept as an explicit block
-# (not for_each) matching the earlier revert of the workers-map split — at 3+
-# workers that loop starts earning its keep; revisit then.
-resource "proxmox_virtual_environment_vm" "k3s_worker_2" {
-  name        = "k3s-worker-2"
-  description = "k3s agent — runs project workloads."
-  node_name   = var.proxmox_dell_node
-  tags        = concat(local.common_tags, ["worker"])
-
-  clone {
-    vm_id = var.proxmox_dell_template_vm_id
-    full  = true
-  }
-
-  agent {
-    enabled = true
-  }
-  stop_on_destroy = true
-
-  cpu {
-    cores = var.worker_cores
-    type  = "x86-64-v2-AES"
-  }
-
-  memory {
-    dedicated = var.worker_memory
-  }
-
-  disk {
-    datastore_id = var.proxmox_dell_storage_pool
-    interface    = "scsi0"
-    size         = var.worker_disk_size
-    cache        = "writeback"
-  }
-
-  disk {
-    datastore_id = var.proxmox_dell_storage_pool
-    interface    = "scsi1"
-    size         = var.worker_data_disk_size
-    file_format  = "raw"
-    cache        = "writeback"
-  }
-
-  network_device {
-    bridge = var.network_bridge
-  }
-
-  initialization {
-    datastore_id = var.proxmox_dell_storage_pool
-
-    ip_config {
-      ipv4 {
-        address = "${var.worker2_ip}${var.network_cidr_suffix}"
-        gateway = var.network_gateway
-      }
-    }
-
-    dns {
-      servers = var.dns_servers
-    }
-
-    user_account {
-      username = var.vm_user
-      keys     = [var.ssh_public_key]
-    }
-  }
-
-  operating_system {
-    type = "l26"
-  }
-}
-
-# ─── k3s-worker-3 — ASRock Immich recovery worker ───
+# ─── k3s-worker-3 — ASRock managed-HDD worker ───
 resource "proxmox_virtual_environment_vm" "k3s_worker_3" {
   name        = "k3s-worker-3"
-  description = "k3s agent on pve-asrock — temporarily reassociates the preserved Immich Longhorn disk."
+  description = "k3s agent on pve-asrock — uses the dedicated Proxmox-managed Longhorn HDD datastore."
   node_name   = var.proxmox_asrock_node
   tags        = concat(local.common_tags, ["worker"])
 
@@ -234,7 +160,7 @@ resource "proxmox_virtual_environment_vm" "k3s_worker_3" {
   stop_on_destroy = true
 
   cpu {
-    cores = var.worker_cores
+    cores = var.worker3_cores
     type  = "x86-64-v2-AES"
   }
 
@@ -248,16 +174,17 @@ resource "proxmox_virtual_environment_vm" "k3s_worker_3" {
     size         = var.worker3_disk_size
   }
 
-  # Temporary partition-2 passthrough for Immich recovery; remove during the
-  # whole-disk Longhorn storage convergence tracked in GitHub issue #48.
+  # Dedicated Longhorn data disk allocated from the separate physical-HDD
+  # datastore. Proxmox owns the block allocation; Ansible owns the guest ext4
+  # filesystem and mount, matching worker-1's lifecycle.
   disk {
-    datastore_id      = ""
-    interface         = "scsi1"
-    path_in_datastore = var.worker3_passthrough_path
-    file_format       = "raw"
-    backup            = false
-    replicate         = false
-    discard           = "ignore"
+    datastore_id = var.proxmox_asrock_longhorn_storage_pool
+    interface    = "scsi1"
+    size         = var.worker3_data_disk_size
+    file_format  = "raw"
+    cache        = "none"
+    backup       = false
+    replicate    = false
   }
 
   network_device {

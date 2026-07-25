@@ -3,9 +3,11 @@
 # table — used to template the apt sources files in roles/proxmox_host.
 debian_codename: "trixie"
 
-# Must match terraform/variables.tf's storage_pool default/tfvars value —
-# this is what the terraform@pve token's storage ACL gets scoped to.
-proxmox_storage_pool: "local-lvm"
+# Must match the datastores used in terraform/terraform.tfvars. The scoped
+# Terraform identity receives allocation rights only on this explicit list.
+proxmox_storage_pools:
+  - "local-lvm"
+  - "longhorn-hdd"
 
 # Must match terraform/variables.tf's network_bridge default/tfvars value —
 # this is what the terraform@pve token's SDN ACL gets scoped to.

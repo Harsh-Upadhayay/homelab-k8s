@@ -50,3 +50,7 @@
     fail_msg: >-
       The selected ASRock e1000e module does not match the physically tested
       recovery artifact. Refusing to continue with an unknown driver.
+
+- name: Initialize the dedicated Longhorn HDD datastore
+  ansible.builtin.import_tasks: longhorn_hdd.yml
+  tags: [never, asrock-longhorn-storage]

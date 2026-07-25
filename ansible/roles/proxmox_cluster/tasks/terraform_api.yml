@@ -67,19 +67,28 @@
   ansible.builtin.command: pveum aclmod / -user terraform@pve -role PVEVMAdmin
   when: not terraform_pve_vm_acl_exists
 
-- name: Determine whether the storage ACL already exists
+- name: Determine which Terraform storage ACLs already exist
   ansible.builtin.set_fact:
     terraform_pve_storage_acl_exists: >-
-      {{ (pveum_acls.stdout | from_json
-          | selectattr('ugid', 'defined')
-          | selectattr('ugid', 'equalto', 'terraform@pve')
-          | selectattr('path', 'equalto', '/storage/' + proxmox_storage_pool)
-          | selectattr('roleid', 'equalto', 'PVEDatastoreUser')
-          | list | length) > 0 }}
+      {{
+        terraform_pve_storage_acl_exists | default({})
+        | combine({
+            item: (
+              pveum_acls.stdout | from_json
+              | selectattr('ugid', 'defined')
+              | selectattr('ugid', 'equalto', 'terraform@pve')
+              | selectattr('path', 'equalto', '/storage/' + item)
+              | selectattr('roleid', 'equalto', 'PVEDatastoreUser')
+              | list | length
+            ) > 0
+          })
+      }}
+  loop: "{{ proxmox_storage_pools }}"
 
-- name: Grant terraform@pve the PVEDatastoreUser role, scoped to the storage pool actually used
-  ansible.builtin.command: "pveum aclmod /storage/{{ proxmox_storage_pool }} -user terraform@pve -role PVEDatastoreUser"
-  when: not terraform_pve_storage_acl_exists
+- name: Grant terraform@pve allocation rights on each declared datastore
+  ansible.builtin.command: "pveum aclmod /storage/{{ item }} -user terraform@pve -role PVEDatastoreUser"
+  when: not terraform_pve_storage_acl_exists[item]
+  loop: "{{ proxmox_storage_pools }}"
 
 # Third privilege bucket: attaching a VM's NIC to a bridge needs SDN.Use, even
 # for a plain Linux bridge with no SDN zones/vnets actually configured
