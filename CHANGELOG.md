@@ -38,6 +38,13 @@ Loosely follows [Keep a Changelog](https://keepachangelog.com/). Dates are when 
 - Accepted ADR-0049 for the workstation rebuild and future physical-host lifecycle: create one Proxmox cluster on `pve-dell`, join the empty workstation before provisioning guests, use one Terraform provider/token with per-VM `node_name`, accept the temporary two-node read-only-on-quorum-loss limitation, and add a third physical node in one to two months. The Immich runbook now also records the preferred later move of the existing `k3s-server-1` VM, the Longhorn replicas required for Dell-outage continuity, and the clean `pve-dell` retirement sequence.
 - Reconciled the documentation with the current three-VM baseline, completed GitOps/observability layers, Tailscale Operator adoption, blue/green Rollouts exercise, and the post-Proxmox Immich disk-UUID recovery plan. Updated moved manifest paths and removed stale instructions that referenced deleted files or passed OAuth credentials as Helm values. Historical migration checkpoints remain dated and explicitly point to the current runbooks where their old status has since changed.
 
+### Fixed
+- Closed the `k3s-worker-3` gap in issue #29's Tailscale work: the node had no
+  `tailscaled` at all and was reachable only over the LAN, so Ansible could not
+  manage it from any off-LAN tailnet device. Joined it through the existing
+  shared `tailscale_host` role and restored its MagicDNS inventory address, so
+  every host in `inventory.ini` is once again addressed uniformly.
+
 ### Added
 - **INC-2026-002: stale Longhorn snapshot attachment tickets** — records the
   maintenance near miss where two fully purged Snapshot resources retained
