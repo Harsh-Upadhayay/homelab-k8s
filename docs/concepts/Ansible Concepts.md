@@ -44,6 +44,31 @@ with an empty `scsi1`; `group_vars/k3s_agent.yml` declares the common `/dev/sdb`
 it by label, installs Longhorn client prerequisites, and adds `RequiresMountsFor=` so k3s cannot
 start against the OS disk by accident. There is no worker-1 or worker-3 task file.
 
+**A host's LVM-thin datastore has two possible origins, and the absence of a `host_vars` file is
+what tells you which.** Proxmox's own installer creates `local-lvm` (volume group plus thin pool) on
+whatever disk the hypervisor is installed onto, so `pve-dell` — whose only storage is that one
+external SSD — arrives with its datastore already built and needs no Ansible storage work at all.
+That is why no `host_vars/pve-dell.yml` exists, and two independent guards each keep `storage.yml`
+from running there: the `never` tag, and `when: proxmox_lvmthin_storage is defined` in
+`proxmox_host/tasks/main.yml`. `pve-asrock` is the other case — its Longhorn HDD is a *second*
+physical device the installer never touched, so `host_vars/pve-asrock.yml` declares it and one
+explicit `--tags storage-bootstrap` run builds it. Read Dell's missing file as "this host had
+nothing to bootstrap," not as an inconsistency to fix. A future single-disk host installed the same
+way needs no `host_vars` storage block either.
+
+**The two storage roles verify device identity to very different standards — know which one is
+actually guarding you.** `proxmox_host/tasks/storage.yml` is deliberately paranoid before it will
+wipe anything: it resolves a stable `/dev/disk/by-id/wwn-...` path through `readlink -f`, asserts
+`hostname -s` matches `inventory_hostname`, asserts the device carries no unexpected volume group,
+and — on the empty-device path that actually runs `wipefs` — asserts the owner VM is absent or
+stopped. `longhorn_node` does none of that: it trusts the literal `/dev/sdb` from
+`group_vars/k3s_agent.yml`, and its only real protection is that `community.general.filesystem`
+won't reformat a device that already has a filesystem (which is also why re-running `site.yml`
+never endangers live Longhorn data). That is adequate today because each worker VM has exactly one
+extra disk, so `/dev/sdb` is unambiguous; it would stop being adequate the moment a worker gained a
+second data disk and guest enumeration order started to matter. Recorded as a known asymmetry, not
+a live defect.
+
 ## Making non-idempotent commands safe
 
 **`ansible.builtin.command` has no built-in idempotency.** Unlike `copy`/`apt`, a raw command module has no idea whether it changed anything — left alone it reports `changed` on every run, forever. Idempotency has to be hand-rolled around it (`ansible/roles/tailscale_host/tasks/main.yml`).
