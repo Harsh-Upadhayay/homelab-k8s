@@ -1,0 +1,43 @@
+# The single workspace volume (ADR-0055, issue #59). Mounted at BOTH /workspace and
+# $HOME by the devbox, and at /workspace by every project's app containers.
+#
+# $HOME is on this volume specifically so VS Code's Remote-SSH server survives a pod
+# restart instead of being re-downloaded, and so anything installed into ~/.local
+# (mise runtimes, ad-hoc tools) persists WITHOUT needing an image rebuild.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: workspace
+  namespace: workbench
+  labels:
+    app.kubernetes.io/name: workbench
+  annotations:
+    # Orders objects WITHIN this Application only — it does not sequence against the
+    # `longhorn` Application that ships the StorageClass. Sync longhorn first.
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  # node-scoped, not pod scoped, i.e one node may mount the volumen & any number of
+  # pods on that node can mount it simultaneously — which is exactly what lets the
+  # devbox and every project's app containers share this one volume (ADR-0054).
+  # `ReadWriteOncePod` is the genuinely pod-exclusive mode and would break that.
+  # RWO also pins all workbench pods to one node for free; under the class's
+  # dataLocality: best-effort the replica follows them there.
+  accessModes: [ReadWriteOnce]
+
+  # MUST be explicit. Omitting it binds to the cluster DEFAULT class, which here is
+  # local-path (see k8s/longhorn/values.yaml) — a node-local directory that works
+  # right up until the pod moves. Chosen for dataLocality: best-effort; see
+  # storageclass-workbench.yaml for why neither existing Longhorn class fits.
+  #
+  # NOTE: this class uses volumeBindingMode: WaitForFirstConsumer, so this PVC stays
+  # Pending until a pod mounts it. That is correct, not broken — every other PVC in
+  # this repo uses Immediate and binds straight away.
+  storageClassName: longhorn-workbench
+
+  resources:
+    requests:
+      # No limits for storage, direct ask i want this much.
+      # Floor from #59: 14 repos plus every node_modules/.venv/GOMODCACHE. The class
+      # sets allowVolumeExpansion: true, so starting small is cheap to correct —
+      # growing means editing this value and re-syncing.
+      storage: 50Gi
