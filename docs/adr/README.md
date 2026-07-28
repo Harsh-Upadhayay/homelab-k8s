@@ -13,6 +13,7 @@ The Ansible/Terraform/Kubernetes/platform *mechanics* these decisions rely on li
 - [[v0.3 - Ingress and TLS]] — ADR-0013 … ADR-0015, ADR-0027
 - [[v0.4 - Public and Private Access]] — ADR-0016 … ADR-0018, ADR-0025 … ADR-0026, ADR-0028 … ADR-0029
 - [[v2.0 - Operability]] — ADR-0030 … ADR-0048, ADR-0051 … ADR-0053
+- [[v4.0 - Developer Workspace]] — ADR-0054 … ADR-0064
 
 (0019–0021 live in the v0.1 log despite the number gap: 0019 records the
 original tried-and-reverted refactor and is now superseded by 0053 rather than
@@ -77,3 +78,14 @@ v1.0 has no log — it produced no architecture decisions of its own, only valid
 | 0051 | One Longhorn data copy by default; redundancy is an explicit per-volume promotion | Accepted | [[v2.0 - Operability]] |
 | 0052 | ASRock HDD becomes a separate Proxmox-managed datastore | Accepted | [[v2.0 - Operability]] |
 | 0053 | One parameterized lifecycle for every worker | Accepted | [[v2.0 - Operability]] |
+| 0054 | One flat `workbench` namespace holding the devbox and every project's app containers | Accepted (planned) | [[v4.0 - Developer Workspace]] |
+| 0055 | RWO Longhorn volume for the workspace; RWX rejected on small-file performance | Accepted (planned) | [[v4.0 - Developer Workspace]] |
+| 0056 | Credential-free git transport over `ext::kubectl exec` with `updateInstead` | Accepted (planned) | [[v4.0 - Developer Workspace]] |
+| 0057 | No build abstraction; commands run directly in the shell | Accepted (planned) | [[v4.0 - Developer Workspace]] |
+| 0058 | Mounted-source hot reload instead of image rebuilds in the inner loop | Accepted (planned) | [[v4.0 - Developer Workspace]] |
+| 0059 | In-cluster `registry:2` instead of ghcr.io; containerd cannot read images from a PVC | Accepted (planned) | [[v4.0 - Developer Workspace]] |
+| 0060 | The in-cluster builder is dev-only and never produces images Argo CD deploys | Accepted (planned) | [[v4.0 - Developer Workspace]] |
+| 0061 | `workbench` under Argo CD with manual sync and `/spec/replicas` ignored | Accepted (planned) | [[v4.0 - Developer Workspace]] |
+| 0062 | `homelab-k8s` and `homelab` excluded from in-cluster development | Accepted (planned) | [[v4.0 - Developer Workspace]] |
+| 0063 | No backups for the workspace volume; GitHub is the backup | Accepted (planned) | [[v4.0 - Developer Workspace]] |
+| 0064 | Tailscale sidecar with `--ssh` for the devbox, not a Service on port 22 | Accepted (planned) | [[v4.0 - Developer Workspace]] |
