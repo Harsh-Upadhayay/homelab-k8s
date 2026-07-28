@@ -1,0 +1,62 @@
+# StorageClass for the v4.0 developer workspace volume (ADR-0054/0055, issue #59).
+#
+# Exists as its own class rather than reusing `longhorn` or `longhorn-replicated`
+# for exactly one reason: dataLocality. Longhorn runs the ENGINE (which serves the
+# block device) on the node where the pod attaches, and the REPLICA (which owns the
+# bytes) wherever it was scheduled — the two talk over TCP. With dataLocality
+# disabled, nothing requires a one-replica volume's only copy to live on the node
+# running the pod, so every read and write can cross the LAN. That is the same
+# per-operation latency tax ADR-0055 rejected RWX/NFS for; picking RWO to dodge NFS
+# round trips and then landing the replica on the other host re-incurs it by another
+# route. Neither existing class avoids it: `longhorn` sets disabled explicitly,
+# `longhorn-replicated` leaves it unset and inherits the global default (disabled).
+#
+# NOTE: StorageClass has no `spec:` — it predates the spec/status convention, so its
+# fields sit at the top level (same as ConfigMap/Secret/ServiceAccount). It is also
+# cluster-scoped, hence no metadata.namespace.
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: longhorn-workbench
+provisioner: driver.longhorn.io
+
+# The workspace holds 14 repos plus every node_modules/.venv/GOMODCACHE; 50Gi is the
+# starting size and growing it later must stay possible.
+allowVolumeExpansion: true
+
+# Delete, not Retain (contrast the longhorn-immich-*-retain classes, which guard
+# irreplaceable photos). Per ADR-0063 the workspace has no backups by design: GitHub
+# is the real backup and the rule is commit before you stop. Retain would only leave
+# orphaned volumes silently consuming the data disk, to be reaped by hand.
+reclaimPolicy: Delete
+
+# WaitForFirstConsumer, deliberately diverging from storageclass-replicated.yaml's
+# Immediate. That file argues "a Longhorn volume isn't pinned to whichever node the
+# first pod lands on, so there's nothing to gain by waiting" — true under
+# dataLocality: disabled, but not here. With Immediate, the volume is provisioned
+# before any pod exists, so Longhorn places the replica on free space alone; the pod
+# then schedules elsewhere and best-effort has to rebuild the whole volume across the
+# LAN to catch up. Waiting for the scheduler means the replica is placed on the right
+# node the first time, and the rebuild never happens.
+volumeBindingMode: WaitForFirstConsumer
+
+# Values here are passed straight through to the CSI driver and are NOT validated by
+# Kubernetes — Longhorn validates them. All values must be quoted strings; an
+# unquoted `numberOfReplicas: 1` is a YAML integer and is rejected.
+parameters:
+  numberOfReplicas: "1" # DATA copies, per ADR-0051 — unrelated to any pod replica count.
+
+  # best-effort over strict-local: it is strictly dominant over `disabled` at no cost.
+  # It constrains the Kubernetes scheduler not at all, and when a local replica cannot
+  # be placed (no space, disk offline) it degrades silently to `disabled` behaviour
+  # rather than failing to attach. strict-local is faster still — it bypasses the
+  # network stack entirely — but hard-binds the volume to a single node, the only one
+  # of the three options that trades away scheduling freedom.
+  #
+  # Because the data follows the pod under best-effort, node placement is a Kubernetes
+  # scheduling concern (nodeSelector/nodeAffinity on the devbox), not a Longhorn one.
+  # Deliberately left unexpressed for now; revisit if the space-based default lands the
+  # workspace on k3s-worker-3's spinning HDD and that proves slower than worker-1's SSD.
+  dataLocality: "best-effort"
+
+  staleReplicaTimeout: "30" # minutes before an unreachable replica is written off; matches the other classes.

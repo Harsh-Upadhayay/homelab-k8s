@@ -1,10 +1,16 @@
-# Child Application: Longhorn — chart + three companions bundled. The
-# companions (k8s/longhorn/manifests/) are: the hand-written 2-copy
-# `longhorn-replicated` StorageClass (ADR-0030), the internal-only UI
-# IngressRoute (ADR-0033), and the Grafana dashboard ConfigMap (ADR-0041).
-# All three already exist in-cluster from when Longhorn was installed
-# manually — first sync adopts them (tracking-annotation-only diff), same
-# as the Traefik chart adoption was.
+# Child Application: Longhorn — chart + companions bundled. The companions
+# (k8s/longhorn/manifests/) are: the legacy-name `longhorn-replicated`
+# StorageClass (ADR-0030, retained because a bound PVC's storageClassName is
+# immutable), the Immich retain classes (ADR-0052), the internal-only UI
+# IngressRoute (ADR-0033), the Grafana dashboard ConfigMap (ADR-0041), and the
+# `longhorn-workbench` class for the v4.0 developer workspace (ADR-0055
+# amendment, issue #59). The original three already existed in-cluster from the
+# manual Longhorn install — first sync adopted them (tracking-annotation-only
+# diff), same as the Traefik chart adoption was.
+#
+# The whole directory is a source path, so a new manifest here needs no change
+# to this file. Note there is no syncPolicy.automated: this Application syncs
+# manually.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

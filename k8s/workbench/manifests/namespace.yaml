@@ -1,0 +1,41 @@
+# The v4.0 developer workspace namespace (ADR-0054, issue #59).
+#
+# ONE FLAT NAMESPACE, deliberately — it holds the devbox pod AND every project's
+# app containers together, rather than one namespace per project. The reason is a
+# single Kubernetes fact: PersistentVolumeClaims are namespaced, and a pod can only
+# mount a PVC in its own namespace. Since the whole premise is one workspace volume
+# holding all 14 repos, mounted at once by the devbox and by each project's
+# containers, per-project namespaces would force either a devbox (and PVC, and tool
+# install, and VS Code server) per project, or a single RWX volume — which ADR-0055
+# rejects separately on small-file performance.
+#
+# What that costs, knowingly: project separation is convention, not a boundary.
+# Service names must be project-prefixed by hand (`kiroku-api`, never bare `api`),
+# dev-server ports come from a per-project block table, there is no per-project
+# NetworkPolicy, and there is no `kubectl delete ns kiroku` teardown button.
+# Acceptable only because everything here is one operator's own code on a private
+# tailnet.
+#
+# PLATFORM COMPONENT, not an app. These manifests live at top-level
+# k8s/workbench/manifests/ beside k8s/longhorn/ and k8s/traefik/, which under this
+# repo's directory-determines-project convention means the `default` AppProject.
+# The `personal` project was the original plan (ADR-0061) and is wrong: it exists to
+# fence code arriving from EXTERNAL dev-owned repos, and workbench has none — every
+# manifest is in this repo. See the ADR-0054/0061 amendments for the full reasoning,
+# including the accepted cost that `default` applies no containment at all.
+#
+# No `group:` label: that is the k8s/apps/ grouping convention, and no other
+# top-level platform component sets one.
+#
+# No ResourceQuota or LimitRange, matching the policy for trusted operator-owned
+# workloads (audiobookshelf, nextcloud) rather than the dev-owned personal
+# namespaces (kiroku), which are quota'd because their manifests arrive from an
+# external repo. Revisit if issue #65's BuildKit turns out to be able to starve the
+# node it lands on.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: workbench
+  labels:
+    app.kubernetes.io/name: workbench
+    app.kubernetes.io/part-of: workbench
