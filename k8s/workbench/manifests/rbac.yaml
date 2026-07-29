@@ -1,0 +1,42 @@
+# Namespace-admin identity for the devbox (issue #60).
+#
+# DELIBERATE DIVERGENCE from k8s/apps/personal/kiroku/rbac.yaml, which
+# hand-writes a Role specifically to EXCLUDE `secrets` and avoid the
+# exfiltration surface. Different threat model: `deployer` there is the scoped
+# identity handed to a collaborator or CI, whereas this is the operator's own
+# development environment. A dev namespace is poked at imperatively by design
+# (ADR-0061), secrets are managed from the devbox as part of the daily loop,
+# and enumerating every verb a day's work might need is friction that buys
+# little — this is the same access a local dev machine already has.
+#
+# ACCEPTED RISK, recorded once rather than left implicit: the devbox runs
+# arbitrary third-party code by design (every `npm install` is remote code
+# execution), and the built-in `admin` ClusterRole includes read/write on
+# `secrets`. The `tailscale-auth` key lives in this namespace, so code running
+# here can read it. Mitigation if that ever matters: move tailnet credentials
+# to their own namespace. Accepted knowingly — an equivalent local dev machine
+# already holds broader credentials than this.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: devbox
+  namespace: workbench
+---
+# NOTE: a RoleBinding referencing a ClusterRole grants that ClusterRole's
+# permissions ONLY within this RoleBinding's namespace. The ClusterRole is just
+# the permission DEFINITION; the binding kind decides the scope. Binding this
+# same `admin` ClusterRole with a ClusterRoleBinding would be cluster-wide —
+# that is the mistake this shape avoids.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: devbox-admin
+  namespace: workbench
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: admin
+subjects:
+  - kind: ServiceAccount
+    name: devbox
+    namespace: workbench

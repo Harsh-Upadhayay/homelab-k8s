@@ -20,13 +20,31 @@ spec:
       containers:
       - name: devbox
         image: mcr.microsoft.com/devcontainers/base:bookworm
-        command: ["sleep", "infinity"]
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            setsid /home/vscode/.local/bin/tailscaled \
+              --tun=userspace-networking \
+              --statedir=/home/vscode/.local/share/tailscale \
+              --socket=/tmp/ts.sock </dev/null >/tmp/tsd.log 2>&1 &
+            exec sleep infinity
         volumeMounts:
           - name: workspace
             mountPath: /workspace
           - name: workspace
             mountPath: /home/vscode
             subPath: home
+        livenessProbe:
+          exec:
+            command:
+              - /home/vscode/.local/bin/tailscale
+              - --socket=/tmp/ts.sock
+              - status
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+      serviceAccountName: devbox
       volumes:
         - name: workspace
           persistentVolumeClaim:
