@@ -23,3 +23,6 @@ kubeconfig
 # Claude Code worktrees (EnterWorktree) - local scratch checkouts, never meant
 # to be tracked as gitlinks in the main repo's history
 .claude/worktrees/
+
+# Scratch notes (e.g. hardware-shopping research) - not part of the platform
+.scratch/

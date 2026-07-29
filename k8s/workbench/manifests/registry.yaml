@@ -1,0 +1,92 @@
+# In-cluster image registry for the dev inner loop (ADR-0059, issue #65).
+#
+# WHY A REGISTRY IS MANDATORY, not a convenience: a Deployment cannot reference an
+# image sitting on a PVC. `image:` is not a filesystem path — containerd resolves
+# images exclusively from its own per-node content store, which is populated only by
+# pulling from a registry. A built image on the workspace volume is invisible to the
+# kubelet no matter how the manifest is written.
+#
+# SCOPE IS DEV ONLY (ADR-0060). This registry must never serve images that Argo CD
+# deploys: an in-cluster build path under GitOps produces artifacts that are not
+# reproducible from git, which is the thing GitOps exists to prevent. Real images
+# come from CI (issue #27).
+#
+# Lives in `workbench` rather than its own namespace, so the flat-namespace argument
+# from ADR-0054 holds and the devbox's existing namespace-admin RoleBinding
+# (ADR-0065) already covers it.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: registry
+  namespace: workbench
+  labels:
+    app.kubernetes.io/name: registry
+spec:
+  accessModes: [ReadWriteOnce]
+
+  # Plain `longhorn`, NOT `longhorn-workbench`. That class exists for
+  # dataLocality: best-effort, which keeps the workspace's small-file I/O local to
+  # the pod — the right call for `git status` and language-server indexing. A
+  # registry serves large sequential blobs a handful of times a year, so locality
+  # buys nothing here, and best-effort would trigger a background full-volume
+  # rebuild every time this pod moved nodes.
+  storageClassName: longhorn
+
+  resources:
+    requests:
+      # Separate from the workspace volume on purpose: registry data is
+      # infrastructure state, not the operator's code. Nuking the workspace must not
+      # take the images with it.
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: registry
+  namespace: workbench
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: registry
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: registry
+    spec:
+      # NOTE: deliberately no securityContext, unlike the devbox. The registry:2
+      # image runs as its own user and expects to own /var/lib/registry; forcing
+      # runAsUser: 1000 here breaks it on permissions. securityContext is a
+      # per-workload decision, not a blanket policy.
+      containers:
+        - name: registry
+          image: registry:2
+          ports:
+            - containerPort: 5000
+              name: registry
+          volumeMounts:
+            # This path is the registry:2 image's contract for where blobs live —
+            # not a free choice.
+            - name: data
+              mountPath: /var/lib/registry
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: registry
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: registry
+  namespace: workbench
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: registry
+  ports:
+    # port 80 so image references need no port suffix:
+    #   registry.workbench.svc.cluster.local/<repo>:dev
+    # targetPort is the container's actual 5000. `port` is what the Service listens
+    # on; `targetPort` is where it forwards.
+    - port: 80
+      targetPort: 5000
