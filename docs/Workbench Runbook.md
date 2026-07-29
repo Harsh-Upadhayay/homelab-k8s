@@ -98,6 +98,40 @@ Both Services listen on **port 80**, so references need no port suffix:
 
 Verified: `curl http://registry.workbench.svc.cluster.local/v2/` returns `HTTP 200`.
 
+### Building and pushing, from the devbox
+
+```
+buildctl --addr tcp://buildkit.workbench.svc:80 build \
+  --frontend dockerfile.v0 \
+  --local context=/workspace/<repo> --local dockerfile=/workspace/<repo> \
+  --output type=image,name=registry.workbench.svc.cluster.local/<repo>:dev,push=true,registry.insecure=true
+```
+
+`registry.insecure=true` is required on the output — BuildKit, like containerd, assumes HTTPS otherwise.
+
+### The service name is a pattern, not a hostname — this is the part that surprises
+
+`registries.yaml` on every node maps that readable name to a node-local address:
+
+```yaml
+mirrors:
+  "registry.workbench.svc.cluster.local":   # matched literally, NEVER resolved
+    endpoint:
+      - "http://127.0.0.1:30500"            # the only thing actually dialled
+```
+
+**Why it has to work this way:** the thing pulling images is containerd, running on the *node*. Nodes sit outside the cluster network and use their own resolver, so they cannot resolve any `*.svc.cluster.local` name — CoreDNS only serves pods. A pull with the service name as the endpoint fails with:
+
+```
+dial tcp: lookup registry.workbench.svc.cluster.local: no such host
+```
+
+This is [k3s issue #1581](https://github.com/k3s-io/k3s/issues/1581), open since March 2020. The commonly-suggested workaround — adding CoreDNS's ClusterIP to each node's `/etc/resolv.conf` — is **not used here**: it makes every node's DNS depend on a pod that itself needs DNS to schedule.
+
+The `mirrors` key being a match pattern rather than a hostname is what dissolves the problem, and it is the same trick kind, k3d and minikube use. Manifests keep the readable name; only the endpoint must be node-reachable.
+
+**If you change the registry Service's `nodePort`, update the Ansible task too** — `ansible/roles/k3s_node/tasks/main.yml` writes `registries.yaml`, and a mismatch shows up as `connection refused` on every pull.
+
 ### Rootless BuildKit needs Unconfined seccomp + AppArmor
 
 Without these the container dies instantly with `[rootlesskit:child] error: failed to share mount point: /: permission denied`:

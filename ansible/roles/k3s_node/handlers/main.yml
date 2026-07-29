@@ -1,0 +1,23 @@
+---
+# k3s_node runs against the WHOLE cluster (site.yml: hosts: k3s_cluster), but the
+# systemd unit differs by node role: the control plane runs `k3s`, workers run
+# `k3s-agent`. Both handlers listen on the same logical name so a task in this role
+# can notify once without caring which kind of node it is on; the group condition
+# then picks exactly one.
+#
+# The listen name is deliberately NOT "restart k3s" — k3s_server/handlers/main.yml
+# already defines a handler by that exact name, and handler names are global within
+# a play.
+- name: restart k3s on the control plane
+  ansible.builtin.systemd:
+    name: k3s
+    state: restarted
+  when: inventory_hostname in groups['k3s_server']
+  listen: restart k3s node runtime
+
+- name: restart k3s on workers
+  ansible.builtin.systemd:
+    name: k3s-agent
+    state: restarted
+  when: inventory_hostname in groups['k3s_agent']
+  listen: restart k3s node runtime

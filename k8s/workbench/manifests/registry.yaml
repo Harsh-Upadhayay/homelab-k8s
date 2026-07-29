@@ -80,13 +80,43 @@ metadata:
   name: registry
   namespace: workbench
 spec:
-  type: ClusterIP
+  # NodePort, not ClusterIP — and the reason is worth keeping, because the obvious
+  # design does not work.
+  #
+  # THE PROBLEM: the thing that pulls images is containerd, running on the NODE.
+  # Nodes are outside the cluster network and use their own resolver, so they cannot
+  # resolve any *.svc.cluster.local name — that is CoreDNS's job and CoreDNS only
+  # serves pods. A registries.yaml endpoint of registry.workbench.svc.cluster.local
+  # fails with "no such host". This is k3s issue #1581, open since March 2020 with
+  # no upstream fix; the workaround in that thread (adding CoreDNS's IP to the
+  # node's /etc/resolv.conf) makes every node's DNS depend on a pod that needs DNS
+  # to schedule, and is rejected here for that reason.
+  #
+  # THE RESOLUTION, which is what kind, k3d and minikube all converged on: the
+  # `mirrors` key in registries.yaml is a MATCHING PATTERN, not a hostname. It is
+  # compared as a literal string against the image reference and is never resolved.
+  # Only `endpoint` is ever dialed. So manifests keep the readable service name
+  # while containerd is pointed at a node-local address.
+  #
+  # NodePort over hardcoding the ClusterIP: a ClusterIP is stable only until the
+  # Service is deleted and recreated, at which point every node's registries.yaml
+  # silently goes stale. 127.0.0.1:30500 has no such failure mode. hostPort was
+  # rejected outright — it is known-broken with CNI plugins (kubernetes #44564).
+  #
+  # This does not contradict ADR-0059's "ClusterIP only", which was written to mean
+  # "not exposed to the LAN". A NodePort bound for node-local containerd use is a
+  # narrower thing than what that was guarding against, and pods still reach the
+  # registry by its ClusterIP exactly as before.
+  type: NodePort
   selector:
     app.kubernetes.io/name: registry
   ports:
-    # port 80 so image references need no port suffix:
+    # port 80 so in-cluster references need no port suffix:
     #   registry.workbench.svc.cluster.local/<repo>:dev
-    # targetPort is the container's actual 5000. `port` is what the Service listens
-    # on; `targetPort` is where it forwards.
+    # `port` is what the Service listens on, `targetPort` the container's actual
+    # 5000, and `nodePort` the fixed port containerd dials on 127.0.0.1. The
+    # nodePort is pinned rather than auto-assigned precisely because Ansible writes
+    # it into registries.yaml on every node.
     - port: 80
       targetPort: 5000
+      nodePort: 30500
