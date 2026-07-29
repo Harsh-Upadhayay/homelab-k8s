@@ -1,0 +1,81 @@
+# BuildKit daemon for in-cluster image builds (ADR-0059, issue #65).
+#
+# The Mac has no container runtime and will not get one, so builds run here, driven
+# from the devbox by `buildctl` — the source is already on the workspace PVC, so
+# nothing needs shipping anywhere.
+#
+# Needed only when a BASE IMAGE changes (a new language runtime or system package).
+# Source and dependency changes are handled by mounted-source hot reload (ADR-0058),
+# so realistic build frequency is a handful of times per project per year.
+#
+# NO PVC, deliberately. This is scratch space: the build cache is rebuildable by
+# definition, and losing it costs one slow rebuild rather than any data. emptyDir is
+# the correct shape — it lives and dies with the pod.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: buildkit
+  namespace: workbench
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: buildkit
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: buildkit
+    spec:
+      containers:
+        - name: buildkit
+          # Rootlesskit needs to create unprivileged user + mount namespaces, which
+          # the default seccomp and AppArmor profiles block — without these the
+          # container dies immediately with
+          #   "failed to share mount point: /: permission denied".
+          # Unconfined here is NOT the same as privileged: the container still runs
+          # as a non-root user and cannot escape to the node. It only stops the
+          # kernel filtering the namespace syscalls rootless mode is built on.
+          securityContext:
+            seccompProfile:
+              type: Unconfined
+            appArmorProfile:
+              type: Unconfined
+            runAsUser: 1000
+            runAsGroup: 1000
+          # ROOTLESS on purpose. Image building normally wants privileged access for
+          # mount namespaces and overlayfs, and the non-rootless image needs
+          # `privileged: true` — a container that can escape to the node. The
+          # rootless variant plus --oci-worker-no-process-sandbox avoids that
+          # entirely. Marginally slower builds, which is irrelevant at this
+          # frequency.
+          image: moby/buildkit:master-rootless
+          args:
+            - --addr
+            - tcp://0.0.0.0:1234
+            - --oci-worker-no-process-sandbox
+          ports:
+            - containerPort: 1234
+              name: buildkit
+          volumeMounts:
+            - name: cache
+              mountPath: /home/user/.local/share/buildkit
+      volumes:
+        - name: cache
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: buildkit
+  namespace: workbench
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: buildkit
+  ports:
+    # Reached as tcp://buildkit.workbench.svc:80 from the devbox. Nothing infers a
+    # default port for buildctl's --addr, so 80 buys nothing over 1234 here — it is
+    # only for consistency with the registry Service.
+    - port: 80
+      protocol: TCP
+      targetPort: 1234

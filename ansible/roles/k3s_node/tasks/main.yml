@@ -55,3 +55,56 @@
   ansible.builtin.apt:
     update_cache: true
     cache_valid_time: 3600
+
+- name: Ensure the k3s config directory exists
+  ansible.builtin.file:
+    path: /etc/rancher/k3s
+    state: directory
+    mode: "0755"
+
+# Point containerd at the in-cluster dev registry (ADR-0059, issue #65).
+#
+# TWO SEPARATE PROBLEMS ARE SOLVED HERE, and conflating them is what makes the
+# obvious version of this file wrong.
+#
+# 1. HTTPS. Containerd assumes HTTPS and validates certificates for every registry.
+#    This one is node-local plain HTTP with no certificate, so without the http://
+#    scheme on the endpoint every pull fails with
+#    "http: server gave HTTP response to HTTPS client". No `configs` block is
+#    needed — that section carries auth and TLS settings, and there is neither.
+#
+# 2. DNS. The thing pulling images is containerd, running on the NODE. Nodes sit
+#    outside the cluster network and use their own resolver, so they CANNOT resolve
+#    any *.svc.cluster.local name — that is CoreDNS's job and CoreDNS only serves
+#    pods. Pointing the endpoint at registry.workbench.svc.cluster.local fails with
+#    "no such host". This is k3s issue #1581, open since March 2020 with no upstream
+#    fix; the workaround in that thread (adding CoreDNS's IP to the node's
+#    /etc/resolv.conf) makes every node's DNS depend on a pod that needs DNS to
+#    schedule, and is rejected here for that reason.
+#
+# THE KEY IS A PATTERN, NOT A HOSTNAME. This is what resolves the tension, and it
+# is what kind, k3d and minikube all converged on: the quoted `mirrors` key is
+# matched as a literal string against the image reference and is NEVER resolved.
+# Only `endpoint` is dialed. So manifests keep the readable service name while
+# containerd talks to a node-local address.
+#
+# 127.0.0.1:30500 is the registry Service's pinned nodePort. Chosen over hardcoding
+# the ClusterIP, which is stable only until the Service is deleted and recreated —
+# at which point every node's copy of this file silently goes stale.
+#
+# Mode 0644, unlike config.yaml next to it: that file holds the cluster join token,
+# this one has no secrets and containerd reads it as root regardless.
+#
+# Scope is DEV ONLY (ADR-0060) — this registry must never serve images Argo CD
+# deploys, since an in-cluster build path under GitOps produces artifacts that are
+# not reproducible from git.
+- name: Point containerd at the in-cluster dev registry
+  ansible.builtin.copy:
+    dest: /etc/rancher/k3s/registries.yaml
+    mode: "0644"
+    content: |
+      mirrors:
+        "registry.workbench.svc.cluster.local":
+          endpoint:
+            - "http://127.0.0.1:30500"
+  notify: restart k3s node runtime

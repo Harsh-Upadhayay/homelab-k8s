@@ -1,0 +1,96 @@
+# The devbox — the developer's shell and editor backend, plus the workspace volume
+# every other workbench pod mounts (ADR-0054, ADR-0055, ADR-0064).
+#
+# tailscaled runs IN THIS CONTAINER rather than a sidecar: Tailscale SSH spawns the
+# login shell as a child of tailscaled, in tailscaled's own container filesystem, so
+# a sidecar would drop you into the official Alpine image — no workspace, and no
+# glibc for VS Code Remote-SSH's server. See the ADR-0064 amendment.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: workspace
+  namespace: workbench
+  labels:
+    app.kubernetes.io/name: workbench
+  annotations:
+    # Orders objects WITHIN this Application only — it does not sequence against the
+    # `longhorn` Application that ships the StorageClass. Sync longhorn first.
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  # node-scoped, not pod scoped, i.e one node may mount the volumen & any number of
+  # pods on that node can mount it simultaneously — which is exactly what lets the
+  # devbox and every project's app containers share this one volume (ADR-0054).
+  # `ReadWriteOncePod` is the genuinely pod-exclusive mode and would break that.
+  # RWO also pins all workbench pods to one node for free; under the class's
+  # dataLocality: best-effort the replica follows them there.
+  accessModes: [ReadWriteOnce]
+
+  # MUST be explicit. Omitting it binds to the cluster DEFAULT class, which here is
+  # local-path (see k8s/longhorn/values.yaml) — a node-local directory that works
+  # right up until the pod moves. Chosen for dataLocality: best-effort; see
+  # storageclass-workbench.yaml for why neither existing Longhorn class fits.
+  #
+  # NOTE: this class uses volumeBindingMode: WaitForFirstConsumer, so this PVC stays
+  # Pending until a pod mounts it. That is correct, not broken — every other PVC in
+  # this repo uses Immediate and binds straight away.
+  storageClassName: longhorn-workbench
+
+  resources:
+    requests:
+      # No limits for storage, direct ask i want this much.
+      # Floor from #59: 14 repos plus every node_modules/.venv/GOMODCACHE. The class
+      # sets allowVolumeExpansion: true, so starting small is cheap to correct —
+      # growing means editing this value and re-syncing.
+      storage: 50Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devbox
+  namespace: workbench
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: devbox
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: devbox
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: devbox
+        image: mcr.microsoft.com/devcontainers/base:bookworm
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            setsid /home/vscode/.local/bin/tailscaled \
+              --tun=userspace-networking \
+              --statedir=/home/vscode/.local/share/tailscale \
+              --socket=/tmp/ts.sock </dev/null >/tmp/tsd.log 2>&1 &
+            exec sleep infinity
+        volumeMounts:
+          - name: workspace
+            mountPath: /workspace
+          - name: workspace
+            mountPath: /home/vscode
+            subPath: home
+        livenessProbe:
+          exec:
+            command:
+              - /home/vscode/.local/bin/tailscale
+              - --socket=/tmp/ts.sock
+              - status
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+      serviceAccountName: devbox
+      volumes:
+        - name: workspace
+          persistentVolumeClaim:
+            claimName: workspace
