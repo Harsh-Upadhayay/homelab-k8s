@@ -27,7 +27,7 @@ vm_user        = "harsh"
 # --- k3s-server-1 (control plane — tainted, etcd lives here) ---
 server_ip        = "192.168.1.21"
 server_cores     = 4
-server_memory    = 6144
+server_memory    = 4096
 server_disk_size = 60
 
 # Every worker uses the same Terraform resource. Host placement, capacity, and
@@ -39,7 +39,7 @@ workers = {
     clone_datastore_id  = null
     ip_address          = "192.168.1.22"
     cores               = 12
-    memory              = 18432
+    memory              = 22528
     os_datastore_id     = "local-lvm"
     os_disk_size        = 60
     os_disk_cache       = "writeback"
@@ -56,7 +56,7 @@ workers = {
     clone_datastore_id  = "local-lvm"
     ip_address          = "192.168.1.24"
     cores               = 6
-    memory              = 12288
+    memory              = 28672
     os_datastore_id     = "local-lvm"
     os_disk_size        = 40
     os_disk_cache       = "none"
