@@ -37,6 +37,44 @@ Two cases *do* collide, and neither needs pre-allocation:
 
 ---
 
+## The daily loop — `devx`
+
+`devx` runs **on the Mac**, not in the devbox. It is symlinked from `bin/devx` into `~/.local/bin`, so it tracks the repo checkout and edits take effect immediately.
+
+```
+devx <project>          bring the project up and attach a shell
+devx <project> down     scale on-demand workloads to zero
+devx ls                 projects, workloads, lifecycle, up/down
+devx pull <project>     show the pod's uncommitted work + git remote recipe
+devx status             cluster reachable / devbox state / ssh
+```
+
+**Workloads are discovered by label, never by a config file** (ADR-0066). Label a project's Deployments and `devx` picks them up with no code change:
+
+| Label | Values | Effect |
+|---|---|---|
+| `workbench.neovara/project` | `<name>` | Which project the workload belongs to |
+| `workbench.neovara/lifecycle` | `always-on` \| `on-demand` | Whether `devx <project> down` scales it to zero |
+
+Mark long-lived Postgres `always-on` — cold-starting a database mid-thought is the most disruptive possible interruption. The devbox itself always stays up.
+
+A Deployment missing the project label is simply **invisible** to `devx`; the convention is unenforced. `devx ls` is the quickest way to notice.
+
+### What `devx` deliberately does not do
+
+- **No port-forward tunnels.** M4's Tailscale `Ingress` per dev frontend removes the need.
+- **No build/test/run vocabulary** (ADR-0057). It gets you to a shell; you type `go test ./...` yourself.
+
+### Offline is a supported mode, not an error
+
+Every path that needs the API checks reachability first and prints what to do, rather than surfacing a raw `kubectl` timeout at the moment it is hardest to debug. `devx status` is the quick check.
+
+Run `devx pull <project>` **before** going offline — the Mac clone is the fallback, and it goes stale otherwise.
+
+### macOS bash 3.2
+
+`devx` avoids `mapfile`/`readarray` (bash 4+) because macOS still ships bash 3.2. Requiring a Homebrew bash 5 would make the tool's first instruction "install a different shell". If you edit `devx`, test it with `/bin/bash ./bin/devx …` explicitly — a `zsh` or Homebrew-bash test will not catch the regression.
+
 ## Connecting
 
 `ssh workbench` from any tailnet device. No password, no key, no `authorized_keys` — authentication is tailnet identity, authorization is the `tag:devbox` ACL rule (ADR-0064). VS Code Remote-SSH attaches to the same host.

@@ -1,0 +1,346 @@
+#!/usr/bin/env bash
+#
+# devx — one command from a cold cluster to a working shell (issue #62, M3).
+#
+# Runs on the MacBook, not in the devbox. It scales a project's workloads up,
+# waits for them, and drops you into a tmux session inside the devbox with the
+# repo as your working directory.
+#
+#   devx <project>        ensure devbox + project up, attach tmux, cd to the repo
+#   devx <project> down   scale on-demand workloads to 0, leave always-on ones
+#   devx ls               projects and their up/down state
+#   devx pull <project>   fetch the pod's work back to the Mac clone
+#   devx status           cluster reachability + devbox state
+#
+# WHY BASH (ADR-style note): the tool's shape is not settled yet, and the second
+# version is always better than the first. Bash makes the first one cheap. A Go
+# rewrite is worth revisiting once this has survived a month of daily use and
+# has a real spec — not before.
+#
+# WHAT THIS DELIBERATELY DOES NOT DO:
+#   - No port-forward tunnels. M4 (#63) exposes dev frontends via Tailscale
+#     Ingress, which removes the messiest part this tool would otherwise own.
+#   - No build/test/run vocabulary. Per ADR-0057 there is no Makefile
+#     abstraction: once you have a shell, you type `go test ./...` yourself.
+#     devx gets you to the shell; it does not wrap what you do there.
+
+set -uo pipefail
+
+NAMESPACE="workbench"
+SSH_HOST="workbench"          # ~/.ssh/config entry from M1 (ADR-0064)
+WORKSPACE="/workspace"
+LABEL_PROJECT="workbench.neovara/project"
+LABEL_LIFECYCLE="workbench.neovara/lifecycle"
+
+# Colours only when stdout is a terminal, so piping devx stays clean.
+if [[ -t 1 ]]; then
+  BOLD=$'\033[1m'; DIM=$'\033[2m'; RED=$'\033[31m'; GREEN=$'\033[32m'
+  YELLOW=$'\033[33m'; RESET=$'\033[0m'
+else
+  BOLD=""; DIM=""; RED=""; GREEN=""; YELLOW=""; RESET=""
+fi
+
+info()  { printf '%s\n' "${DIM}==>${RESET} $*"; }
+warn()  { printf '%s\n' "${YELLOW}warning:${RESET} $*" >&2; }
+die()   { printf '%s\n' "${RED}error:${RESET} $*" >&2; exit 1; }
+
+usage() {
+  cat <<EOF
+${BOLD}devx${RESET} — in-cluster development workspace driver
+
+  devx <project>          bring the project up and attach a shell
+  devx <project> down     scale the project's on-demand workloads to zero
+  devx ls                 list projects and their state
+  devx pull <project>     fetch the pod's commits back to the Mac clone
+  devx status             cluster reachability and devbox state
+
+Workloads are discovered by label, never by a config file:
+  ${LABEL_PROJECT}=<name>
+  ${LABEL_LIFECYCLE}=always-on|on-demand
+EOF
+}
+
+# --- cluster reachability ----------------------------------------------------
+#
+# Cluster-unreachable is NOT an error condition — it is the offline mode this
+# whole design supports. A raw `kubectl` timeout at exactly the moment you are
+# least able to debug it is the worst possible output, so every path that needs
+# the API checks this first and prints something actionable instead.
+cluster_up() {
+  kubectl --request-timeout=5s get ns "$NAMESPACE" >/dev/null 2>&1
+}
+
+require_cluster() {
+  if ! cluster_up; then
+    cat >&2 <<EOF
+${YELLOW}cluster unreachable${RESET} — working offline.
+
+Your local clone is the fallback. Nothing is broken; the cluster is simply not
+answering right now (asleep, off the tailnet, or genuinely down).
+
+  - Check the tailnet:   tailscale status
+  - Check the API:       kubectl get nodes
+  - Before going offline next time, run:  devx pull <project>
+EOF
+    exit 1
+  fi
+}
+
+# --- workload helpers --------------------------------------------------------
+
+# Deployments belonging to a project. Empty output means the project has no
+# workloads yet, which is normal for a repo you have only just started editing.
+project_deploys() {
+  local project="$1" extra="${2:-}"
+  local selector="${LABEL_PROJECT}=${project}"
+  [[ -n "$extra" ]] && selector="${selector},${extra}"
+  kubectl -n "$NAMESPACE" get deploy -l "$selector" \
+    -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null
+}
+
+deploy_replicas() {
+  kubectl -n "$NAMESPACE" get deploy "$1" \
+    -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo 0
+}
+
+# Read newline-separated stdin into a named array.
+#
+# This exists because macOS ships bash 3.2 (2007) and `mapfile`/`readarray`
+# arrived in bash 4. This is the Mac-side tool, so it has to run on what macOS
+# actually has — requiring a Homebrew bash 5 would make the tool's first
+# instruction "install a different shell". Caught the hard way: `devx down`
+# failed with "mapfile: command not found" on the first real run.
+read_lines_into() {
+  local __name="$1" __line
+  eval "$__name=()"
+  while IFS= read -r __line; do
+    [[ -z "$__line" ]] && continue
+    eval "$__name+=(\"\$__line\")"
+  done
+}
+
+# The devbox has to be up before anything else — it is where you land.
+ensure_devbox() {
+  local ready
+  ready=$(kubectl -n "$NAMESPACE" get deploy devbox \
+    -o jsonpath='{.status.readyReplicas}' 2>/dev/null)
+  if [[ "${ready:-0}" -ge 1 ]]; then
+    return 0
+  fi
+
+  info "devbox is down — scaling up"
+  kubectl -n "$NAMESPACE" scale deploy devbox --replicas=1 >/dev/null \
+    || die "could not scale the devbox"
+  kubectl -n "$NAMESPACE" wait --for=condition=available \
+    deploy/devbox --timeout=180s >/dev/null \
+    || die "devbox did not become available within 180s — try: kubectl -n $NAMESPACE describe deploy devbox"
+}
+
+# --- commands ----------------------------------------------------------------
+
+cmd_up() {
+  local project="$1"
+  require_cluster
+  ensure_devbox
+
+  local deploys
+  read_lines_into deploys < <(project_deploys "$project")
+
+  if [[ ${#deploys[@]} -eq 0 ]]; then
+    # Not a failure: plenty of projects are just a repo on the volume with no
+    # app containers yet. Say so once, then continue to the shell.
+    info "no workloads labelled ${LABEL_PROJECT}=${project} — connecting to the devbox only"
+  else
+    local to_start=()
+    for d in "${deploys[@]}"; do
+      [[ "$(deploy_replicas "$d")" -ge 1 ]] || to_start+=("$d")
+    done
+
+    if [[ ${#to_start[@]} -eq 0 ]]; then
+      info "${project}: already up (${#deploys[@]} workload(s))"
+    else
+      info "${project}: starting ${to_start[*]}"
+      # "Up" always means --replicas=1. Scaling to zero destroys the prior
+      # value, but every dev workload here is single-replica by definition —
+      # recording and restoring it would be machinery for a case that does not
+      # exist. If that ever changes, this is the line to revisit.
+      for d in "${to_start[@]}"; do
+        kubectl -n "$NAMESPACE" scale deploy "$d" --replicas=1 >/dev/null \
+          || warn "could not scale $d"
+      done
+      for d in "${to_start[@]}"; do
+        kubectl -n "$NAMESPACE" wait --for=condition=available \
+          "deploy/$d" --timeout=120s >/dev/null \
+          || warn "$d did not become available within 120s (continuing anyway)"
+      done
+    fi
+  fi
+
+  connect "$project"
+}
+
+# The connect line, and why each flag is there:
+#
+#   ssh -A          forwards the SSH agent, so git inside the devbox uses the
+#                   Mac's key without any credential ever being stored on the
+#                   PVC (ADR-0056 / #60).
+#   -t              forces a TTY; without it tmux refuses to start over a
+#                   remote command.
+#   tmux new -A     attach-or-create. This is the important one: reconnecting
+#                   after a dropped tailnet link is the SAME command as
+#                   connecting fresh, so there is nothing to remember.
+#   -s <project>    one named session per project, so `tmux ls` inside the
+#                   devbox is the list of what is in flight.
+#   -c <dir>        new windows in this session open in the repo.
+#
+# Note the two unrelated `-A` flags: ssh's is agent forwarding, tmux's is
+# attach-or-create. They are easy to misread as the same option.
+connect() {
+  local project="$1"
+  local dir="${WORKSPACE}/${project}"
+
+  # If the directory is missing, land in /workspace rather than failing — the
+  # repo may simply not be cloned yet, and a shell is more useful than an error.
+  if ! ssh -o BatchMode=yes "$SSH_HOST" "test -d '$dir'" 2>/dev/null; then
+    warn "${dir} does not exist — opening in ${WORKSPACE} instead"
+    dir="$WORKSPACE"
+  fi
+
+  info "connecting to ${project}"
+  exec ssh -A -t "$SSH_HOST" \
+    "tmux new -A -s '${project}' -c '${dir}'"
+}
+
+cmd_down() {
+  local project="$1"
+  require_cluster
+
+  # Only on-demand workloads scale down. Long-lived Postgres and the devbox
+  # itself keep running: cold-starting a database mid-thought is the most
+  # disruptive possible interruption, and the whole point of `down` is to
+  # reclaim node resources without paying that cost.
+  local deploys
+  read_lines_into deploys < <(project_deploys "$project" "${LABEL_LIFECYCLE}=on-demand")
+
+  if [[ ${#deploys[@]} -eq 0 ]]; then
+    info "${project}: nothing marked ${LABEL_LIFECYCLE}=on-demand"
+    return 0
+  fi
+
+  info "${project}: scaling down ${deploys[*]}"
+  for d in "${deploys[@]}"; do
+    kubectl -n "$NAMESPACE" scale deploy "$d" --replicas=0 >/dev/null \
+      || warn "could not scale down $d"
+  done
+
+  # Worth stating out loud, because Argo would otherwise undo this within
+  # minutes. ADR-0061 gives the workbench Application manual sync, no selfHeal,
+  # and ignoreDifferences on /spec/replicas precisely so `devx down` sticks.
+  info "devbox left running (always-on)"
+}
+
+cmd_ls() {
+  require_cluster
+
+  local rows
+  rows=$(kubectl -n "$NAMESPACE" get deploy \
+    -l "$LABEL_PROJECT" \
+    -o jsonpath="{range .items[*]}{.metadata.labels['workbench\.neovara/project']}{'\t'}{.metadata.name}{'\t'}{.metadata.labels['workbench\.neovara/lifecycle']}{'\t'}{.status.readyReplicas}{'\n'}{end}" \
+    2>/dev/null)
+
+  if [[ -z "$rows" ]]; then
+    info "no labelled project workloads yet"
+    info "label a Deployment with ${LABEL_PROJECT}=<name> to have devx manage it"
+    return 0
+  fi
+
+  printf '%s\n' "${BOLD}PROJECT        WORKLOAD                  LIFECYCLE    STATE${RESET}"
+  while IFS=$'\t' read -r project name lifecycle ready; do
+    [[ -z "$project" ]] && continue
+    local state
+    if [[ "${ready:-0}" -ge 1 ]]; then
+      state="${GREEN}up${RESET}"
+    else
+      state="${DIM}down${RESET}"
+    fi
+    printf '%-14s %-25s %-12s %s\n' \
+      "$project" "$name" "${lifecycle:-unset}" "$state"
+  done <<< "$rows"
+}
+
+# Bring the Mac clone up to date with work done in the pod, so the local copy is
+# a usable fallback when the cluster is unreachable. This is the one direction
+# that still matters day to day: the devbox pushes to GitHub itself over the
+# forwarded agent, but the Mac clone goes stale unless something pulls.
+cmd_pull() {
+  local project="$1"
+  require_cluster
+
+  local remote_dir="${WORKSPACE}/${project}"
+  if ! ssh -o BatchMode=yes "$SSH_HOST" "test -d '${remote_dir}/.git'" 2>/dev/null; then
+    die "${remote_dir} is not a git repo in the devbox"
+  fi
+
+  info "${project}: uncommitted work in the pod"
+  ssh -o BatchMode=yes "$SSH_HOST" \
+    "cd '${remote_dir}' && git status --short" || true
+
+  cat <<EOF
+
+${BOLD}To sync this into a local clone:${RESET}
+
+  cd <your local ${project} clone>
+  git remote add pod "ext::ssh ${SSH_HOST} -o BatchMode=yes git-upload-pack '${remote_dir}'" 2>/dev/null || true
+  git fetch pod
+
+Anything not committed in the pod will not come across — commit first.
+EOF
+}
+
+cmd_status() {
+  if ! cluster_up; then
+    printf '%s\n' "cluster    ${RED}unreachable${RESET}"
+    printf '%s\n' "${DIM}working offline; your local clone is the fallback${RESET}"
+    exit 1
+  fi
+  printf '%s\n' "cluster    ${GREEN}reachable${RESET}"
+
+  local ready
+  ready=$(kubectl -n "$NAMESPACE" get deploy devbox \
+    -o jsonpath='{.status.readyReplicas}' 2>/dev/null)
+  if [[ "${ready:-0}" -ge 1 ]]; then
+    printf '%s\n' "devbox     ${GREEN}up${RESET}"
+  else
+    printf '%s\n' "devbox     ${DIM}down${RESET}"
+  fi
+
+  if ssh -o BatchMode=yes -o ConnectTimeout=5 "$SSH_HOST" true 2>/dev/null; then
+    printf '%s\n' "ssh        ${GREEN}ok${RESET} (${SSH_HOST})"
+  else
+    printf '%s\n' "ssh        ${RED}unreachable${RESET} (${SSH_HOST})"
+  fi
+}
+
+# --- dispatch ----------------------------------------------------------------
+
+main() {
+  command -v kubectl >/dev/null || die "kubectl not found on PATH"
+
+  case "${1:-}" in
+    ""|-h|--help|help) usage ;;
+    ls)                cmd_ls ;;
+    status)            cmd_status ;;
+    pull)
+      [[ $# -ge 2 ]] || die "usage: devx pull <project>"
+      cmd_pull "$2" ;;
+    *)
+      local project="$1"
+      case "${2:-}" in
+        "")     cmd_up "$project" ;;
+        down)   cmd_down "$project" ;;
+        *)      die "unknown subcommand '${2}' (try: devx --help)" ;;
+      esac ;;
+  esac
+}
+
+main "$@"
