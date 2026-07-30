@@ -4,7 +4,14 @@
 
 Operating notes for the `workbench` namespace — the in-cluster developer workspace introduced in v4.0.
 
-**Status: stub.** Started in M0 (issue #59) to hold the dev-port table, which is needed before `devx` (#62) and dev frontend exposure (#63) can be built. The daily loop, the offline flip, and PVC-node recovery are written in M8 (issue #67).
+**Who owns what in this namespace.** Two kinds of object share `workbench`, with different owners and different lifecycles:
+
+| | Owned by | Managed how |
+|---|---|---|
+| **Infrastructure** — namespace, workspace PVC, devbox RBAC, devbox / registry / buildkit Deployments | this repo (`k8s/workbench/manifests/`) | Argo CD, manual sync (ADR-0061) |
+| **Dev workloads** — per-project Deployments, Services, Tailscale Ingresses | each project's own repo | `kubectl` from the devbox — **deliberately outside GitOps** |
+
+The `workbench` namespace is the operator's working environment, not a deployment target. Dev workloads are applied by hand from the devbox, which holds namespace-admin here (ADR-0065). They are invisible to Argo because it compares git against objects carrying its own tracking marker, not against everything in the namespace — verified live: a hand-applied dev Deployment leaves the Application reading `Synced`.
 
 ---
 
@@ -292,8 +299,78 @@ A recreated PVC now costs only the first-run setup above, not a broken pod.
 
 ---
 
-## To be written in M8 (issue #67)
+## GitOps boundary
 
-- The daily loop — `devx <project> up`, connect, work, `devx <project> down`
-- The offline flip — working when the tailnet or the cluster is unavailable
-- Recovery when the PVC's node is down — the workspace is single-replica with no backups by design (ADR-0063); GitHub is the backup and the rule is **commit before you stop**
+One Argo `Application` — `k8s/argocd/apps/workbench.yaml`, `default` project — adopts the namespace infrastructure only.
+
+Three properties, each deliberate:
+
+- **No `automated` block.** A dev namespace is poked at imperatively by design. With `selfHeal`, scaling a project to zero would be reverted within minutes because git says `replicas: 1` (ADR-0061).
+- **No `prune`.** Prune asks *"what is in the namespace that git does not specify?"* — a blunter question than the tracking-id comparison driving sync status, and not a mechanism to leave armed in a namespace that intentionally holds hand-applied workloads. Removing a manifest from git therefore means deleting the object by hand.
+- **`ignoreDifferences` on `/spec/replicas`.** A scaled-to-zero project is the normal state, not drift. Without this, `devx <project> down` would show as a permanent diff on the dashboard.
+
+**No label scoping is needed**, and adding it would be configuration to maintain for no gain. Argo tracks resources by an `argocd.argoproj.io/tracking-id` marker it stamps on objects it creates; anything applied by hand carries no marker and never enters the comparison.
+
+Verified live on adoption: all 10 infrastructure objects went `OutOfSync` → `Synced` on the first manual sync (tracking-annotation-only diff), a hand-applied dev Deployment did **not** appear in the resource list and did **not** change the status, and scaling the devbox to zero left the app `Synced` without being reverted.
+
+```
+kubectl -n argocd get app workbench          # sync + health
+argocd app diff workbench                    # what a sync would change
+argocd app sync workbench                    # apply it (or via the UI)
+```
+
+---
+
+## The offline flip
+
+Cluster-unreachable is a **supported mode, not an incident**. `devx` treats it that way: every path that needs the API checks reachability first and prints what to do rather than surfacing a raw `kubectl` timeout at the moment it is hardest to debug.
+
+**Before you go offline:**
+
+```
+devx pull <project>     # shows the pod's uncommitted work + the git remote recipe
+```
+
+Commit on the devbox first — anything uncommitted does not come across.
+
+**While offline**, the Mac clone is the fallback. Work there as normal.
+
+**Diagnosing**, in order — the failure is usually the tailnet, not the cluster:
+
+```
+tailscale status        # is the Mac on the tailnet? is `workbench` listed?
+devx status             # cluster / devbox / ssh, one line each
+kubectl get nodes       # only meaningful once the tailnet is up
+```
+
+`devx status` distinguishing *cluster unreachable* from *ssh unreachable* is the useful signal: the API server is reached through the Tailscale operator's proxy, the devbox through its own tailnet node, so one can fail without the other.
+
+**Coming back**, push from the Mac and pull on the devbox, or vice versa. There is deliberately no automatic sync — ADR-0056's exec transport was skipped (#61) in favour of SSH agent forwarding, so the devbox pushes to GitHub itself and the Mac pulls from GitHub. GitHub is the meeting point.
+
+**The discipline rule, unchanged:** one side hot at a time, and commit before switching.
+
+---
+
+## Recovery when the PVC's node is down
+
+The workspace volume is **single-replica with no backups, by design** (ADR-0063). This section is what that decision costs, stated plainly so it is not a surprise at the worst moment.
+
+**Symptom:** the devbox pod is `Pending` or stuck in `ContainerCreating`, and events mention the volume failing to attach.
+
+```
+kubectl -n workbench describe pod -l app.kubernetes.io/name=devbox | sed -n '/Events:/,$p'
+kubectl -n longhorn-system get volumes.longhorn.io
+kubectl get nodes
+```
+
+**If the node is down, the volume is unavailable until it returns.** There is no second replica to fail over to and no backup to restore from. That is the accepted trade, not a fault to fix under pressure.
+
+**What to do:**
+
+1. **Bring the node back.** This is the actual fix. See *Node cannot pull images* above if it is up but unhealthy; check Proxmox if it is genuinely down.
+2. **Work from the Mac clone meanwhile.** Anything committed and pushed is on GitHub. Anything not committed is on a volume you cannot currently reach.
+3. **Do not delete the PVC to "unstick" it.** With `reclaimPolicy: Delete` on `longhorn-workbench`, that destroys the volume and everything uncommitted on it.
+
+**Why single-replica is still the right call:** GitHub is the real backup, and the operational rule is *commit before you stop*. A second replica would double the storage cost and the write amplification to protect work that should not exist un-pushed for long anyway. Revisit only if the loss window starts mattering more than the cost.
+
+**If the volume is genuinely lost**, recovery is: recreate the PVC, re-run the *First-run setup* above, and re-clone the repos. Roughly fifteen minutes, and the reason that section exists as a checklist.

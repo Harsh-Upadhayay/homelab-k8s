@@ -78,14 +78,16 @@ v1.0 has no log — it produced no architecture decisions of its own, only valid
 | 0051 | One Longhorn data copy by default; redundancy is an explicit per-volume promotion | Accepted | [[v2.0 - Operability]] |
 | 0052 | ASRock HDD becomes a separate Proxmox-managed datastore | Accepted | [[v2.0 - Operability]] |
 | 0053 | One parameterized lifecycle for every worker | Accepted | [[v2.0 - Operability]] |
-| 0054 | One flat `workbench` namespace holding the devbox and every project's app containers | Accepted (planned) | [[v4.0 - Developer Workspace]] |
-| 0055 | RWO Longhorn volume for the workspace; RWX rejected on small-file performance | Accepted (planned) | [[v4.0 - Developer Workspace]] |
-| 0056 | Credential-free git transport over `ext::kubectl exec` with `updateInstead` | Accepted (planned) | [[v4.0 - Developer Workspace]] |
-| 0057 | No build abstraction; commands run directly in the shell | Accepted (planned) | [[v4.0 - Developer Workspace]] |
-| 0058 | Mounted-source hot reload instead of image rebuilds in the inner loop | Accepted (planned) | [[v4.0 - Developer Workspace]] |
-| 0059 | In-cluster `registry:2` instead of ghcr.io; containerd cannot read images from a PVC | Accepted (planned) | [[v4.0 - Developer Workspace]] |
-| 0060 | The in-cluster builder is dev-only and never produces images Argo CD deploys | Accepted (planned) | [[v4.0 - Developer Workspace]] |
-| 0061 | `workbench` under Argo CD with manual sync and `/spec/replicas` ignored | Accepted (planned) | [[v4.0 - Developer Workspace]] |
-| 0062 | `homelab-k8s` and `homelab` excluded from in-cluster development | Accepted (planned) | [[v4.0 - Developer Workspace]] |
-| 0063 | No backups for the workspace volume; GitHub is the backup | Accepted (planned) | [[v4.0 - Developer Workspace]] |
-| 0064 | Tailscale sidecar with `--ssh` for the devbox, not a Service on port 22 | Accepted (planned) | [[v4.0 - Developer Workspace]] |
+| 0054 | One flat `workbench` namespace holding the devbox and every project's app containers | Accepted (amended: placement, port blocks) | [[v4.0 - Developer Workspace]] |
+| 0055 | RWO Longhorn volume for the workspace; RWX rejected on small-file performance | Accepted (amended: `dataLocality`) | [[v4.0 - Developer Workspace]] |
+| 0056 | Credential-free git transport over `ext::kubectl exec` with `updateInstead` | Not implemented — superseded in practice by 0064 agent forwarding (#61) | [[v4.0 - Developer Workspace]] |
+| 0057 | No build abstraction; commands run directly in the shell | Accepted | [[v4.0 - Developer Workspace]] |
+| 0058 | Mounted-source hot reload instead of image rebuilds in the inner loop | Accepted (planned — #64) | [[v4.0 - Developer Workspace]] |
+| 0059 | In-cluster `registry:2` instead of ghcr.io; containerd cannot read images from a PVC | Accepted (amended: NodePort, public pulls) | [[v4.0 - Developer Workspace]] |
+| 0060 | The in-cluster builder is dev-only and never produces images Argo CD deploys | Accepted | [[v4.0 - Developer Workspace]] |
+| 0061 | `workbench` under Argo CD with manual sync and `/spec/replicas` ignored | Accepted (amended: infra only, no prune) | [[v4.0 - Developer Workspace]] |
+| 0062 | `homelab-k8s` and `homelab` excluded from in-cluster development | Accepted | [[v4.0 - Developer Workspace]] |
+| 0063 | No backups for the workspace volume; GitHub is the backup | Accepted | [[v4.0 - Developer Workspace]] |
+| 0064 | Tailscale SSH in the devbox container, not a Service on port 22 | Accepted (amended: in-container, not sidecar) | [[v4.0 - Developer Workspace]] |
+| 0065 | The devbox holds namespace-admin on `workbench`, secrets included | Accepted | [[v4.0 - Developer Workspace]] |
+| 0066 | `devx` discovers workloads by label; lifecycle lives in the manifest | Accepted | [[v4.0 - Developer Workspace]] |
