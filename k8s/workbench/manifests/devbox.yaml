@@ -64,11 +64,19 @@ spec:
         fsGroup: 1000
       containers:
       - name: devbox
-        image: mcr.microsoft.com/devcontainers/base:bookworm
+        # Built in-cluster from k8s/workbench/devbox-image/Dockerfile (issue #65).
+        #
+        # imagePullPolicy: Always because `dev` is a MUTABLE tag. Without it a node
+        # that already has a `:dev` layer keeps running the old image after a
+        # rebuild — observed during M6 verification, where a fresh pod silently ran
+        # the previous build. The registry is node-local (127.0.0.1:30500 via
+        # registries.yaml), so re-pulling costs almost nothing.
+        image: registry.workbench.svc.cluster.local/devbox:dev
+        imagePullPolicy: Always
         command: ["/bin/bash", "-c"]
         args:
           - |
-            setsid /home/vscode/.local/bin/tailscaled \
+            setsid /usr/local/bin/tailscaled \
               --tun=userspace-networking \
               --statedir=/home/vscode/.local/share/tailscale \
               --socket=/tmp/ts.sock </dev/null >/tmp/tsd.log 2>&1 &
@@ -82,7 +90,10 @@ spec:
         livenessProbe:
           exec:
             command:
-              - /home/vscode/.local/bin/tailscale
+              # Baked into the image now, not $HOME — the PVC mount below would
+              # shadow anything under /home/vscode. --statedir above deliberately
+              # stays on the PVC: the binary is software, the node identity is state.
+              - /usr/local/bin/tailscale
               - --socket=/tmp/ts.sock
               - status
           initialDelaySeconds: 30
