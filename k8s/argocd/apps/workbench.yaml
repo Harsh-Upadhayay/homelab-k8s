@@ -1,0 +1,69 @@
+# Child Application: workbench — the v4.0 developer workspace (ADR-0061, issue #66).
+#
+# Adopts only the INFRASTRUCTURE of the namespace: the namespace itself, the
+# workspace PVC, the devbox ServiceAccount + RoleBinding, and the devbox,
+# registry, and buildkit Deployments. All of that lives in this repo under
+# k8s/workbench/manifests/.
+#
+# It deliberately does NOT manage the dev workloads that share the namespace.
+# Per-project dev Deployments, Services, and Tailscale Ingresses (kiroku-api,
+# kiroku-web, ...) are written in each project's OWN repo and applied with
+# `kubectl` from the devbox, which holds namespace-admin on `workbench`
+# (ADR-0065). The workbench namespace is the operator's working environment, not
+# a deployment target — so those objects are intentionally outside GitOps.
+#
+# WHY THAT IS SAFE, and why it needs no label scoping: Argo compares git against
+# the objects carrying its own tracking marker
+# (argocd.argoproj.io/tracking-id, this cluster's default `label` method), not
+# against everything in the namespace. Objects the devbox applies by hand carry
+# no marker, so they never enter the comparison and never make this Application
+# report OutOfSync. Verified against the live cluster: the `kiroku` Application
+# reads Synced while an untracked kube-root-ca.crt ConfigMap sits in its
+# namespace.
+#
+# The `default` project is deliberate. `personal` exists to fence code arriving
+# from external, dev-owned repos — push access to a GitOps-watched repo is
+# deploy access to the cluster — and it explicitly forbids this repo in its
+# sourceRepos. Workbench has no external repo; it is a platform component
+# alongside k8s/longhorn/ and k8s/traefik/. Accepted cost: `default` is */*/* and
+# applies no containment. Full reasoning in the ADR-0054/0061 amendments.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: workbench
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Harsh-Upadhayay/homelab-k8s.git
+    targetRevision: main
+    path: k8s/workbench/manifests
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: workbench
+
+  # A scaled-to-zero project is the normal state of a dev namespace, not drift.
+  # Without this, `devx <project> down` shows as a permanent diff on the
+  # dashboard even though nothing is wrong.
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas
+
+  syncPolicy:
+    # NO `automated` BLOCK — this is the whole point of ADR-0061. A dev
+    # namespace is poked at imperatively by design: scaled to zero to reclaim
+    # node resources, restarted, edited live while something is being debugged.
+    # With selfHeal, Argo would spend its day undoing the workflow — scale to
+    # zero and it scales back within minutes because git says replicas: 1.
+    #
+    # PRUNE IS ALSO DELIBERATELY ABSENT (it defaults false). Prune asks "what is
+    # in the namespace that git does not specify?", which is a different and
+    # blunter question than the tracking-id comparison that drives sync status.
+    # With a namespace that intentionally holds hand-applied dev workloads, that
+    # is not a mechanism to leave armed. Removing a manifest from git therefore
+    # means deleting the object by hand — acceptable, since manual sync already
+    # means someone is present to review the diff.
+    syncOptions:
+      - CreateNamespace=false # namespace.yaml in the bundle creates it

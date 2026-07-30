@@ -7,6 +7,7 @@
 # repo as your working directory.
 #
 #   devx <project>        ensure devbox + project up, attach tmux, cd to the repo
+#   devx -v <project>     same, but open VS Code (Remote-SSH) instead of tmux
 #   devx <project> down   scale on-demand workloads to 0, leave always-on ones
 #   devx ls               projects and their up/down state
 #   devx pull <project>   fetch the pod's work back to the Mac clone
@@ -29,6 +30,7 @@ set -uo pipefail
 NAMESPACE="workbench"
 SSH_HOST="workbench"          # ~/.ssh/config entry from M1 (ADR-0064)
 WORKSPACE="/workspace"
+VSCODE_BIN="code"             # Shell Command: Install 'code' command in PATH
 LABEL_PROJECT="workbench.neovara/project"
 LABEL_LIFECYCLE="workbench.neovara/lifecycle"
 
@@ -49,6 +51,7 @@ usage() {
 ${BOLD}devx${RESET} — in-cluster development workspace driver
 
   devx <project>          bring the project up and attach a shell
+  devx -v <project>       bring the project up and open it in VS Code instead
   devx <project> down     scale the project's on-demand workloads to zero
   devx ls                 list projects and their state
   devx pull <project>     fetch the pod's commits back to the Mac clone
@@ -139,7 +142,7 @@ ensure_devbox() {
 # --- commands ----------------------------------------------------------------
 
 cmd_up() {
-  local project="$1"
+  local project="$1" mode="${2:-tmux}"
   require_cluster
   ensure_devbox
 
@@ -176,7 +179,7 @@ cmd_up() {
     fi
   fi
 
-  connect "$project"
+  connect "$project" "$mode"
 }
 
 # The connect line, and why each flag is there:
@@ -186,17 +189,29 @@ cmd_up() {
 #                   PVC (ADR-0056 / #60).
 #   -t              forces a TTY; without it tmux refuses to start over a
 #                   remote command.
-#   tmux new -A     attach-or-create. This is the important one: reconnecting
-#                   after a dropped tailnet link is the SAME command as
-#                   connecting fresh, so there is nothing to remember.
-#   -s <project>    one named session per project, so `tmux ls` inside the
-#                   devbox is the list of what is in flight.
-#   -c <dir>        new windows in this session open in the repo.
 #
-# Note the two unrelated `-A` flags: ssh's is agent forwarding, tmux's is
-# attach-or-create. They are easy to misread as the same option.
+# The tmux side is a SESSION GROUP, not a single shared session — that
+# distinction is load-bearing. A plain `tmux attach` from two clients means
+# both clients share one "current window" pointer: switch windows on one and
+# the other jumps with you. That is fine for two panes of the same physical
+# terminal, but wrong here, where "this ssh connection" and "a VS Code
+# terminal tab" are different people looking at different things.
+#
+# `-t '${project}'` groups this session with the shared base session (created
+# below if missing) — same window LIST, but this session's own current-window
+# pointer, independent of every other grouped session. `-s '${project}-ssh'`
+# gives the ssh path one fixed, reused name: a dropped-tailnet reconnect runs
+# the exact same command and lands back on the same view, no clutter. VS
+# Code's terminals (devx-terminal, see the devbox's ~/.local/bin) do the
+# opposite on purpose — a fresh grouped session per terminal tab — because
+# each one really is meant to be a blank window.
+#
+# mode=vscode takes a different path entirely: `code --remote` opens its own
+# SSH connection (Remote-SSH manages that, not us) and just needs a target
+# folder. Agent forwarding for that connection comes from `ForwardAgent yes`
+# on the `workbench` entry in ~/.ssh/config, not from a flag here.
 connect() {
-  local project="$1"
+  local project="$1" mode="${2:-tmux}"
   local dir="${WORKSPACE}/${project}"
 
   # If the directory is missing, land in /workspace rather than failing — the
@@ -206,9 +221,16 @@ connect() {
     dir="$WORKSPACE"
   fi
 
+  if [[ "$mode" == "vscode" ]]; then
+    command -v "$VSCODE_BIN" >/dev/null \
+      || die "'${VSCODE_BIN}' not found on PATH — in VS Code, run: Shell Command: Install 'code' command in PATH"
+    info "opening ${project} in VS Code (${SSH_HOST}:${dir})"
+    exec "$VSCODE_BIN" --remote "ssh-remote+${SSH_HOST}" "$dir"
+  fi
+
   info "connecting to ${project}"
   exec ssh -A -t "$SSH_HOST" \
-    "tmux new -A -s '${project}' -c '${dir}'"
+    "tmux has-session -t '=${project}' 2>/dev/null || tmux new-session -d -s '${project}' -c '${dir}'; tmux new-session -A -t '${project}' -s '${project}-ssh' -c '${dir}'"
 }
 
 cmd_down() {
@@ -326,6 +348,12 @@ cmd_status() {
 main() {
   command -v kubectl >/dev/null || die "kubectl not found on PATH"
 
+  local mode="tmux"
+  if [[ "${1:-}" == "-v" ]]; then
+    mode="vscode"
+    shift
+  fi
+
   case "${1:-}" in
     ""|-h|--help|help) usage ;;
     ls)                cmd_ls ;;
@@ -336,7 +364,7 @@ main() {
     *)
       local project="$1"
       case "${2:-}" in
-        "")     cmd_up "$project" ;;
+        "")     cmd_up "$project" "$mode" ;;
         down)   cmd_down "$project" ;;
         *)      die "unknown subcommand '${2}' (try: devx --help)" ;;
       esac ;;
