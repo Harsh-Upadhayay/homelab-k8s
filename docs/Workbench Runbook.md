@@ -181,11 +181,70 @@ ssh -i ~/.ssh/proxmox_ed25519 root@pve-dell... 'qm reboot 101'
 kubectl uncordon <node>
 ```
 
+## The devbox image
+
+Built in-cluster from `k8s/workbench/devbox-image/Dockerfile` and pushed to `registry.workbench.svc.cluster.local/devbox:dev`.
+
+**What goes in the image** — the test is *"does the pod need it to boot?"*, not *"is it software?"*:
+
+| Baked in | Why |
+|---|---|
+| `tailscaled` / `tailscale` | The `livenessProbe` execs it — missing means a crash-loop |
+| `buildctl` | Chicken-and-egg: without it you cannot rebuild the image that would restore it |
+| `kubectl`, `mise`, `nvim`, `tmux`, `ripgrep`, `git` | Cheap, and no simpler runtime path |
+
+Everything must land in **`/usr/local/bin`, never `$HOME`** — the PVC mounts over `/home/vscode`, so anything baked there at build time is shadowed and effectively gone at runtime. The Claude Code and Antigravity installers both default to `~/.local/bin`; redirect them.
+
+**Rebuilding:**
+
+```
+buildctl --addr tcp://buildkit.workbench.svc:80 build \
+  --frontend dockerfile.v0 \
+  --local context=/workspace/homelab-k8s/k8s/workbench/devbox-image \
+  --local dockerfile=/workspace/homelab-k8s/k8s/workbench/devbox-image \
+  --output type=image,name=registry.workbench.svc.cluster.local/devbox:dev,push=true,registry.insecure=true
+kubectl rollout restart deploy/devbox -n workbench
+```
+
+`imagePullPolicy: Always` is set on the Deployment because `dev` is a mutable tag — without it a node that already holds a `:dev` layer keeps running the old image after a rebuild. This was observed for real during M6 verification: a fresh pod silently ran the previous build. To check a specific build, run a pod against the digest rather than the tag.
+
+## First-run setup (per fresh PVC)
+
+`$HOME` is on the workspace volume, so these persist across restarts and only need doing once. They are deliberately **not** in the image — see the header comment in the Dockerfile.
+
+```
+# Claude Code — native installer, no Node needed. Auto-updates land in
+# ~/.local/share/claude/versions/ on the PVC, so they persist. (Baked into the
+# image they would go to the ephemeral layer and be re-downloaded every restart.)
+curl -fsSL https://claude.ai/install.sh | bash
+
+# Language runtimes
+mise use -g node@22 python@3.12 go@1.22
+
+# Codex CLI — note the @openai/ scope; the unscoped `codex` package on npm is an
+# unrelated 2012 project that installs cleanly and does nothing.
+npm config set prefix ~/.local        # MUST come first — see below
+npm install -g @openai/codex
+```
+
+**`npm config set prefix ~/.local` is load-bearing.** npm globals default to living *inside* the active Node install directory, so a later `mise use -g node@24` moves that directory and `codex` silently disappears. Pointing the prefix at `~/.local` decouples global packages from the Node version.
+
+**Antigravity CLI (`agy`) does not currently run on this cluster.** It installs (`curl -fsSL https://antigravity.google/cli/install.sh | bash -s -- --dir ~/.local/bin`) but dies at startup:
+
+```
+FATAL ERROR: This binary was compiled with pclmul enabled,
+but this feature is not available on this processor
+```
+
+The VMs expose `cpu: x86-64-v2-AES`, a conservative QEMU baseline without `pclmulqdq`. The physical CPUs almost certainly have it — it has been standard on Intel since 2010. Fix is changing the Proxmox CPU type to `host` or `x86-64-v3` on the workers, which needs a VM reboot each. Also note the installer's real flags are only `-d/--dir` and `-h/--help`; the published docs mention `--skip-aliases` and `--skip-path`, and the script rejects both.
+
 ## Runtime-installed tooling
 
 `tailscaled`, `tailscale`, and anything else in `~/.local/bin` are installed **at runtime into the PVC-backed `$HOME`**, not baked into the image. They survive pod restarts because `$HOME` is on the volume.
 
-**Known consequence:** if the PVC is ever recreated, the Deployment starts a `tailscaled` that does not exist, the liveness probe fails, and the pod crash-loops. Recovery is to reinstall the binaries and re-run `tailscale up` once. This is deliberate — baking them in needs BuildKit (issue #65) — but it is a known state, not a surprise.
+**Resolved as of the devbox image (#65).** `tailscaled`, `tailscale`, and `buildctl` are now baked into `/usr/local/bin`, so a recreated PVC no longer crash-loops the pod — the binaries survive independently of the volume. What still lives on the PVC is *state*: `tailscaled`'s `--statedir` (node identity), `mise` runtimes, and the VS Code Remote-SSH server. Verified across the image switch: the devbox came back as the same tailnet node with no re-registration.
+
+A recreated PVC now costs only the first-run setup above, not a broken pod.
 
 ---
 
