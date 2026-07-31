@@ -40,3 +40,41 @@ subjects:
   - kind: ServiceAccount
     name: devbox
     namespace: workbench
+---
+# Traefik's CRDs are NOT covered by the `admin` binding above, despite the
+# name. The built-in `admin` ClusterRole only includes what's aggregated via
+# the `rbac.authorization.k8s.io/aggregate-to-admin: "true"` label (see
+# `admin`'s own .aggregationRule) — Traefik's Helm chart creates a
+# `traefik-traefik` ClusterRole for its own controller, but never labels it
+# for aggregation, so `admin` has zero permissions on `traefik.io` resources
+# anywhere in the cluster. Confirmed live: a direct SA-token request to
+# /apis/traefik.io/v1alpha1/namespaces/workbench/middlewares returned 403
+# despite the devbox-admin RoleBinding.
+#
+# Same broad-access reasoning as the ACCEPTED RISK note above: grant the
+# whole API group here rather than enumerating exactly which Traefik CRDs
+# (Middleware, IngressRoute, IngressRouteTCP, ...) a given project happens to
+# need this week.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: devbox-traefik
+  namespace: workbench
+rules:
+  - apiGroups: ["traefik.io"]
+    resources: ["*"]
+    verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: devbox-traefik
+  namespace: workbench
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: devbox-traefik
+subjects:
+  - kind: ServiceAccount
+    name: devbox
+    namespace: workbench
