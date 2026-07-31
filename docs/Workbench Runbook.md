@@ -9,7 +9,7 @@ Operating notes for the `workbench` namespace — the in-cluster developer works
 | | Owned by | Managed how |
 |---|---|---|
 | **Infrastructure** — namespace, workspace PVC, devbox RBAC, devbox / registry / buildkit Deployments | this repo (`k8s/workbench/manifests/`) | Argo CD, manual sync (ADR-0061) |
-| **Dev workloads** — per-project Deployments, Services, Tailscale Ingresses | each project's own repo | `kubectl` from the devbox — **deliberately outside GitOps** |
+| **Dev workloads** — per-project Deployments, Services, Traefik IngressRoutes | each project's own repo | `kubectl` from the devbox — **deliberately outside GitOps** |
 
 The `workbench` namespace is the operator's working environment, not a deployment target. Dev workloads are applied by hand from the devbox, which holds namespace-admin here (ADR-0065). They are invisible to Argo because it compares git against objects carrying its own tracking marker, not against everything in the namespace — verified live: a hand-applied dev Deployment leaves the Application reading `Synced`.
 
@@ -17,18 +17,18 @@ The `workbench` namespace is the operator's working environment, not a deploymen
 
 ## Dev ports
 
-**This is a lookup table, not an allocation scheme.** It exists so `devx` knows which URL to open and so M4's Tailscale `Ingress` objects have a known `targetPort` — *not* to prevent collisions.
+**This is a lookup table, not an allocation scheme.** It exists so `devx` knows which URL to open and so each project's `IngressRoute` has a known `targetPort` — *not* to prevent collisions.
 
-Ports do not collide across projects here. A port lives in a network namespace, and in Kubernetes the **pod** is the network namespace: every pod has its own IP and its own full port space. Two Deployments in `workbench` can both bind 5173 with no conflict, and so can two Tailscale `Ingress` frontends. This was originally misunderstood as a reason for per-project port blocks; see the ADR-0054 amendment.
+Ports do not collide across projects here. A port lives in a network namespace, and in Kubernetes the **pod** is the network namespace: every pod has its own IP and its own full port space. Two Deployments in `workbench` can both bind 5173 with no conflict, and so can two Traefik `IngressRoute` frontends — they're matched by `Host()` rule, not by port. This was originally misunderstood as a reason for per-project port blocks; see the ADR-0054 amendment.
 
 Two cases *do* collide, and neither needs pre-allocation:
 
 | Case | Collides? | Why, and what to do |
 |---|---|---|
 | Two app-container pods, same port | No | Separate pods, separate network namespaces. |
-| Two Tailscale `Ingress` frontends, same port | No | Separate tailnet nodes, each with its own MagicDNS name. |
+| Two Traefik `IngressRoute` frontends, same port | No | Matched by `Host()`, each project's own Service/pod behind it. |
 | Two dev servers in tmux panes **inside the devbox pod** | **Yes** | One pod, one network namespace. Announces itself instantly as `EADDRINUSE` — change the port on the spot. |
-| Two `kubectl port-forward` sessions **on the Mac** | **Yes** | The Mac's own port space. Shrinking by design: M4 replaces port-forward in the normal loop. |
+| Two `kubectl port-forward` sessions **on the Mac** | **Yes** | The Mac's own port space. Shrinking by design: an `IngressRoute` replaces port-forward in the normal loop. |
 
 ### Conventions
 
@@ -40,7 +40,37 @@ Two cases *do* collide, and neither needs pre-allocation:
 
 | Project | Service | Port | Notes |
 |---|---|---|---|
-| `kiroku` | `kiroku-dev` | 5173 | Vite default. Dev hostname is `kiroku-dev` because `kiroku` already runs in-cluster as a live workload. First project through the inner loop (issue #64). |
+| `kiroku` | `kiroku` | 3000 | **Not** Vite's 5173 default — `server.ts` runs Vite in *middleware mode* inside a custom Express server, so dev and prod both listen on `PORT` (3000). First project through the inner loop (issue #64). |
+| `kiroku` | `kiroku-api` | 8080 | Go backend. Reached by the frontend at `http://kiroku-api:8080` — a Service DNS name, same as the `docker-compose.local.yml` service name it replaces. |
+
+Public: `kiroku-dev.in.neovara.uk` — dev hostname disambiguated from live workloads, since `kiroku` already runs in-cluster.
+
+### Dev frontend exposure
+
+Not a Tailscale `Ingress` per frontend, despite what earlier planning docs say (see the ADR-0054 amendment) — a wider pattern was already live for eight platform/admin UIs (`argocd`, `longhorn`, `grafana`, `prometheus`, Traefik's own dashboard, `immich`, `whoami`, `argo-rollouts`): `*.in.neovara.uk` → the same public `cloudflared` tunnel already forwarding `neovara.uk` → Traefik's `websecure` entrypoint, gated by Cloudflare Access rather than tailnet membership. Reusing it means one exposure mechanism cluster-wide instead of two.
+
+Each dev frontend gets an `IngressRoute` (and usually a `secure-headers` `Middleware`) written in **the project's own repo**, applied by hand from the devbox — same as its Deployment/Service. Shape, copied from any existing internal route:
+
+```yaml
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: kiroku
+spec:
+  entryPoints:
+    - websecure
+  tls: {}
+  routes:
+    - match: Host(`kiroku-dev.in.neovara.uk`)
+      kind: Rule
+      services:
+        - name: kiroku
+          port: 3000
+```
+
+**`tls: {}` is not optional, and omitting it does not error.** Without it the router registers as plain HTTP and never matches a `websecure` connection — every request 404s while the pods sit `1/1 Running` and perfectly healthy. This is the single easiest thing to lose copying from prod's own `routing.yaml`: prod's public route uses the `web` entrypoint (TLS terminates at Cloudflare's edge, Traefik never sees it) and so has no `tls` block at all — copying that file wholesale silently drops the one field the private pattern actually requires.
+
+The devbox needs its own RBAC for this — the built-in `admin` `ClusterRole` does **not** cover Traefik's CRDs, since Traefik's Helm-installed ClusterRole is never labelled for aggregation into `admin`. A namespace-scoped `Role`+`RoleBinding` on `traefik.io` resources closes the gap (`k8s/workbench/manifests/rbac.yaml`).
 
 ---
 
@@ -69,7 +99,7 @@ A Deployment missing the project label is simply **invisible** to `devx`; the co
 
 ### What `devx` deliberately does not do
 
-- **No port-forward tunnels.** M4's Tailscale `Ingress` per dev frontend removes the need.
+- **No port-forward tunnels.** A Traefik `IngressRoute` per dev frontend removes the need (see "Dev frontend exposure" below).
 - **No build/test/run vocabulary** (ADR-0057). It gets you to a shell; you type `go test ./...` yourself.
 
 ### Offline is a supported mode, not an error
