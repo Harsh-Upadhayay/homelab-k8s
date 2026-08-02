@@ -1,0 +1,10 @@
+# Namespace for the External Secrets Operator. Committed here (not via Argo's
+# CreateNamespace) so it's explicitly GitOps-owned — matches the traefik /
+# longhorn pattern. ESO's pods run here, and the bootstrap AWS credential
+# Secret + the ClusterSecretStore also live in this namespace.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: external-secrets
+  labels:
+    app.kubernetes.io/name: external-secrets
