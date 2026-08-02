@@ -64,3 +64,14 @@ variable "tailscale_client_secret" {
 variable "tailscale_client_id" {
   type = string
 }
+
+# --- Workbench devbox Tailscale auth key (one-time bootstrap/recovery key) ---
+# The devbox authenticates via persisted state on its PVC (ADR-0064), NOT via a
+# mounted Secret. This key is only read via the Kubernetes API from inside the
+# devbox (namespace-admin RBAC, ADR-0065) for the initial `tailscale up` or a
+# state-wipe recovery — see docs/Workbench Runbook.md.
+variable "workbench_tailscale_authkey" {
+  type      = string
+  sensitive = true
+  ephemeral = true
+}

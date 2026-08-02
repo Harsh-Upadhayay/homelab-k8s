@@ -39,3 +39,4 @@ metadata:
   labels:
     app.kubernetes.io/name: workbench
     app.kubernetes.io/part-of: workbench
+    neovara-external-secrets: "true"

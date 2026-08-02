@@ -25,6 +25,7 @@ and live in `terraform.tfvars`.
 | | `…/grafana/admin-user` | String | *(tfvars)* |
 | `operator-oauth` (tailscale) | `…/tailscale/client-secret` | SecureString | `tailscale_client_secret` |
 | | `…/tailscale/client-id` | String | *(tfvars)* |
+| `tailscale-auth` (workbench) | `…/workbench/tailscale-authkey` | SecureString | `workbench_tailscale_authkey` |
 
 ### Supply secrets at apply time
 
@@ -38,6 +39,7 @@ never appear in shell history or process args:
     export TF_VAR_cloudflared_tunnel_token="$(kubectl -n cloudflare get secret cloudflared-tunnel-token -o jsonpath='{.data.token}' | base64 -d)"
     export TF_VAR_grafana_admin_password="$(kubectl -n monitoring get secret grafana-admin-secret -o jsonpath='{.data.admin-password}' | base64 -d)"
     export TF_VAR_tailscale_client_secret="$(kubectl -n tailscale get secret operator-oauth -o jsonpath='{.data.client_secret}' | base64 -d)"
+    export TF_VAR_workbench_tailscale_authkey="$(kubectl -n workbench get secret tailscale-auth -o jsonpath='{.data.TS_AUTHKEY}' | base64 -d)"
     terraform apply
 
 `terraform plan` also requires the ephemeral vars to be set (they're required

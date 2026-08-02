@@ -85,3 +85,13 @@ resource "aws_ssm_parameter" "tailscale_client_id" {
   type           = "String"
   insecure_value = var.tailscale_client_id
 }
+
+# Workbench devbox Tailscale auth key — bootstrap/recovery only. The devbox reads
+# this Secret via the Kubernetes API (not a pod mount) for the one-time
+# `tailscale up` after a state wipe; normal restarts resume from PVC state.
+resource "aws_ssm_parameter" "workbench_tailscale_authkey" {
+  name             = "/neovara/homeinfra/workbench/tailscale-authkey"
+  type             = "SecureString"
+  value_wo         = var.workbench_tailscale_authkey
+  value_wo_version = 1
+}
