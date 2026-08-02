@@ -6,6 +6,7 @@ metadata:
     group: homelab
     app.kubernetes.io/name: immich
     app.kubernetes.io/part-of: immich
+    neovara-external-secrets: "true"
   annotations:
     # The namespace contains retained authoritative PVCs; never prune it as an
     # incidental consequence of removing or refactoring the Application.
