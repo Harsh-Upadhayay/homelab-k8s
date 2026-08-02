@@ -8,3 +8,4 @@ metadata:
   name: nextcloud
   labels:
     app.kubernetes.io/part-of: nextcloud
+    neovara-external-secrets: "true"
