@@ -55,6 +55,7 @@ Full backup strategy (off-box etcd shipping, Velero, Proxmox Backup Server), Cil
 ## Working style for this repo
 
 - The user is learning Kubernetes hands-on and wants to understand every component, not just have it work — prefer explaining *why* a change is correct over just making it, especially for anything touching the decisions above.
+- Code-review workflow when the user writes Terraform/K8s code and asks for a check: fix spelling/syntax and minor issues directly, flag anything big separately, then follow up with a concise brief of the changes that teaches the underlying concept or root cause (e.g. HCL block-vs-attribute, or *why* an S3 bucket name can't have underscores). The user writes the code for the learning value; opencode guides, fixes, and explains — avoid handing over copy-paste solutions when the user is in learning mode. Trivial scaffolding/mechanical moves (gitignore, file relocations) may be done directly to keep velocity.
 - Prefer custom, minimal, readable config (as already done for the Ansible roles) over pulling in third-party roles/charts that hide what's actually happening, unless the third-party option is clearly the standard and inspectable.
 - Keep manifests commented the way they already are in this repo — the comments carry the reasoning, not just the "what."
 - Treat qualifying outages and near misses as learning artifacts. After recovery, create a blameless
