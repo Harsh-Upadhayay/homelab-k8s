@@ -1,12 +1,11 @@
-# Terraform
-terraform/.terraform/
-terraform/.terraform.lock.hcl
-terraform/terraform.tfstate
-terraform/terraform.tfstate.backup
-terraform/terraform.tfstate.*.backup
-# terraform.tfvars is intentionally NOT ignored — it holds no secrets (the API
-# token comes from PROXMOX_VE_API_TOKEN at runtime), so it's committed as the
-# source of truth for this host.
+# Terraform — generalized for the terraform/<component>/ layout (bootstrap, proxmox, aws, ...)
+terraform/**/.terraform/
+terraform/**/.terraform.lock.hcl
+terraform/**/terraform.tfstate
+terraform/**/terraform.tfstate.*
+# terraform.tfvars is intentionally NOT ignored — it holds only non-secret
+# values (region, bucket name, host specs). Secrets reach Terraform via env
+# vars (PROXMOX_VE_API_TOKEN) or TF_VAR_* (ephemeral, value_wo), never tfvars.
 
 # Ansible
 ansible/*.retry
