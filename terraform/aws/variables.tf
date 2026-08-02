@@ -75,3 +75,24 @@ variable "workbench_tailscale_authkey" {
   sensitive = true
   ephemeral = true
 }
+
+# --- Bootstrap secrets (tier: bootstrap) ---
+# Host-side values consumed by Ansible/Terraform ON THE MACHINES, not by pods.
+# Stored in SSM as the durable source of truth so the local .env file is no
+# longer the only copy. Deliberately NOT wired to any ExternalSecret — read
+# directly from SSM by whichever tooling needs them. All three are secrets.
+variable "k3s_token" {
+  type      = string
+  sensitive = true
+  ephemeral = true
+}
+variable "proxmox_ve_api_token" {
+  type      = string
+  sensitive = true
+  ephemeral = true
+}
+variable "immich_login" {
+  type      = string
+  sensitive = true
+  ephemeral = true
+}

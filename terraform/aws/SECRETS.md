@@ -54,8 +54,34 @@ cluster's ExternalSecret to force ESO to re-pull:
     kubectl annotate externalsecret <name> -n <ns> --overwrite \
       refreshed-at="$(date -Iseconds)"
 
-## The ESO IAM access key
+## Bootstrap tier — host-side secrets, SSM only (no ESO)
 
+Three `.env` values now live in SSM under `/neovara/bootstrap/` as the durable
+source of truth, so the gitignored `.env` file is no longer the only copy:
+
+| Key | SSM parameter | Consumed by |
+|---|---|---|
+| `K3S_TOKEN` | `/neovara/bootstrap/k3s-token` | k3s Ansible roles (node join) |
+| `PROXMOX_VE_API_TOKEN` | `/neovara/bootstrap/proxmox-ve-api-token` | Terraform Proxmox provider |
+| `IMMICH_LOGIN` | `/neovara/bootstrap/immich-login` | *(orphan — nothing consumes it yet)* |
+
+These are **not** wired to ESO (no ExternalSecret): they are read by Ansible /
+Terraform **on the machines**, not by pods, so there is no K8s Secret to
+materialize. Read them directly with the tooling's own AWS credentials:
+
+    aws ssm get-parameter --name /neovara/bootstrap/k3s-token --with-decryption \
+      --query Parameter.Value --output text
+
+Supply at apply time from `.env` (at the repo root — note the path):
+
+    export TF_VAR_k3s_token="$(grep '^K3S_TOKEN=' ../../.env | cut -d= -f2-)"
+    export TF_VAR_proxmox_ve_api_token="$(grep '^PROXMOX_VE_API_TOKEN=' ../../.env | cut -d= -f2-)"
+    export TF_VAR_immich_login="$(grep '^IMMICH_LOGIN=' ../../.env | cut -d= -f2-)"
+
+The ESO IAM role's policy is scoped to `/neovara/{dev,prod,homeinfra}/*` — it
+deliberately excludes `bootstrap`, since ESO never reads these.
+
+## The ESO IAM access key
 `terraform apply` also creates the ESO access key (`aws_iam_access_key.eso`).
 Its **secret** key IS stored in state — it's a generated output, not a supplied
 input, so there's no write-only form. Acceptable because state lives in the

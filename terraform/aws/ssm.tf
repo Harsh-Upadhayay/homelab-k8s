@@ -95,3 +95,38 @@ resource "aws_ssm_parameter" "workbench_tailscale_authkey" {
   value_wo         = var.workbench_tailscale_authkey
   value_wo_version = 1
 }
+
+# ---------------------------------------------------------------------------
+# Bootstrap secrets (tier: bootstrap). Host-side values consumed by
+# Ansible/Terraform on the machines, not by pods. NOT referenced by any
+# ExternalSecret — these exist in SSM only, as the durable source of truth
+# replacing the local .env file. Read directly via `aws ssm get-parameter`.
+# ---------------------------------------------------------------------------
+
+# k3s cluster join token — consumed by the k3s_server/k3s_worker Ansible roles
+# at node install time. Rotating it requires re-running the k3s roles.
+resource "aws_ssm_parameter" "k3s_token" {
+  name             = "/neovara/bootstrap/k3s-token"
+  type             = "SecureString"
+  value_wo         = var.k3s_token
+  value_wo_version = 1
+}
+
+# Proxmox VE API token — consumed by the Terraform Proxmox provider to provision
+# and manage the k3s VMs.
+resource "aws_ssm_parameter" "proxmox_ve_api_token" {
+  name             = "/neovara/bootstrap/proxmox-ve-api-token"
+  type             = "SecureString"
+  value_wo         = var.proxmox_ve_api_token
+  value_wo_version = 1
+}
+
+# Immich OAuth/login secret — unreferenced orphan today (nothing consumes it in
+# k8s/ansible/terraform), but preserved in SSM so it isn't lost when .env is
+# retired. Wire consumption before relying on it.
+resource "aws_ssm_parameter" "immich_login" {
+  name             = "/neovara/bootstrap/immich-login"
+  type             = "SecureString"
+  value_wo         = var.immich_login
+  value_wo_version = 1
+}
