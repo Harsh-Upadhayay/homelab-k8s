@@ -89,7 +89,13 @@ grafana:
     passwordKey: admin-password
   persistence:
     enabled: true
-    storageClassName: longhorn-hdd
+    # Grafana uses embedded SQLite, which cannot tolerate the write latency
+    # of a cross-node HDD-backed Longhorn volume (SQLITE_BUSY lock timeouts
+    # made every request take 15-80s, failing the /api/health readiness
+    # probe). Only Prometheus's WAL replay/compaction caused the etcd disk
+    # contention in INC-2026-003/005 — Grafana's small dataset never did, so
+    # it stays on the standard SSD-backed longhorn storageClass.
+    storageClassName: longhorn
     size: 2Gi
   resources:
     requests:
