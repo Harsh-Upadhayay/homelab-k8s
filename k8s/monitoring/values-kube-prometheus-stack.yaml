@@ -54,7 +54,12 @@ prometheus:
         cpu: 250m
         memory: 400Mi
       limits:
-        memory: 1Gi
+        # Bumped from 1Gi (2026-08-10): the WAL grew to 353 segments after
+        # never successfully checkpointing, so post-replay TSDB compaction
+        # pushed past 1Gi and got OOMKilled (exit 137) moments after
+        # reaching /-/ready — a death spiral where each SIGKilled restart
+        # left more mmap chunks corrupted and the next WAL replay bigger.
+        memory: 2Gi
 
 alertmanager:
   alertmanagerSpec:
