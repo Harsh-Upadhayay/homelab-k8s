@@ -389,6 +389,60 @@ engine error says `/engine-binaries/.../longhorn` does not exist.
 
 ## Control-plane placement and eventual `pve-dell` retirement
 
+> **COMPLETED 2026-08-17 — the control-plane move described below was carried out.** `k3s-server-1`
+> now runs on `pve-asrock`'s internal `local-lvm`. The planning text that follows is kept verbatim
+> because it records the reasoning and the acceptance bar; read it as history, not as pending work.
+> Execution plan and evidence:
+> `docs/superpowers/plans/2026-08-15-k3s-server-1-control-plane-migration.md`.
+>
+> How the four prerequisites below were satisfied:
+>
+> 1. **Capacity inspected for real.** ASRock's `pve` VG had only 14.75GiB genuinely free — the thin
+>    pool was 53.93GiB at 72.5% used, and `k3s-worker-3`'s own disk sat at 97.7% of its allocation.
+>    Rather than squeeze into that, the pool was extended to **74.68GiB**: 14.75GiB of unallocated VG
+>    space plus ~6GiB reclaimed by shrinking a verified-unused 8G swap LV to 2G. Separately, the
+>    source disk's apparent 63.47% (~38GiB) allocation proved to be an artifact of `discard=ignore`
+>    never releasing freed blocks; enabling discard and running `fstrim` reclaimed 47.9GiB and took
+>    it to 18.50%. A RAM check that the original prerequisites did not call for turned out to matter
+>    more than the disk one: ASRock had only ~2.6GiB free against 32,027MB physical, so landing the
+>    4096MB control plane would have overcommitted the host. `k3s-worker-3` was cut 28,672MB →
+>    24,576MB to create ~3.3GiB of reserve; `k3s-server-1` was left at 4096MB deliberately.
+> 2. **Verified etcd snapshot and a stated rollback path.** An on-demand snapshot
+>    (`pre-asrock-migration-k3s-server-1-1786942650`) was taken and verified immediately before the
+>    move. The primary rollback was structural rather than restorative: an offline `qm migrate` does
+>    not delete the source disk until the transfer completes, so a failed transfer is recovered with
+>    `qm start 100` back on `pve-dell` — which is exactly what happened on the first attempt (see
+>    below) and restored service in about 30 seconds.
+> 3. **A migration that preserved the VM, proven not merely intended.** Mechanism was offline
+>    `qm migrate 100 pve-asrock --with-local-disks --targetstorage local-lvm` (9m36s, ~60GiB at
+>    ~111-113 MB/s). VMID 100, IP `192.168.1.21`, disk contents, embedded etcd and the VM's Tailscale
+>    identity all survived. On the Terraform side the `bpg/proxmox` provider detected the new
+>    `node_name` on refresh and proposed **no changes at all**, so the "must show no control-plane
+>    replacement" bar was met outright; `apply -refresh-only` then persisted it as
+>    `0 added, 0 changed, 0 destroyed`. Note that `terraform plan` alone reported `No changes` while
+>    the on-disk state still read `pve-dell` — the reconciling refresh happens in memory, so the plan
+>    verdict can mask stale state.
+> 4. **Full post-move verification.** 3/3 nodes `Ready` with `k3s-server-1` still on
+>    `192.168.1.21`; 19/19 Argo CD Applications `Synced`/`Healthy`; every Longhorn volume
+>    `attached`/`healthy`; CoreDNS resolving; `nextcloud.neovara.uk` returning 302 across repeated
+>    attempts and `immich.in.neovara.uk` returning 200; cloudflared clean.
+>
+> **The first attempt failed and is worth recording.** A 10-minute timeout on the *calling* side
+> severed the SSH client at ~53GiB transferred; the Proxmox task log recorded `broken pipe`. Nothing
+> was wrong with the hosts, network or storage — throughput was steady throughout. It was rolled
+> back cleanly and retried with the transfer launched detached (`nohup`) on the source host so it no
+> longer depends on the controlling session. Two estimates were corrected in the process:
+> `qm migrate --with-local-disks` streams the **entire** logical volume, not just allocated extents
+> (so `fstrim` reduces destination allocation but not wire transfer), and a failed attempt leaves an
+> orphaned partial LV on the destination that must be removed before any retry or `lvcreate`
+> collides.
+>
+> **What this move does not achieve**, restated because it is easy to over-read: it does not create
+> etcd HA (`k3s-server-1` remains the sole server), and it does not yet deliver Dell-outage
+> continuity. Critical Longhorn volumes still need healthy ASRock replicas, and — newly identified
+> during this work — `kubectl` from the Mac reaches the API through the Tailscale operator pod,
+> which still runs on `k3s-worker-1` on `pve-dell`. Both remain open.
+
 Today `k3s-server-1`, `k3s-worker-1`, and `k3s-worker-2` all live on `pve-dell`; a Dell outage is
 therefore a practical Kubernetes outage. After Immich is recovered, the preferred next placement
 change is to move the **existing** `k3s-server-1` VM to the workstation, retaining its Kubernetes
