@@ -5,11 +5,28 @@
 # Every node spec is passed explicitly here (defaults in variables.tf are
 # fallback documentation).
 #
-# Sizing ledger for pve-dell (14 threads / 30GiB usable / 816GiB thin pool):
-#   CPU  4+12 = 16 vCPU on 14 threads — mild, intentional overcommit.
-#   RAM  6+18 = 24GiB of 30 — host headroom remains unchanged.
-#   DISK 60 server + 60 worker OS + 650 worker data = 770G declared, leaving
-#        about 46G of the thin pool undeclared as the safety margin.
+# Sizing ledger — rewritten after the 2026-08-17 control-plane move (issue #49).
+#
+# pve-dell (14 threads / 31543MB / 816GiB thin pool) — now a worker-only host:
+#   CPU  14 vCPU on 14 threads. No overcommit, and strictly less contention than
+#        the previous 4+12=16, because the server VM left.
+#   RAM  28672MB of 31543, leaving ~2.8GiB for the host. Measured host process
+#        usage is ~2.4GiB, and this host keeps 8GiB of swap as a backstop.
+#        The old ~5GiB reserve here existed because an OOM kill against the
+#        *control plane* would have taken etcd and the whole cluster with it.
+#        That VM now lives on ASRock, so the worst case here is a recoverable
+#        worker OOM, and the headroom was deliberately spent on the worker.
+#   DISK 60 worker OS + 650 worker data = 710G declared of the 816G pool.
+#
+# pve-asrock (motherboard SSD, 74.68GiB thin pool after the #49 extension;
+#             separate 1.36TiB longhorn-hdd pool; 32027MB RAM):
+#   CPU  4 server + 6 worker = 10 vCPU.
+#   RAM  4096 server + 24576 worker = 28672MB of 32027, ~3.3GiB host reserve.
+#        RAM is never overcommitted here: this host now runs the control plane,
+#        so ADR-0020's original reasoning applies to *this* box instead. worker-3
+#        was cut 28672->24576 to make room rather than shrinking the server VM,
+#        which has the least slack and the worst failure mode.
+#   DISK 60 server OS + 40 worker OS on the SSD pool; 1300G worker data on HDD.
 
 proxmox_cluster_endpoint = "https://pve-dell.egret-pence.ts.net:8006/" # One healthy cluster member; MagicDNS keeps applies available off-LAN.
 template_vm_id           = 9000
@@ -39,7 +56,7 @@ workers = {
     clone_datastore_id  = null
     ip_address          = "192.168.1.22"
     cores               = 14
-    memory              = 26624
+    memory              = 28672
     os_datastore_id     = "local-lvm"
     os_disk_size        = 60
     os_disk_cache       = "writeback"
