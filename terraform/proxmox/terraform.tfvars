@@ -13,7 +13,7 @@
 
 proxmox_cluster_endpoint = "https://pve-dell.egret-pence.ts.net:8006/" # One healthy cluster member; MagicDNS keeps applies available off-LAN.
 template_vm_id           = 9000
-server_node_name         = "pve-dell"
+server_node_name         = "pve-asrock"
 server_storage_pool      = "local-lvm"
 network_bridge           = "vmbr0"
 
