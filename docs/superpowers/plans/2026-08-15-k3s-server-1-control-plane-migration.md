@@ -84,8 +84,10 @@ Expected: command returns with no output/error; `swapon --show` afterward prints
 
 - [ ] **Step 3: Shrink the swap logical volume from 8G to 2G**
 
-Run: `ssh -i ~/.ssh/proxmox_ed25519 root@192.168.1.51 "lvreduce -L 2G /dev/pve/swap"`
+Run: `ssh -i ~/.ssh/proxmox_ed25519 root@192.168.1.51 "lvreduce -y -L 2G /dev/pve/swap"`
 Expected: `Size of logical volume pve/swap changed from 8.00 GiB to 2.00 GiB.` A small, non-zero swap is kept rather than removed entirely — some emergency headroom is still worth having, and this frees the ~6GiB that was sitting idle rather than the whole thing.
+
+**`-y` is required, not optional:** `lvreduce` interactively prompts `Do you really want to reduce pve/swap? [y/n]` because shrinking an LV normally risks data loss. Over a non-interactive SSH command that prompt has no TTY to answer it and the command hangs. `-y` is safe here specifically because the volume holds no filesystem and is confirmed-unused swap that Step 4 immediately re-initializes with `mkswap`.
 
 - [ ] **Step 4: Recreate the swap signature and re-enable it**
 
@@ -115,7 +117,7 @@ Expected: `local-lvm` row's `Total (KiB)` now reflects the larger pool (~78,000,
 
 **Systems:** `pve-dell`, `k3s-server-1` (192.168.1.21)
 
-**Consumes:** Nothing from Task 2 — this can run in parallel with it, but is written second since it's the source-side half of the capacity story.
+**Consumes:** Nothing from Task 2 — this task is logically independent of it (it's the source-side half of the capacity story, where Task 2 was the destination side). Execute it in order anyway: this plan runs strictly sequentially, and this task reboots the control plane, so it must not overlap with anything else.
 **Produces:** `vm-100-disk-0`'s real LVM-thin `Data%` drops from ~63% toward something close to its true ~16–20% live usage, so a subsequent block-level copy transfers only real data.
 
 This step causes one brief control-plane restart (the guest OS must reboot once for the virtio-scsi controller to renegotiate discard support with the guest kernel). Expect ~1–2 minutes of API unavailability. This is acceptable for a single-server cluster during a planned maintenance window; do not run this during active use.
@@ -145,7 +147,37 @@ Expected: output line like `/: X GiB (Y bytes) trimmed`, where Y is a large posi
 Run: `ssh -i ~/.ssh/proxmox_ed25519 root@pve-dell "lvs -o lv_name,lv_size,data_percent --select 'lv_name=~vm-100-disk'"`
 Expected: `Data%` for `vm-100-disk-0` has dropped substantially from `63.47` — should now be roughly in the 20–30% range (not necessarily identical to the guest's 16% filesystem usage, because thin-pool blocks are reclaimed in fixed chunk sizes larger than individual files, but it should be a clear, large drop, not a rounding-error change).
 
-- [ ] **Step 6: No commit** — infrastructure-only change, nothing in the repo to commit yet.
+- [ ] **Step 6: Make the discard change permanent in Terraform, so a later apply can't silently revert it**
+
+`terraform/proxmox/main.tf`'s `k3s_server_1` `disk` block currently sets only `datastore_id`, `interface`, `size`, and `cache` — it does **not** set `discard`. The `bpg/proxmox` provider defaults that attribute to `"ignore"`, so as far as Terraform is concerned the desired state is still `discard=ignore`. Leaving it that way means the very next `terraform apply` (including Task 8's) would flip the live disk back to `discard=ignore` and silently undo everything this task just accomplished — the disk would start re-accumulating stale blocks immediately.
+
+Edit `terraform/proxmox/main.tf`, in the `resource "proxmox_virtual_environment_vm" "k3s_server_1"` block's `disk` block, adding the `discard` line so it reads:
+
+```hcl
+  disk {
+    datastore_id = var.server_storage_pool
+    interface    = "scsi0"
+    size         = var.server_disk_size
+
+    cache = "writeback"
+    # Thin-provisioned control-plane disk: let guest TRIM release freed blocks
+    # back to the LVM-thin pool. Without this the host-side allocation only ever
+    # grows, which is what inflated this disk to ~38GiB against ~9GiB of real data.
+    discard = "on"
+  }
+```
+
+- [ ] **Step 7: Commit the Terraform config change on the migration branch**
+
+```bash
+git add terraform/proxmox/main.tf
+git commit -m "fix(terraform): enable discard on the k3s-server-1 disk
+
+The provider defaults discard to \"ignore\", so the config silently
+disagreed with the live disk after enabling TRIM by hand. Without this
+the next apply would revert it and let the thin allocation re-inflate
+(~38GiB host-side against ~9GiB of real data before the fstrim)."
+```
 
 ---
 
@@ -178,7 +210,16 @@ Expected: one row, size in the same ~28–30MB ballpark as the existing hourly s
 **Files:** Modify `terraform/proxmox/terraform.tfvars` (`workers.k3s-worker-3.memory`)
 
 **Consumes:** Confirmed real usage on both sides: `k3s-server-1` uses ~2.2GiB of its existing 4096MB (too little slack to cut further — stays unchanged) and `k3s-worker-3` uses only ~7.5GiB of its 28,672MB (19GiB idle) — there's plenty to give up here instead.
-**Produces:** `pve-asrock` host RAM demand drops from 28,672MB (worker-3 alone, already exceeding what's left once `server-1`'s 4096MB is added) to 24,576MB + 4096MB = 28,672MB total — leaving ~3.3GiB of host reserve once `server-1` lands in Task 6, instead of a negative one.
+**Produces:** enough free RAM on `pve-asrock` for `k3s-server-1` to land without overcommitting the host.
+
+The arithmetic, stated explicitly because it's the whole reason this task exists (`pve-asrock` has 32,027MB physical, per `/proc/meminfo` — a "32GB" module reports slightly less than 32,768):
+
+| | worker-3 | server-1 | total guest demand | vs. 32,027MB physical |
+|---|---|---|---|---|
+| Before (if server-1 moved as-is) | 28,672 | 4,096 | **32,768MB** | **741MB over — host gets nothing** |
+| After this task | 24,576 | 4,096 (unchanged) | **28,672MB** | ~3.3GiB left as host reserve |
+
+The cut is 4GB rather than the 3GB that would bring demand to exactly break-even, because a host needs real reserve for Proxmox itself, not merely a non-negative remainder. All 4GB comes from `k3s-worker-3` (~7.5GiB used of 28GiB — ~19GiB idle), leaving it ~16.5GiB of slack. `k3s-server-1` is deliberately untouched: at ~2.2GiB real usage against 4096MB it has the least slack of the two, and it's the VM where an OOM kill takes etcd and the cluster with it.
 
 This is done as a live hot-unplug memory resize (the `bpg/proxmox`-managed VM does not use `hotplug` ballooning here, so this requires a VM reboot to take effect cleanly — schedule it as part of this same maintenance window, not during active use of dependent workloads on `k3s-worker-3`).
 
@@ -230,45 +271,56 @@ the control-plane VM (4096MB, unchanged) lands here."
 
 **Systems:** `pve-dell`, `pve-asrock`, `k3s-server-1`
 
-**Consumes:** Task 2's extended pool (destination has real headroom) and Task 3's shrunk source disk (transfer size is now close to real usage, not the stale 38GiB figure).
+**Consumes:** Task 2's extended pool (destination has real headroom), Task 3's shrunk source disk (transfer size is now close to real usage, not the stale 38GiB figure), and Task 5's freed RAM (the destination host can actually fit this VM).
 **Produces:** `k3s-server-1` (VMID 100) running on `pve-asrock`, disk relocated to `pve-asrock`'s `local-lvm`, same VMID/IP/disk contents, `pve-dell` no longer holds this VM.
 
-- [ ] **Step 1: Gracefully stop the k3s server process before shutting down the VM**
+**Verified pre-conditions for the migration mechanism (checked 2026-08-17, no need to re-derive):** `local-lvm` is a single cluster-wide `lvmthin` entry in `/etc/pve/storage.cfg` (`vgname pve`, `thinpool data`) with **no** `nodes:` restriction, and a VG named `pve` exists on both hosts — so `--targetstorage local-lvm` resolves correctly on `pve-asrock`. Both hosts run identical `pve-manager/9.2.3`. (`longhorn-hdd`, by contrast, *is* pinned to `nodes pve-asrock` — it is not involved here.)
+
+- [ ] **Step 1: Confirm Proxmox cluster quorum before starting — the migration cannot proceed without it**
+
+Run: `ssh -i ~/.ssh/proxmox_ed25519 root@192.168.1.51 "pvecm status | grep -E 'Quorate|Total votes|Expected votes'"`
+Expected: `Quorate: Yes`, with total votes equal to expected votes (`2`).
+
+This cluster is a two-member, no-QDevice topology (ADR-0049), so quorum is 2-of-2: **both** hosts must stay up for the whole migration. If either drops mid-transfer, `pmxcfs` goes read-only and the migration fails partway. This is also why the plan never adds a QDevice to "make this easier" — that's an explicit Global Constraint. If this check does not report `Quorate: Yes`, stop and resolve the cluster problem before touching the control plane.
+
+- [ ] **Step 2: Gracefully stop the k3s server process before shutting down the VM**
 
 Run: `ssh -i ~/.ssh/id_ed25519 harsh@192.168.1.21 "sudo systemctl stop k3s"`
 Expected: command returns with no error; `sudo systemctl status k3s` shows `inactive (dead)`.
 
-- [ ] **Step 2: Shut down the VM cleanly**
+- [ ] **Step 3: Shut down the VM cleanly**
 
 Run: `ssh -i ~/.ssh/proxmox_ed25519 root@pve-dell "qm shutdown 100 --timeout 60"`
 Expected: `qm list` on `pve-dell` shows VMID 100 as `stopped`.
 
-- [ ] **Step 3: Migrate the VM to pve-asrock, bringing its local disk along**
+- [ ] **Step 4: Migrate the VM to pve-asrock, bringing its local disk along**
 
 Run: `ssh -i ~/.ssh/proxmox_ed25519 root@pve-dell "qm migrate 100 pve-asrock --with-local-disks --targetstorage local-lvm"`
-Expected: command streams progress and finishes with `migration finished successfully`. This can take a few minutes even at the reduced ~10GiB size over a LAN link — do not interrupt it.
+Expected: command streams progress and finishes with `migration finished successfully`. This can take a few minutes even at the reduced ~10GiB size over a LAN link — do not interrupt it. Both the `scsi0` disk and the small `vm-100-cloudinit` volume travel with it.
 
-- [ ] **Step 4: Confirm the VM now lives on pve-asrock**
+- [ ] **Step 5: Confirm the VM now lives on pve-asrock**
 
 Run: `ssh -i ~/.ssh/proxmox_ed25519 root@192.168.1.51 "qm list"`
 Expected: VMID 100 (`k3s-server-1`) now appears here, `stopped`.
 
-- [ ] **Step 5: Confirm it's gone from pve-dell**
+- [ ] **Step 6: Confirm it's gone from pve-dell**
 
 Run: `ssh -i ~/.ssh/proxmox_ed25519 root@pve-dell "qm list"`
-Expected: VMID 100 no longer listed (only `k3s-worker-1` and the template remain).
+Expected: VMID 100 no longer listed (only `k3s-worker-1` (101) and the template (9000) remain).
 
-- [ ] **Step 6: Start the VM on its new host**
+- [ ] **Step 7: Start the VM on its new host**
 
 Run: `ssh -i ~/.ssh/proxmox_ed25519 root@192.168.1.51 "qm start 100"`
 Expected: command returns cleanly; `qm status 100` on `pve-asrock` reports `running`.
 
-- [ ] **Step 7: Confirm k3s came back up and the API is reachable at the same IP**
+- [ ] **Step 8: Confirm k3s came back up and the API is reachable at the same IP**
 
 Run: (wait ~30s, then) `kubectl get nodes -o wide`
 Expected: all 3 nodes `Ready`, `k3s-server-1`'s `INTERNAL-IP` still shows `192.168.1.21` — the IP is guest-level config baked into the disk, unaffected by which physical host runs the VM.
 
-- [ ] **Step 8: No commit** — this is a live Proxmox operation; Terraform state reconciliation happens in Task 8, after Task 7's decision gate.
+**Expect kubectl to need a retry or two here, and don't mistake that for failure.** This workstation's kubeconfig points at `https://tailscale-operator.egret-pence.ts.net`, i.e. every `kubectl` call is proxied by the Tailscale operator pod rather than hitting `192.168.1.21` directly. That proxy has to re-establish its connection to the API server after the control plane restarts, so the first attempts can fail with a timeout even though the cluster is fine. Retry over ~2 minutes before treating it as a real problem; if it's still failing after that, check the VM's own console/SSH (`ssh -i ~/.ssh/id_ed25519 harsh@192.168.1.21 "sudo systemctl status k3s"`) to distinguish "API down" from "proxy not reconnected".
+
+- [ ] **Step 9: No commit** — this is a live Proxmox operation; Terraform state reconciliation happens in Task 8, after Task 7's decision gate.
 
 ---
 
@@ -281,7 +333,7 @@ Expected: all 3 nodes `Ready`, `k3s-server-1`'s `INTERNAL-IP` still shows `192.1
 
 - [ ] **Step 1: Update the tfvars value to match the new physical placement**
 
-Edit `terraform/proxmox/terraform.tfvars` line 16: change `server_node_name = "pve-dell"` to `server_node_name = "pve-asrock"`.
+In `terraform/proxmox/terraform.tfvars`, change the top-level `server_node_name` key from `"pve-dell"` to `"pve-asrock"`. (Match on the key name, not a line number — Task 5 already edited this file, and hard-coded line numbers go stale. This is the top-level `server_node_name`, not the `node_name` inside either `workers` block.)
 
 - [ ] **Step 2: Run a plan and read the proposed action type carefully — do not apply yet**
 
@@ -312,6 +364,8 @@ This is the decision gate — write down (in the terminal output, or a scratch n
 Run: `cd terraform/proxmox && terraform apply`
 Expected: plan reprinted matches Task 7's Step 2 output exactly (no drift since then); type `yes`; apply completes with `Apply complete! Resources: 0 added, 1 changed, 0 destroyed.` (or `0 changed` if it was already a no-op plan).
 
+**Before typing `yes`, confirm the reprinted plan changes `node_name` and nothing else.** Task 3 Step 6 already put `discard = "on"` into the config precisely so this apply cannot silently revert the live disk to `discard=ignore`. If the reprinted plan proposes reverting `discard`, or touches any other live setting this migration deliberately established, do **not** apply — that means a config-vs-reality gap survived, and applying would undo real work. Report it instead.
+
 - [ ] **Step A2: Confirm zero drift remains**
 
 Run: `terraform plan`
@@ -329,33 +383,29 @@ applied the node_name change in place, no control-plane replacement."
 
 ### Branch B — Task 7 observed a forced replacement
 
-- [ ] **Step B1: Revert the tfvars edit so state and config agree on the OLD value for a moment**
+**Do not revert the tfvars edit before doing this.** `terraform state rm` does not read `node_name` from the config at all — it only drops the resource's bookkeeping entry — so reverting the edit and then re-applying it would be a pure no-op pair. It is also actively risky: `git checkout -- terraform.tfvars` discards *any* uncommitted change to that file, and by this point in the plan that file may legitimately carry work you want to keep. Leave the config saying `pve-asrock` (which is where the VM actually is) throughout this branch — that is exactly the value the import in B2 needs to match.
 
-Run: `cd terraform/proxmox && git checkout -- terraform.tfvars` (this restores `server_node_name = "pve-dell"` in the file only — Terraform state still (correctly) doesn't know about the physical move yet either).
+- [ ] **Step B1: Remove the stale resource from state without touching real infrastructure**
 
-- [ ] **Step B2: Remove the stale resource from state without touching real infrastructure**
+Run: `cd terraform/proxmox && terraform state rm proxmox_virtual_environment_vm.k3s_server_1`
+Expected: `Removed proxmox_virtual_environment_vm.k3s_server_1` confirmation. This only edits Terraform's bookkeeping — the actual VM on `pve-asrock` is completely unaffected by this command, which is the entire reason this branch exists rather than letting Terraform "fix" the drift by replacing the control plane.
 
-Run: `terraform state rm proxmox_virtual_environment_vm.k3s_server_1`
-Expected: `Removed proxmox_virtual_environment_vm.k3s_server_1` confirmation. This only edits Terraform's bookkeeping — the actual VM on `pve-asrock` is completely unaffected by this command.
-
-- [ ] **Step B3: Re-apply the tfvars edit now that state has no opinion about node_name**
-
-Edit `terraform/proxmox/terraform.tfvars` line 16 again: `server_node_name = "pve-dell"` → `server_node_name = "pve-asrock"`.
-
-- [ ] **Step B4: Re-import the existing VM at its new location**
+- [ ] **Step B2: Re-import the existing VM at its new location**
 
 Run: `terraform import proxmox_virtual_environment_vm.k3s_server_1 pve-asrock/100`
-Expected: `Import successful!` — this attaches Terraform's state to the VM that already exists at VMID 100 on `pve-asrock`; it does not create anything.
+Expected: `Import successful!` — this attaches Terraform's state to the VM that already exists at VMID 100 on `pve-asrock`; it does not create anything. The `pve-asrock/100` address is the `bpg/proxmox` provider's `<node_name>/<vm_id>` import format, and it must match the config's `server_node_name` value set in Task 7.
 
-- [ ] **Step B5: Confirm zero drift**
+- [ ] **Step B3: Confirm zero drift**
 
 Run: `terraform plan`
-Expected: `No changes. Your infrastructure matches the configuration.` If any diff appears (e.g., in disk options Task 3 changed, like `discard=on`), reconcile the Terraform config (`main.tf`'s `disk` block) to match reality rather than letting a future `apply` silently flip it back to `discard=ignore` — the config is the source of truth going forward, so if `discard=on` is being kept permanently, add it to the resource block now.
+Expected: `No changes. Your infrastructure matches the configuration.`
 
-- [ ] **Step B6: Commit**
+Task 3 Step 6 already reconciled the one known config-vs-reality gap (`discard = "on"`), so a clean plan is the expected result here. If some *other* unexpected diff appears, do not apply it blind — reconcile the Terraform config to match the live reality that this plan deliberately established, rather than letting an apply flip live settings back to provider defaults. Report any such diff rather than improvising.
+
+- [ ] **Step B4: Commit**
 
 ```bash
-git add terraform/proxmox/terraform.tfvars terraform/proxmox/main.tf
+git add terraform/proxmox/terraform.tfvars
 git commit -m "chore(terraform): reconcile k3s-server-1 state after manual move to pve-asrock
 
 Provider forces replacement on node_name change, so the physical
@@ -363,6 +413,8 @@ qm migrate was done out-of-band and state was re-imported at the
 new location rather than letting Terraform destroy/recreate the
 control-plane VM."
 ```
+
+(`main.tf` is not staged here — its `discard` change was already committed in Task 3 Step 7.)
 
 ---
 
@@ -395,8 +447,10 @@ Expected: every volume `attached` / `healthy`, same as pre-migration (the contro
 
 - [ ] **Step 5: CoreDNS is answering**
 
-Run: `kubectl run -it --rm dns-check --image=busybox:1.36 --restart=Never -- nslookup nextcloud.nextcloud.svc.cluster.local`
+Run: `kubectl run dns-check --image=busybox:1.36 --restart=Never --rm --attach -- nslookup nextcloud.nextcloud.svc.cluster.local`
 Expected: resolves to a ClusterIP, no timeout.
+
+(Deliberately `--attach` and **not** `-it`: `-i`/`-t` allocate an interactive TTY, which fails or hangs when run from a non-interactive shell. `--rm` still needs an attached stream to know when to clean up, so `--attach` alone is the correct non-interactive form.)
 
 - [ ] **Step 6: cloudflared tunnel is up**
 
@@ -457,6 +511,7 @@ git commit -m "docs: record k3s-server-1 control-plane move to pve-asrock (close
 
 - **`k3s-worker-3`'s own disk is at 97.7% of its 40G thin allocation** on the same `pve-asrock` pool this plan extends. This plan does not touch it. Task 2's pool extension buys it some slack too (same shared pool), but if it keeps growing it will need its own capacity fix — flag as a follow-up, don't fold it into this migration.
 - **This migration does not, by itself, give Dell-outage application continuity.** The control plane moving to `pve-asrock` only means the *API* survives a `pve-dell` failure. Longhorn replicas for critical PVCs (e.g., Immich/Nextcloud databases) still need healthy copies on `pve-asrock`/`k3s-worker-3` before that claim can be made — this is explicitly called out as separate follow-on work in the source runbook and is not part of this plan.
+- **It does not give `kubectl` access during a Dell outage either — and this is easy to assume it does.** This workstation's kubeconfig points at `https://tailscale-operator.egret-pence.ts.net`, and the Tailscale operator pod that serves that endpoint currently runs on `k3s-worker-1`, which is on **`pve-dell`**. So after this migration the API server survives a Dell outage but the proxy in front of it does not, and `kubectl` from the Mac would still break. Closing that gap means either letting the operator pod reschedule onto `k3s-worker-3` (it has no node affinity pinning it, but it also needs the API to be reachable to be rescheduled) or pointing the kubeconfig directly at `192.168.1.21` over the tailnet as a fallback path. Worth a follow-up; deliberately out of scope here so this plan stays a placement change rather than an access-path redesign.
 - **This plan does not create real etcd HA.** `k3s-server-1` remains the sole server. A genuine 3-node embedded-etcd control plane is deliberately deferred (see `CLAUDE.md`'s "Explicitly deferred" section).
 - **Off-box etcd backup shipping remains deferred.** The Task 4 snapshot and the existing hourly snapshots all live on the same disk being migrated — they protect against a bad migration, not against losing that disk entirely later. That's a pre-existing, accepted gap this plan doesn't change.
 
