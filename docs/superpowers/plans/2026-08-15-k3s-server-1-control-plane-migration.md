@@ -84,10 +84,17 @@ Expected: command returns with no output/error; `swapon --show` afterward prints
 
 - [ ] **Step 3: Shrink the swap logical volume from 8G to 2G**
 
-Run: `ssh -i ~/.ssh/proxmox_ed25519 root@192.168.1.51 "lvreduce -y -L 2G /dev/pve/swap"`
-Expected: `Size of logical volume pve/swap changed from 8.00 GiB to 2.00 GiB.` A small, non-zero swap is kept rather than removed entirely — some emergency headroom is still worth having, and this frees the ~6GiB that was sitting idle rather than the whole thing.
+Run: `ssh -i ~/.ssh/proxmox_ed25519 root@192.168.1.51 "lvreduce -y --fs ignore -L 2G /dev/pve/swap"`
+Expected: `Size of logical volume pve/swap changed from 8.00 GiB (2048 extents) to 2.00 GiB (512 extents).` followed by a `THIS MAY DESTROY YOUR DATA` warning and `Logical volume pve/swap successfully resized.` A small, non-zero swap is kept rather than removed entirely — some emergency headroom is still worth having, and this frees the ~6GiB that was sitting idle rather than the whole thing.
 
-**`-y` is required, not optional:** `lvreduce` interactively prompts `Do you really want to reduce pve/swap? [y/n]` because shrinking an LV normally risks data loss. Over a non-interactive SSH command that prompt has no TTY to answer it and the command hangs. `-y` is safe here specifically because the volume holds no filesystem and is confirmed-unused swap that Step 4 immediately re-initializes with `mkswap`.
+**Both flags are required, and neither is optional:**
+
+- **`-y`** — `lvreduce` interactively prompts `Do you really want to reduce pve/swap? [y/n]`, because shrinking an LV normally risks data loss. Over a non-interactive SSH command that prompt has no TTY to answer it, so the command hangs.
+- **`--fs ignore`** — LVM 2.03.31 (this host's version) detects the filesystem signature on the target LV and refuses to shrink it without instruction, failing with exit code 5 and `File system swap found on pve/swap... File system reduce is required and not supported (swap)`. LVM cannot "shrink" a swap area the way it can shrink ext4, so it declines rather than guess. `--fs ignore` tells it to resize the block device and leave signature handling to us — which is correct here because Step 4 immediately runs `mkswap` over the result.
+
+Both are safe specifically because this volume holds **no persistent data**: swap is volatile scratch space by definition, it was verified unused in Step 1, and Step 4 re-initializes it from scratch. This is *not* a pattern to copy for an LV holding a real filesystem.
+
+> **Executed 2026-08-17:** the original form of this step omitted `--fs ignore` and failed exactly as described above, leaving swap deactivated (Step 2 had already run) with the LV untouched at 8.00 GiB. Recovery was to add the flag and continue — no data at risk, but note that a failure between Step 2 and Step 4 leaves the host with **no swap**, which is the one genuinely undesirable intermediate state in this task. If that happens and you cannot immediately proceed, run `swapon -a` to restore the host to its exact starting state before doing anything else.
 
 - [ ] **Step 4: Recreate the swap signature and re-enable it**
 
