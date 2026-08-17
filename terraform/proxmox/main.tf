@@ -100,11 +100,17 @@ resource "proxmox_virtual_environment_vm" "k3s_worker" {
   }
 
   # The template supplies scsi0; every worker grows it to its declared size.
+  # discard="on" is load-bearing, not cosmetic: the provider defaults it to
+  # "ignore", under which QEMU silently drops the guest's TRIM requests. The
+  # guest still reports success, so the only way to see the problem is host-side
+  # — worker-1's data disk had grown to 433GiB of thin allocation against 16GiB
+  # of real data before this was set.
   disk {
     datastore_id = each.value.os_datastore_id
     interface    = "scsi0"
     size         = each.value.os_disk_size
     cache        = each.value.os_disk_cache
+    discard      = "on"
   }
 
   # Proxmox owns the empty scsi1 allocation. The shared longhorn_node Ansible
@@ -117,6 +123,7 @@ resource "proxmox_virtual_environment_vm" "k3s_worker" {
     cache        = each.value.data_disk_cache
     backup       = each.value.data_disk_backup
     replicate    = each.value.data_disk_replicate
+    discard      = "on"
   }
 
   network_device {
