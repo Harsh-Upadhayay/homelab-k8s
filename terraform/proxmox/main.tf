@@ -34,6 +34,10 @@ resource "proxmox_virtual_environment_vm" "k3s_server_1" {
     size         = var.server_disk_size
 
     cache = "writeback"
+    # Thin-provisioned control-plane disk: let guest TRIM release freed blocks
+    # back to the LVM-thin pool. Without this the host-side allocation only ever
+    # grows, which is what inflated this disk to ~38GiB against ~9GiB of real data.
+    discard = "on"
   }
 
   network_device {
