@@ -302,8 +302,46 @@ Expected: `qm list` on `pve-dell` shows VMID 100 as `stopped`.
 
 - [ ] **Step 4: Migrate the VM to pve-asrock, bringing its local disk along**
 
-Run: `ssh -i ~/.ssh/proxmox_ed25519 root@pve-dell "qm migrate 100 pve-asrock --with-local-disks --targetstorage local-lvm"`
-Expected: command streams progress and finishes with `migration finished successfully`. This can take a few minutes even at the reduced ~10GiB size over a LAN link — do not interrupt it. Both the `scsi0` disk and the small `vm-100-cloudinit` volume travel with it.
+**Launch it detached on the source host, never as a plain foreground command:**
+
+```bash
+ssh -i ~/.ssh/proxmox_ed25519 root@pve-dell \
+  "nohup qm migrate 100 pve-asrock --with-local-disks --targetstorage local-lvm \
+   > /var/log/qm-migrate-100.log 2>&1 & echo started"
+```
+
+Then poll until it finishes:
+
+```bash
+ssh -i ~/.ssh/proxmox_ed25519 root@pve-dell "tail -5 /var/log/qm-migrate-100.log"
+```
+
+Expected: the log ends with `migration finished successfully`. Both the `scsi0` disk and the small `vm-100-cloudinit` volume travel with it.
+
+**Budget 11-13 minutes, and do NOT run this inside any wrapper with a timeout under ~20 minutes.**
+
+> **Learned the hard way on 2026-08-17 — read this before estimating.** An earlier attempt was
+> killed at ~53GiB transferred by a 10-minute tool timeout on the *calling* side. The hosts,
+> network, and storage were all fine (steady ~90-96MB/s throughout); the remote task log simply
+> recorded `broken pipe` when the SSH client died. Running it detached with `nohup` makes the
+> transfer independent of the controlling SSH session entirely, so a dropped connection or an
+> impatient wrapper can no longer abort it.
+>
+> **`qm migrate` streams the FULL 60GiB logical volume, not just the ~11GiB of allocated extents.**
+> This is the estimate that was wrong the first time. Task 3's `fstrim` is still worth doing — it
+> determines how much lands *allocated* on the destination (the aborted attempt had written only
+> ~9.4GiB of allocation after streaming 53GiB, i.e. the zeroes land sparse) — but it does **not**
+> reduce the amount of data crossing the wire. Size the time budget from the full volume: 60GiB at
+> ~90-96MB/s ≈ 11-13 minutes.
+
+**If this step fails partway, it leaves an orphaned partial LV on the destination.** A retry will
+collide on `lvcreate` with `Logical Volume "vm-100-disk-0" already exists in volume group "pve"`.
+Before retrying, confirm the leftover is genuinely unreferenced on `pve-asrock` (it should appear in
+`lvs` but have **no** matching file in `/etc/pve/qemu-server/` on that node, since the VM's config
+still belongs to `pve-dell`), then remove it with
+`ssh -i ~/.ssh/proxmox_ed25519 root@192.168.1.51 "lvremove -f pve/vm-100-disk-0"`.
+Verify the source disk on `pve-dell` is still intact *before* removing anything on the destination —
+the source is the only real copy at that moment.
 
 - [ ] **Step 5: Confirm the VM now lives on pve-asrock**
 
