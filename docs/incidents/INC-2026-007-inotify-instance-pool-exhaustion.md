@@ -1,4 +1,4 @@
-# INC-2026-006: fs.inotify.max_user_instances pool exhaustion risk across all k3s nodes
+# INC-2026-007: fs.inotify.max_user_instances pool exhaustion risk across all k3s nodes
 
 ## Incident metadata
 
