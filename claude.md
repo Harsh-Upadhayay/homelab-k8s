@@ -11,10 +11,10 @@ A production-shaped homelab Kubernetes platform built for hands-on operational l
 ```
 Proxmox cluster neovara
 ├── pve-dell: laptop, 14 threads / 30GiB / 816GiB thin pool on an EXTERNAL 1TB USB SSD
-│   ├── k3s-server-1   4c/6GiB,  60GB          control plane, tainted, embedded etcd
-│   └── k3s-worker-1   12c/18GiB, 60GB + 650GB application workloads + data disk
-└── pve-asrock: patched I219-V NIC; motherboard SSD hosts Proxmox + worker OS
-    └── k3s-worker-3   6c/12GiB, 40GB + 1300GB application workloads + HDD data disk
+│   └── k3s-worker-1   12c/22GiB, 60GB + 650GB application workloads + data disk
+└── pve-asrock: patched I219-V NIC; motherboard SSD hosts Proxmox + control plane + worker OS
+    ├── k3s-server-1   4c/4GiB,  60GB          control plane, tainted, embedded etcd
+    └── k3s-worker-3   6c/24GiB, 40GB + 1300GB application workloads + HDD data disk
 ```
 
 **HARD CONSTRAINT (ADR-0022): the laptop's internal NVMe (`nvme0n1`, Samsung 1TB) holds Windows and the user's personal data. It is STRICTLY off-limits — never add it as a storage pool, LVM PV, mount, or passthrough target, never suggest using it "for etcd performance" or "free space." The external USB SSD (`sda`) is the only working storage. Capacity grows by adding physical nodes later, never by touching that disk.**
@@ -25,14 +25,14 @@ Provisioning is split deliberately: **Terraform** (`terraform/`) provisions the 
 
 **CURRENT HYPERVISOR TOPOLOGY (ADR-0049): one Proxmox cluster, not independent hosts.** Cluster `neovara` was created on `pve-dell`; `pve-asrock` joined on 2026-07-23 and now hosts `k3s-worker-3`. Keep one Terraform provider and cluster-wide token; select placement with each VM's `node_name`. The temporary two-node stage intentionally accepts that losing either member makes `pmxcfs` read-only and delays cold-start `onboot` guests until quorum returns. Running guests continue. A third member is planned soon. Do not add a QDevice unless availability requirements change.
 
-Sizing rule (ADR-0020): CPU is mildly overcommitted (16 vCPU on 14 threads — vCPUs are schedulable threads); **RAM is never overcommitted** (24 of 30GiB allocated, ~5GiB host reserve) because a host OOM kill against the server VM kills etcd and the cluster with it.
+Sizing rule (ADR-0020): CPU is mildly overcommitted (vCPUs are schedulable threads); **RAM is never overcommitted on either host**, because a host OOM kill against the server VM kills etcd and the cluster with it. After the 2026-08-17 control-plane move: `pve-dell` allocates 22 of 30GiB to its single worker, and `pve-asrock` allocates 28GiB of 31GiB (24GiB worker-3 + 4GiB server-1), leaving ~3.3GiB host reserve. That reserve is why `k3s-worker-3` was cut from 28GiB to 24GiB rather than `k3s-server-1` being shrunk — the control-plane VM has the least slack of the two and is the one whose OOM kill takes the cluster down.
 
 ## Decisions already made — do not silently change
 
 The formal, numbered record of these (Status/Context/Decision/Consequences, with reversals tracked via "Superseded by") lives in `docs/adr/` — this section is the fast-reading summary for AI context loading, that's the durable version.
 
 - **Embedded etcd via `cluster-init: true`**, not SQLite — even at a single server node. This is what enables real etcd snapshot/restore/inspection and a clean path to a 3-node HA quorum later.
-- **Preferred control-plane placement after Immich recovery: move the existing `k3s-server-1` VM to the workstation**, subject to the 119GiB SSD capacity check and a zero-replacement migration plan. Do not leave exactly two embedded-etcd servers as fake HA; K3s HA requires an odd member count, normally three. Moving the API does not provide Dell-outage app continuity until critical Longhorn volumes also have healthy workstation replicas.
+- **Control-plane placement: `k3s-server-1` moved from `pve-dell` to the workstation (`pve-asrock`'s internal `local-lvm`) on 2026-08-17**, via offline `qm migrate --with-local-disks`, preserving VMID 100, IP `192.168.1.21`, and embedded-etcd data — no control-plane replacement. Do not leave exactly two embedded-etcd servers as fake HA; K3s HA requires an odd member count, normally three, and `k3s-server-1` remains the sole server — this move does not create HA. Moving the API does not by itself provide Dell-outage app continuity: critical Longhorn volumes (e.g. Immich/Nextcloud databases) still need healthy `pve-asrock`/`k3s-worker-3` replicas, and separately, `kubectl` from the Mac still depends on the Tailscale operator pod, which runs on `k3s-worker-1` on `pve-dell` — both remain open follow-ups.
 - **`secrets-encryption: true`** — Kubernetes Secrets encrypted at rest in etcd, not just base64.
 - **Control-plane taint** (`node-role.kubernetes.io/control-plane:NoSchedule`) on k3s-server-1 — app pods must never schedule there.
 - **Flannel + kube-proxy on defaults — Cilium is deliberately deferred.** This was an explicit, reasoned tradeoff: start on the simplest CNI, learn the platform layers first, adopt Cilium later as its own project. **This is the one non-additive item in the whole design** — Flannel → Cilium is not a live migration, it requires a full cluster rebuild. Don't suggest switching CNIs casually; if it comes up, flag that it means a rebuild, not a config change.
@@ -49,7 +49,7 @@ The formal, numbered record of these (Status/Context/Decision/Consequences, with
 
 ## Explicitly deferred — do not add unless asked
 
-Full backup strategy (off-box etcd shipping, Velero, Proxmox Backup Server), Cilium, HA control plane (`k3s-server-2`/`-3`), and additional unplanned workers. Each is staged as a clean follow-on and none should be silently bootstrapped while working on something else. The existing control-plane VM move is issue #49. (Longhorn, monitoring/logging, GitOps/Argo CD, secrets management, Tailscale's GitOps adoption, the ASRock worker, and post-Immich storage convergence were all once deferred and have since landed.)
+Full backup strategy (off-box etcd shipping, Velero, Proxmox Backup Server), Cilium, HA control plane (`k3s-server-2`/`-3`), and additional unplanned workers. Each is staged as a clean follow-on and none should be silently bootstrapped while working on something else. (Longhorn, monitoring/logging, GitOps/Argo CD, secrets management, Tailscale's GitOps adoption, the ASRock worker, post-Immich storage convergence, and the `k3s-server-1` control-plane VM move (issue #49) were all once deferred and have since landed.)
 
 ## Working style for this repo
 

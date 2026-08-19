@@ -5,6 +5,33 @@ Loosely follows [Keep a Changelog](https://keepachangelog.com/). Dates are when 
 ## [Unreleased]
 
 ### Changed
+- Moved the `k3s-server-1` control-plane VM from `pve-dell` to `pve-asrock`'s
+  internal motherboard SSD (issue #49), closing the long-standing placement gap
+  where every node lived on the Dell and a laptop outage was a whole-cluster
+  outage. The move was an offline `qm migrate --with-local-disks` (9m36s, ~60GiB
+  at ~111-113 MB/s) that preserved the VM's identity end to end: same VMID 100,
+  same IP `192.168.1.21`, same Tailscale identity, embedded etcd intact. The
+  `bpg/proxmox` provider picked up the corrected `node_name` on refresh and
+  proposed no changes, so Terraform never proposed replacing the control plane;
+  `apply -refresh-only` recorded it as `0 added, 0 changed, 0 destroyed`.
+  Three preparation steps made it fit. ASRock's `local-lvm` thin pool grew from
+  53.93GiB to 74.68GiB by claiming 14.75GiB of already-unallocated VG space plus
+  ~6GiB freed by shrinking a verified-unused 8G swap LV to 2G. The source disk
+  got `discard=on` and an `fstrim`, which reclaimed 47.9GiB and dropped its
+  host-side thin allocation from 63.47% to 18.50% — that governs how much lands
+  *allocated* on the destination, though not how much crosses the wire, since
+  `qm migrate` streams the whole 60GiB volume regardless. And `k3s-worker-3` gave
+  up 4GiB of RAM (28,672MB → 24,576MB) so the destination host would not be
+  overcommitted; `k3s-server-1` kept its 4096MB deliberately, being the VM with
+  the least slack and the one whose OOM kill would take etcd down with it.
+  Verification after the move was green across nodes, all 19 Argo CD
+  Applications, Longhorn volumes, CoreDNS, and both the public and private
+  ingress paths. Two limits are worth stating plainly, because the move is easy
+  to over-read: it does **not** create etcd HA (`k3s-server-1` is still the sole
+  server), and it does **not** yet buy Dell-outage continuity — critical Longhorn
+  replicas still need healthy ASRock copies, and `kubectl` still reaches the API
+  through the Tailscale operator pod, which runs on `k3s-worker-1` on the Dell.
+  Both are tracked as follow-ups.
 - Replaced the duplicated worker-1/worker-3 Terraform resources with one
   parameterized `for_each` worker lifecycle while preserving VM IDs through
   state-address moves. Removed HDD provisioning from the ASRock hardware role:
