@@ -60,9 +60,16 @@ singleBinary:
   # Persistence belongs to the SingleBinary workload in chart 7.x. The old
   # top-level key was accepted as an unused value, so the live PVC silently
   # fell back to the cluster's local-path class and became pinned to worker-2.
+  #
+  # Moved to longhorn-hdd (k3s-worker-3's HDD datastore) alongside Prometheus/
+  # Alertmanager (see commit 119f6b3) — physically separate from etcd's
+  # pve-dell USB SSD, so Loki's WAL/TSDB flush and compaction can't reproduce
+  # INC-2026-003/005. Unlike Grafana's SQLite (a6d22af), Loki's write path is
+  # async-batched (Prometheus-style TSDB/WAL), not a synchronous per-request
+  # file lock, so it should tolerate HDD latency the same way Prometheus did.
   persistence:
     enabled: true
-    storageClass: longhorn
+    storageClass: longhorn-hdd
     size: 10Gi
 
 # The chart always defines the SimpleScalable-mode components too (read/

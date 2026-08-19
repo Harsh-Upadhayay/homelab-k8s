@@ -41,6 +41,23 @@
     - { name: "net.bridge.bridge-nf-call-iptables", value: "1" }
     - { name: "net.bridge.bridge-nf-call-ip6tables", value: "1" }
 
+# fs.inotify.max_user_instances defaults to 128 (unchanged upstream since
+# 2005) and is a single pool shared by every process under one real UID.
+# k3s/containerd run without user-namespace remapping, so kubelet itself
+# (25-40+ instances just from watching mounted ConfigMap/Secret volumes)
+# and every pod's root process all draw from the same 128-slot pool on a
+# given node. Once it's empty, the next inotify_init() anywhere on that
+# node fails with EMFILE, surfaced by most libraries as a generic, misleading
+# "too many open files" that never mentions inotify. fs.inotify.max_user_watches
+# is deliberately left alone here — it already auto-scales with RAM as of
+# kernel 5.11 and was already comfortably above default on every node.
+- name: Raise fs.inotify.max_user_instances (128 default is shared and exhausted across all pods + kubelet on a node)
+  ansible.posix.sysctl:
+    name: fs.inotify.max_user_instances
+    value: "12400"
+    sysctl_file: /etc/sysctl.d/90-k3s.conf
+    reload: true
+
 - name: Ensure qemu-guest-agent is running (baked into the template, just confirming)
   ansible.builtin.systemd:
     name: qemu-guest-agent

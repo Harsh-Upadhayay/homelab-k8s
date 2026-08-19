@@ -33,34 +33,40 @@ prometheus:
     podMonitorSelectorNilUsesHelmValues: false
     probeSelectorNilUsesHelmValues: false
     ruleSelectorNilUsesHelmValues: false
-    # Keep Prometheus stopped while it shares pve-dell's physical SSD with
-    # single-node etcd. Its WAL replay/compaction reproduced INC-2026-003 even
-    # after the PVC expansion. Restore to 1 only after control-plane issue #49.
-    replicas: 0
+    # Migrated to k3s-worker-3's HDD storage (longhorn-hdd storageClass) to
+    # eliminate physical disk contention with etcd on pve-dell's USB SSD.
+    # Control-plane VM migration (issue #49) no longer blocks monitoring restoration.
+    replicas: 1
     retention: 15d
     storageSpec:
       volumeClaimTemplate:
         spec:
-          storageClassName: longhorn
+          storageClassName: longhorn-hdd
           accessModes: ["ReadWriteOnce"]
           resources:
             requests:
-              # The original 10Gi filled during the first 19 days and caused
-              # Prometheus to crash-loop on WAL replay (INC-2026-005).
+              # Migrated from original longhorn storageClass to longhorn-hdd to
+              # avoid physical disk contention with etcd on pve-dell's USB SSD.
+              # Expanded from 10Gi (INC-2026-005) to 20Gi to provide headroom.
               storage: 20Gi
     resources:
       requests:
         cpu: 250m
         memory: 400Mi
       limits:
-        memory: 1Gi
+        # Bumped from 1Gi (2026-08-10): the WAL grew to 353 segments after
+        # never successfully checkpointing, so post-replay TSDB compaction
+        # pushed past 1Gi and got OOMKilled (exit 137) moments after
+        # reaching /-/ready — a death spiral where each SIGKilled restart
+        # left more mmap chunks corrupted and the next WAL replay bigger.
+        memory: 2Gi
 
 alertmanager:
   alertmanagerSpec:
     storage:
       volumeClaimTemplate:
         spec:
-          storageClassName: longhorn
+          storageClassName: longhorn-hdd
           accessModes: ["ReadWriteOnce"]
           resources:
             requests:
@@ -88,6 +94,12 @@ grafana:
     passwordKey: admin-password
   persistence:
     enabled: true
+    # Grafana uses embedded SQLite, which cannot tolerate the write latency
+    # of a cross-node HDD-backed Longhorn volume (SQLITE_BUSY lock timeouts
+    # made every request take 15-80s, failing the /api/health readiness
+    # probe). Only Prometheus's WAL replay/compaction caused the etcd disk
+    # contention in INC-2026-003/005 — Grafana's small dataset never did, so
+    # it stays on the standard SSD-backed longhorn storageClass.
     storageClassName: longhorn
     size: 2Gi
   resources:
