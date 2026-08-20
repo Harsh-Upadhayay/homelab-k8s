@@ -102,6 +102,14 @@ grafana:
     # it stays on the standard SSD-backed longhorn storageClass.
     storageClassName: longhorn
     size: 2Gi
+  # replicas: 1 (chart default) + an RWO Longhorn volume means the chart's
+  # default RollingUpdate strategy deadlocks on any pod-spec change: k8s
+  # schedules the new pod (possibly on another node) before killing the old
+  # one, but the RWO volume can only attach to one node at a time, so the
+  # new pod hangs forever in Init with a Multi-Attach error. Recreate kills
+  # the old pod first, freeing the volume before the new one starts.
+  deploymentStrategy:
+    type: Recreate
   resources:
     requests:
       cpu: 100m
