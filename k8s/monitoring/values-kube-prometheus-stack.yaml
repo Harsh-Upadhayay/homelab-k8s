@@ -105,9 +105,16 @@ grafana:
   resources:
     requests:
       cpu: 100m
-      memory: 128Mi
-    limits:
       memory: 256Mi
+    # Bumped from 256Mi (2026-08-20): Grafana 13.1.0's unified-storage
+    # backend builds and caches in-memory bleve search indexes (folders,
+    # playlists, repositories) every ~10 minutes. Steady-state RSS grew
+    # past 256Mi, so the pod ran ~1-2 days then got OOMKilled (exit 137),
+    # visible beforehand as growing readiness/liveness probe timeouts —
+    # same failure shape as the Prometheus OOM death spiral this file
+    # already documents above.
+    limits:
+      memory: 512Mi
   # This platform never uses raw Ingress — every internal service gets a
   # hand-written IngressRoute instead (ingressroute-grafana.yaml), same as the
   # Longhorn UI (ADR-0033). Grafana's own Ingress support stays off.
