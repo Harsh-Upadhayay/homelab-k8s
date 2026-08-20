@@ -1,6 +1,7 @@
 # AppProject: 'personal' — the SECURITY BOUNDARY for dev-owned code (kiroku,
-# jobhunt, later a friend's shared project). Their manifests live in THEIR OWN
-# repos under deploy/; this cluster repo holds only a pointer Application
+# job-hunt, documentor-pro, and future friend-shared projects). Their
+# manifests live in THEIR OWN repos under deploy/; this cluster repo holds
+# only a pointer Application
 # (k8s/argocd/apps/<app>.yaml) per app. See docs/Migration Plan.md
 # ("Repo boundaries — hybrid by ownership") for why: push access to a
 # GitOps-watched repo is deploy access to the cluster, so dev repos are
@@ -22,24 +23,27 @@ spec:
   description: Dev-owned apps from external repos; least-privilege, per-namespace.
 
   # Allow-list of the dev-owned project repos. Each entry is added/confirmed when
-  # that app's pointer Application lands (kiroku → M2, jobhunt → M4). This list
-  # must NEVER include https://github.com/Harsh-Upadhayay/homelab-k8s.git —
-  # that would collapse the whole Option E boundary.
-  # TODO(M2): confirm exact kiroku repo URL before first sync.
-  # TODO(M4): confirm exact jobhunt repo URL before first sync.
+  # that app's pointer Application lands. This list must NEVER include
+  # https://github.com/Harsh-Upadhayay/homelab-k8s.git — that would collapse
+  # the whole Option E boundary.
+  #
+  # job-hunt: deep-astaad/job-hunt, NOT a Harsh-Upadhayay repo — Harsh is a
+  # collaborator on it, not the owner, so it's fenced off here like any other
+  # friend-managed repo (an earlier placeholder wrongly assumed ownership;
+  # corrected 2026-08-20).
   sourceRepos:
     - https://github.com/Harsh-Upadhayay/kiroku.git
-    - https://github.com/Harsh-Upadhayay/jobhunt.git
     - git@github.com:nirajmatere/documentor_pro.git
+    - https://github.com/deep-astaad/job-hunt.git
 
   # One namespace per app, in-cluster only. Extended per app as they land.
   destinations:
     - server: https://kubernetes.default.svc
       namespace: kiroku
     - server: https://kubernetes.default.svc
-      namespace: jobhunt
-    - server: https://kubernetes.default.svc
       namespace: documentor-pro
+    - server: https://kubernetes.default.svc
+      namespace: job-hunt
 
   # Deny ALL cluster-scoped resources — the core of the lockdown.
   # (Empty whitelist = nothing cluster-scoped is permitted.)

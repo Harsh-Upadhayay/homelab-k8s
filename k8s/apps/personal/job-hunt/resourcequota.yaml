@@ -1,0 +1,26 @@
+# Aggregate resource ceiling for the whole job-hunt namespace — the "how much"
+# fence (alongside RBAC "who" and the AppProject "what/where"). Bounds a runaway
+# dev app so it can't starve homelab workloads on a never-overcommitted cluster
+# (ADR-0020). Sized for a small two-container app; tune as the app grows.
+#
+# NOTE: once this quota constrains a compute resource, EVERY pod in the namespace
+# must declare requests+limits or it's rejected — the paired limitrange.yaml
+# supplies defaults so bare pods still admit. (See Kubernetes Concepts.md,
+# "Resource governance: ResourceQuota and LimitRange".)
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: job-hunt-quota
+  namespace: job-hunt
+spec:
+  hard:
+    requests.cpu: "1"
+    requests.memory: 1Gi
+    limits.cpu: "2"
+    limits.memory: 3Gi # bumped 2Gi -> 3Gi: RollingUpdate briefly needs OLD pod's limit
+    # AND the new pod's limit at once (surge), which the 2Gi cap rejected outright
+    # when job-hunt-api's limit was raised (2026-07-09) -- see limitrange.yaml, api.yaml
+    pods: "15"
+    services: "10"
+    persistentvolumeclaims: "4"
+    requests.storage: 10Gi

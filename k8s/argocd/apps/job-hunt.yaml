@@ -1,0 +1,35 @@
+# Pointer Application: job-hunt's WORKLOADS, sourced from the app's OWN
+# public repo (deploy/) — NOT this repo. Same Option E dev-owned pattern as
+# kiroku/documentor-pro. Public repo + public image, so unlike
+# documentor-pro this needs no repository-credential Secret and no
+# imagePullSecret — plain HTTPS clone, plain public image pull.
+#
+# In the locked-down `personal` project: sourceRepos allow-lists only this
+# repo, destinations only the job-hunt namespace, and cluster-scoped
+# resources are denied. So a push to deep-astaad/job-hunt can only ever
+# affect the job-hunt namespace.
+#
+# sync-wave "1": after the governance bundle (wave 0) has created the
+# namespace + quota + limitrange + deployer RBAC.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: job-hunt
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: personal
+  source:
+    repoURL: https://github.com/deep-astaad/job-hunt.git
+    targetRevision: main
+    path: deploy
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: job-hunt
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false # the governance Application (wave 0) created it
