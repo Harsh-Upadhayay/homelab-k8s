@@ -30,6 +30,7 @@ spec:
   sourceRepos:
     - https://github.com/Harsh-Upadhayay/kiroku.git
     - https://github.com/Harsh-Upadhayay/jobhunt.git
+    - git@github.com:nirajmatere/documentor_pro.git
 
   # One namespace per app, in-cluster only. Extended per app as they land.
   destinations:
@@ -37,6 +38,8 @@ spec:
       namespace: kiroku
     - server: https://kubernetes.default.svc
       namespace: jobhunt
+    - server: https://kubernetes.default.svc
+      namespace: documentor-pro
 
   # Deny ALL cluster-scoped resources — the core of the lockdown.
   # (Empty whitelist = nothing cluster-scoped is permitted.)

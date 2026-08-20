@@ -1,0 +1,32 @@
+# Governance Application for the documentor-pro (personal) namespace.
+# PLATFORM-OWNED: creates the namespace + ResourceQuota + LimitRange + deployer
+# RBAC from THIS repo (k8s/apps/personal/documentor-pro/). It lives in the
+# `default` project because it creates a Namespace + RBAC — cluster/namespaced
+# admin that the locked-down `personal` project deliberately forbids. See
+# docs/Migration Plan.md (Option E).
+#
+# sync-wave "0": root applies (and health-gates) this before the workload
+# pointer Application (wave 1), so the namespace + quota exist before any pod
+# tries to land in them.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: documentor-pro-governance # provisions the namespace AND quota + limitrange + RBAC
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Harsh-Upadhayay/homelab-k8s.git
+    targetRevision: main
+    path: k8s/apps/personal/documentor-pro
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: documentor-pro
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false # namespace.yaml in the bundle creates it

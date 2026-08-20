@@ -1,0 +1,38 @@
+# Pointer Application: documentor-pro's WORKLOADS, sourced from the app's OWN
+# private repo (deploy/) — NOT this repo. Same Option E dev-owned pattern as
+# kiroku/jobhunt (apps/kiroku.yaml).
+#
+# In the locked-down `personal` project: sourceRepos allow-lists only this
+# repo, destinations only the documentor-pro namespace, and cluster-scoped
+# resources are denied. So a push to nirajmatere/documentor_pro can only ever
+# affect the documentor-pro namespace.
+#
+# Auth: git@github.com:nirajmatere/documentor_pro.git is private, so Argo CD
+# reads it via the documentor-pro-repo-creds Secret in the argocd namespace
+# (label argocd.argoproj.io/secret-type: repository), created imperatively —
+# not ESO-managed, deliberately bypassed for this low-stakes deploy key.
+#
+# sync-wave "1": after the governance bundle (wave 0) has created the
+# namespace + quota + limitrange + deployer RBAC.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: documentor-pro
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: personal
+  source:
+    repoURL: git@github.com:nirajmatere/documentor_pro.git
+    targetRevision: main
+    path: deploy
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: documentor-pro
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false # the governance Application (wave 0) created it
