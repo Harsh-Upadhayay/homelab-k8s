@@ -25,5 +25,5 @@ spec:
         memory: 16Mi
       max: # a container may not set limits above this
         cpu: "1"
-        memory: 2Gi # bumped 1Gi -> 2Gi (matches the ResourceQuota ceiling) after job-hunt-api's
-        # real cold sync-pull needed 1.5Gi (2026-07-09 OOMKill incident, see api.yaml)
+        memory: 2Gi # comfortably covers job-hunt's largest container (django/celery-worker
+        # at 500m/512Mi limits) with room to grow; unchanged in the 2026-08-21 quota resize

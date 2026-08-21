@@ -1,7 +1,17 @@
 # Aggregate resource ceiling for the whole job-hunt namespace — the "how much"
 # fence (alongside RBAC "who" and the AppProject "what/where"). Bounds a runaway
 # dev app so it can't starve homelab workloads on a never-overcommitted cluster
-# (ADR-0020). Sized for a small two-container app; tune as the app grows.
+# (ADR-0020).
+#
+# Sized 2026-08-21 from the app's actual 7-workload footprint (django, 3x
+# celery, mysql, redis, frontend), not the kiroku-derived 2-container default
+# this file started from. Steady-state usage across all 7 pods is
+# requests.cpu~900m / requests.memory~1024Mi / limits.cpu~1.9 / limits.memory
+# ~2.25Gi — the ORIGINAL 1Gi requests.memory cap left zero headroom, which is
+# why `frontend` could never get a single pod scheduled, and why a RollingUpdate
+# on any other pod deadlocked (old pod's quota usage blocked the new pod
+# replacing it, so the old one could never be evicted either). These values
+# give steady-state usage roughly 2x headroom for a full-fleet rollout surge.
 #
 # NOTE: once this quota constrains a compute resource, EVERY pod in the namespace
 # must declare requests+limits or it's rejected — the paired limitrange.yaml
@@ -14,13 +24,11 @@ metadata:
   namespace: job-hunt
 spec:
   hard:
-    requests.cpu: "1"
-    requests.memory: 1Gi
-    limits.cpu: "2"
-    limits.memory: 3Gi # bumped 2Gi -> 3Gi: RollingUpdate briefly needs OLD pod's limit
-    # AND the new pod's limit at once (surge), which the 2Gi cap rejected outright
-    # when job-hunt-api's limit was raised (2026-07-09) -- see limitrange.yaml, api.yaml
-    pods: "15"
+    requests.cpu: "2"
+    requests.memory: 2.5Gi
+    limits.cpu: "4"
+    limits.memory: 5Gi
+    pods: "20" # 7 workloads x2 during a full-fleet rollout surge, plus margin
     services: "10"
     persistentvolumeclaims: "4"
     requests.storage: 10Gi
