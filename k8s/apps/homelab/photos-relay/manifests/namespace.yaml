@@ -1,0 +1,9 @@
+# Dedicated namespace for the Immich -> Google Photos relay. The ESO opt-in label
+# is what lets the ClusterSecretStore's namespace condition materialize the
+# relay's ExternalSecrets here (same gate every other app namespace uses).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: photos-relay
+  labels:
+    neovara-external-secrets: "true"

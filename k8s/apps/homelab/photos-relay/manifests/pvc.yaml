@@ -1,0 +1,17 @@
+# Tiny durable store for the relay's progress ledger (which asset IDs are already
+# in the cloud). It only holds JSON, so 1Gi is generous. It lives on worker-3's
+# HDD-backed Longhorn — the same node the relay is pinned to — so it never forces
+# a cross-node attach. Losing it is not catastrophic: the relay would simply
+# re-verify assets against Google Photos on the next pass (dedup is idempotent).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: photos-relay-state
+  namespace: photos-relay
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn-immich-hdd-retain
+  resources:
+    requests:
+      storage: 1Gi

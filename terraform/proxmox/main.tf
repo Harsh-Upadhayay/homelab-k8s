@@ -130,6 +130,23 @@ resource "proxmox_virtual_environment_vm" "k3s_worker" {
     bridge = var.network_bridge
   }
 
+  # The Google Photos relay drives an Android handset over ADB, and ADB is a USB
+  # device rather than a block device — so the handset has to reach the guest as
+  # a mapped USB port, not a disk.
+  #
+  # host is a physical "bus-port" pair, never vendor:product. Android rewrites
+  # its USB product ID on every mode change — observed live on this handset,
+  # 0x2e82 (PTP) -> 0x2e76 (PTP+ADB) the moment USB debugging was toggled — so an
+  # ID binding would break on the first mode flip, reboot, or Photos update. The
+  # port number is stable as long as the cable stays in the same physical socket.
+  dynamic "usb" {
+    for_each = each.value.usb_devices
+    content {
+      host = usb.value.host
+      usb3 = usb.value.usb3
+    }
+  }
+
   initialization {
     datastore_id = each.value.os_datastore_id
 

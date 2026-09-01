@@ -23,3 +23,7 @@
     - role: longhorn_node
       tags: [longhorn]
     - role: k3s_agent
+    # USB perms for the Google Photos relay handset. Tag-gated: runs only on an
+    # explicit `--tags photos_relay`, and no-ops on workers without the handset.
+    - role: photos_relay_udev
+      tags: [never, photos_relay]

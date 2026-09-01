@@ -28,7 +28,8 @@ spec:
     - oci://ghcr.io/immich-app/immich-charts/immich
 
   # Only the homelab app namespaces on the in-cluster API server.
-  # Extended as each app lands (M1 homepage → M3 abs → M5 nextcloud → M6 immich).
+  # Extended as each app lands (M1 homepage → M3 abs → M5 nextcloud → M6 immich →
+  # photos-relay: the Immich → Google Photos upload relay).
   destinations:
     - server: https://kubernetes.default.svc
       namespace: homepage
@@ -38,6 +39,8 @@ spec:
       namespace: audiobookshelf
     - server: https://kubernetes.default.svc
       namespace: immich
+    - server: https://kubernetes.default.svc
+      namespace: photos-relay
 
   # Cluster-scoped kinds these apps may manage: just their own Namespace.
   # (CreateNamespace=true / namespace.yaml both create a Namespace object.)

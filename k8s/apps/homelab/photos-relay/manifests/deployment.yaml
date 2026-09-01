@@ -1,0 +1,101 @@
+# The relay runs as a single always-on pod, pinned to k3s-worker-3 because that
+# is the node the handset's USB port is mapped into (Terraform usb_devices). It
+# is Recreate, never rolling: two pods must never share the one adb device.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: photos-relay
+  namespace: photos-relay
+  labels:
+    app.kubernetes.io/name: photos-relay
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: photos-relay
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: photos-relay
+    spec:
+      # The handset is physically on pve-asrock, mapped into this worker only.
+      nodeSelector:
+        kubernetes.io/hostname: k3s-worker-3
+      # No k3s taint tolerations: this must never land on the control-plane node.
+      securityContext:
+        # Root in-container == host root here (no userns remap on k3s), which is
+        # what lets adb open the root-owned /dev/bus/usb character devices without
+        # a privileged container. libusb needs raw device access, nothing more.
+        runAsUser: 0
+      containers:
+        - name: relay
+          # Pinned Alpine; android-tools (adb) + python are installed at start
+          # from Alpine's community repo. A follow-up can replace this with the
+          # baked image in relay/Dockerfile to drop the runtime dependency on the
+          # Alpine CDN — see the app README.
+          image: alpine:3.20.3
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -e
+              echo "[init] installing adb + python"
+              echo "https://dl-cdn.alpinelinux.org/alpine/v3.20/community" \
+                >> /etc/apk/repositories
+              apk add --no-cache android-tools python3
+              # Give adb the pre-authorized identity so the handset does not
+              # re-prompt. Copied to a writable dir because adb rewrites perms.
+              mkdir -p /root/.android
+              cp /adb-key/adbkey /root/.android/adbkey
+              cp /adb-key/adbkey.pub /root/.android/adbkey.pub
+              chmod 600 /root/.android/adbkey
+              adb start-server
+              exec python3 /code/relay.py
+          env:
+            - name: STATE_PATH
+              value: /state/relay-state.json
+            # IMMICH_API_KEY comes from the ESO-materialized Secret. Absent/empty
+            # until the user stores the key in SSM; the relay idles (not crashes)
+            # in that case so the pod stays inspectable.
+          envFrom:
+            - secretRef:
+                name: photos-relay-immich
+                optional: true
+          volumeMounts:
+            - name: usb
+              mountPath: /dev/bus/usb
+            - name: code
+              mountPath: /code
+            - name: adb-key
+              mountPath: /adb-key
+              readOnly: true
+            - name: state
+              mountPath: /state
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              # Downloads stream in 1 MiB chunks and uiautomator dumps are small,
+              # so the relay's own footprint is tiny; the cap is a safety rail.
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        # The /dev/bus/usb DIRECTORY, not a leaf node: Android re-enumerates on
+        # every mode change and reboot, changing the leaf number — mounting the
+        # directory means the pod keeps seeing the device across all of that.
+        - name: usb
+          hostPath:
+            path: /dev/bus/usb
+            type: Directory
+        - name: code
+          configMap:
+            name: photos-relay-code
+        - name: adb-key
+          secret:
+            secretName: photos-relay-adb
+            defaultMode: 0600
+        - name: state
+          persistentVolumeClaim:
+            claimName: photos-relay-state

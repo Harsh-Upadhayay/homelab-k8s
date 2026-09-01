@@ -82,5 +82,14 @@ workers = {
     data_disk_cache     = "none"
     data_disk_backup    = false
     data_disk_replicate = false
+
+    # Moto G13 (serial ZD222B3GL8) — the Google Photos relay handset, cabled to
+    # pve-asrock. Bus 1 Port 4 is a USB 2.0 root-hub port, which is all the
+    # handset can negotiate anyway, so usb3 stays false. worker-3 is the right
+    # guest for it: the immich-library Longhorn replica already lives on this
+    # node's HDD, so relay traffic never crosses the network.
+    usb_devices = [
+      { host = "1-4" },
+    ]
   }
 }

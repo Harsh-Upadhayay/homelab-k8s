@@ -1,0 +1,303 @@
+# The relay logic, mounted into the pod. Kept in a ConfigMap (not baked into an
+# image) so the whole program is inspectable in-cluster and editable without a
+# rebuild while the pipeline is still settling. The canonical copy lives at
+# k8s/apps/homelab/photos-relay/relay/relay.py — regenerate this file from it.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: photos-relay-code
+  namespace: photos-relay
+data:
+  relay.py: |
+    #!/usr/bin/env python3
+    """Immich -> Google Photos relay.
+
+    Pulls originals from Immich over its HTTP API, feeds them to the handset's Google
+    Photos backup, waits for the batch to reach the cloud, then deletes the local
+    copies to reclaim phone storage. Repeats forever.
+
+    Safety invariant: Immich is the source of truth and the phone is disposable.
+    A file is only ever deleted from the phone after its batch reports "Backup
+    complete", and even a wrongly-deleted file is re-derivable from Immich — so no
+    original can be lost. The relay only deletes files it pushed (RELAY_PREFIX),
+    never the handset's own camera roll.
+
+    All device control is over adb: the phone is not rooted and Google Photos here is
+    the ReVanced build, so the app UI (via uiautomator) is the only backup-state
+    oracle. See docs/superpowers/specs/2026-09-02-immich-google-photos-relay-design.md.
+    """
+    from __future__ import annotations
+
+    import json
+    import os
+    import subprocess
+    import sys
+    import time
+    import urllib.request
+    import urllib.error
+
+    # ── configuration (all overridable by env; defaults suit this homelab) ─────────
+    # Immich serves its REST API under /api (the same host also serves the web SPA at
+    # the root, so the /api prefix is load-bearing — without it every call 404s).
+    IMMICH_URL = os.environ.get(
+        "IMMICH_URL", "http://immich-server.immich.svc.cluster.local:2283/api").rstrip("/")
+    IMMICH_API_KEY = os.environ.get("IMMICH_API_KEY", "")
+    STATE_PATH = os.environ.get("STATE_PATH", "/state/relay-state.json")
+
+    # Files are pushed into a folder Google Photos already backs up. The prefix makes
+    # every relay file identifiable so the delete step can never touch a real photo.
+    PUSH_DIR = os.environ.get("PUSH_DIR", "/sdcard/DCIM/Camera")
+    RELAY_PREFIX = os.environ.get("RELAY_PREFIX", "immich_")
+
+    # A batch is bounded by bytes so the phone never fills up mid-cycle. The Moto G13
+    # had ~50 GB free; 15 GB leaves generous headroom for Photos' own working space.
+    BATCH_MAX_BYTES = int(os.environ.get("BATCH_MAX_BYTES", str(15 * 1024**3)))
+    BATCH_MAX_FILES = int(os.environ.get("BATCH_MAX_FILES", "300"))
+
+    # How long to wait for a batch to finish backing up before giving up on it (it
+    # will simply be retried on the next pass — nothing is lost).
+    BACKUP_TIMEOUT_S = int(os.environ.get("BACKUP_TIMEOUT_S", str(6 * 3600)))
+    BACKUP_POLL_S = int(os.environ.get("BACKUP_POLL_S", "60"))
+    # Idle wait after a full pass finds nothing new, before reconciling again.
+    IDLE_INTERVAL_S = int(os.environ.get("IDLE_INTERVAL_S", str(3600)))
+
+    PHOTOS_PKG = os.environ.get("PHOTOS_PKG", "app.revanced.android.photos")
+    ADB = os.environ.get("ADB", "adb")
+
+
+    def log(msg: str) -> None:
+        print(f"[relay] {time.strftime('%Y-%m-%d %H:%M:%S')} {msg}", flush=True)
+
+
+    # ── adb helpers ────────────────────────────────────────────────────────────────
+    def adb(*args: str, timeout: int = 120, check: bool = True,
+            binary: bool = False) -> subprocess.CompletedProcess:
+        out = subprocess.PIPE
+        res = subprocess.run([ADB, *args], stdout=out,
+                             stderr=subprocess.PIPE, timeout=timeout)
+        if check and res.returncode != 0:
+            raise RuntimeError(f"adb {' '.join(args)} failed: "
+                               f"{res.stderr.decode('utf-8', 'replace')[:300]}")
+        return res
+
+
+    def adb_shell(cmd: str, **kw) -> str:
+        return adb("shell", cmd, **kw).stdout.decode("utf-8", "replace")
+
+
+    def wait_for_device() -> None:
+        """Block until the handset is present and authorized. Survives phone reboots
+        (e.g. after a system update) — the preserved adb key means no re-tap."""
+        while True:
+            try:
+                adb("wait-for-device", timeout=BACKUP_POLL_S)
+                state = adb_shell("getprop sys.boot_completed", timeout=30).strip()
+                devs = adb("devices", timeout=30).stdout.decode()
+                if "\tdevice" in devs and state == "1":
+                    return
+                if "unauthorized" in devs:
+                    log("device present but UNAUTHORIZED — the adb key was not "
+                        "accepted; a physical 'Always allow' tap is required once")
+            except Exception as e:  # noqa: BLE001 — keep polling through any transient
+                log(f"waiting for device: {e}")
+            time.sleep(BACKUP_POLL_S)
+
+
+    # ── Immich API ─────────────────────────────────────────────────────────────────
+    def immich(path: str, method: str = "GET", body: dict | None = None):
+        data = json.dumps(body).encode() if body is not None else None
+        req = urllib.request.Request(IMMICH_URL + path, data=data, method=method,
+                                     headers={"x-api-key": IMMICH_API_KEY,
+                                              "Accept": "application/json",
+                                              "Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=60) as r:
+            return json.loads(r.read())
+
+
+    def list_all_assets() -> list[dict]:
+        """Every non-trashed image/video, as {id, name, size}. Uses the metadata
+        search endpoint which pages deterministically."""
+        assets: list[dict] = []
+        page = 1
+        while True:
+            # withExif gives us fileSizeInByte so batches can be bounded by bytes;
+            # isTrashed:false keeps deleted-but-not-purged assets out of the mirror.
+            res = immich("/search/metadata", "POST",
+                         {"page": page, "size": 1000, "withExif": True,
+                          "isTrashed": False})
+            items = res.get("assets", {}).get("items", [])
+            for a in items:
+                assets.append({
+                    "id": a["id"],
+                    "name": a.get("originalFileName") or f"{a['id']}",
+                    "size": int(a.get("exifInfo", {}).get("fileSizeInByte") or 0),
+                })
+            nxt = res.get("assets", {}).get("nextPage")
+            if not nxt:
+                break
+            page = int(nxt)
+        return assets
+
+
+    def download_original(asset_id: str, dest: str) -> None:
+        req = urllib.request.Request(f"{IMMICH_URL}/assets/{asset_id}/original",
+                                     headers={"x-api-key": IMMICH_API_KEY})
+        with urllib.request.urlopen(req, timeout=300) as r, open(dest, "wb") as f:
+            while True:
+                chunk = r.read(1024 * 1024)
+                if not chunk:
+                    break
+                f.write(chunk)
+
+
+    # ── Google Photos backup oracle ────────────────────────────────────────────────
+    def backup_complete() -> bool:
+        """True when Google Photos reports its backup queue is drained. The global
+        'Backup complete' signal means every pushed item in the queue is in the
+        cloud; there is no per-file oracle on this unrooted ReVanced build."""
+        try:
+            adb_shell("input keyevent KEYCODE_WAKEUP", timeout=30, check=False)
+            adb_shell(f"monkey -p {PHOTOS_PKG} -c android.intent.category.LAUNCHER 1",
+                      timeout=30, check=False)
+            time.sleep(6)
+            adb_shell("uiautomator dump /sdcard/ui.xml", timeout=60, check=False)
+            ui = adb_shell("cat /sdcard/ui.xml", timeout=30, check=False).lower()
+        except Exception as e:  # noqa: BLE001
+            log(f"backup-oracle read failed: {e}")
+            return False
+        if "backup complete" in ui:
+            return True
+        # Any of these means the queue is still draining.
+        for pending in ("backing up", "backup in progress", "waiting for",
+                        "getting ready", "preparing"):
+            if pending in ui:
+                return False
+        # Neither string present (Photos not on its home screen): treat as not done.
+        return False
+
+
+    def wait_for_backup() -> bool:
+        deadline = time.time() + BACKUP_TIMEOUT_S
+        while time.time() < deadline:
+            if backup_complete():
+                return True
+            time.sleep(BACKUP_POLL_S)
+        return False
+
+
+    # ── state ──────────────────────────────────────────────────────────────────────
+    def load_state() -> dict:
+        try:
+            with open(STATE_PATH) as f:
+                return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return {"done": []}
+
+
+    def save_state(state: dict) -> None:
+        tmp = STATE_PATH + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(state, f)
+        os.replace(tmp, STATE_PATH)
+
+
+    # ── batch push / verify / reclaim ──────────────────────────────────────────────
+    def push_batch(batch: list[dict]) -> list[str]:
+        """Download each asset from Immich and adb-push it to the phone. Returns the
+        remote paths actually pushed."""
+        pushed: list[str] = []
+        for a in batch:
+            local = f"/tmp/{RELAY_PREFIX}{a['id']}"
+            safe_name = a["name"].replace("/", "_")
+            remote = f"{PUSH_DIR}/{RELAY_PREFIX}{a['id']}_{safe_name}"
+            try:
+                download_original(a["id"], local)
+                adb("push", local, remote, timeout=600)
+                pushed.append(remote)
+            except Exception as e:  # noqa: BLE001 — one bad asset must not stop the batch
+                log(f"skip asset {a['id']} ({a['name']}): {e}")
+            finally:
+                if os.path.exists(local):
+                    os.remove(local)
+        if pushed:
+            # One scan for the whole batch is far cheaper than one per file.
+            adb_shell("content call --uri content://media/external/file "
+                      "--method scan_volume --arg external_primary",
+                      timeout=120, check=False)
+        return pushed
+
+
+    def delete_pushed(paths: list[str]) -> None:
+        """Delete only the files we pushed (RELAY_PREFIX guarantees this never hits a
+        real camera photo), then rescan so MediaStore drops the rows."""
+        for p in paths:
+            adb_shell(f"rm -f '{p}'", timeout=60, check=False)
+        adb_shell("content call --uri content://media/external/file "
+                  "--method scan_volume --arg external_primary",
+                  timeout=120, check=False)
+
+
+    def run_pass(state: dict) -> int:
+        """One reconciliation pass. Returns how many assets were newly mirrored."""
+        done = set(state["done"])
+        assets = list_all_assets()
+        todo = [a for a in assets if a["id"] not in done]
+        log(f"library has {len(assets)} assets; {len(todo)} still to mirror")
+        mirrored = 0
+
+        while todo:
+            batch, size = [], 0
+            while todo and len(batch) < BATCH_MAX_FILES and size < BATCH_MAX_BYTES:
+                a = todo.pop(0)
+                batch.append(a)
+                size += a["size"] or 0
+            log(f"pushing batch of {len(batch)} assets (~{size // 1024**2} MiB)")
+            pushed = push_batch(batch)
+            if not pushed:
+                log("nothing pushed in this batch; moving on")
+                continue
+
+            log(f"pushed {len(pushed)} files; waiting for Google Photos to back up")
+            if not wait_for_backup():
+                log("backup did not complete before timeout — leaving local files "
+                    "in place and NOT marking done; will retry next pass")
+                continue
+
+            # Batch is in the cloud: safe to mark done and reclaim phone storage.
+            for a in batch:
+                if a["id"] not in done:
+                    done.add(a["id"])
+                    state["done"].append(a["id"])
+            save_state(state)
+            delete_pushed(pushed)
+            mirrored += len(batch)
+            log(f"batch mirrored and reclaimed; {mirrored} done this pass")
+
+        return mirrored
+
+
+    def main() -> int:
+        if not IMMICH_API_KEY:
+            log("IMMICH_API_KEY is empty — set the photos-relay-immich Secret "
+                "(see the app README). Idling so the pod stays up for inspection.")
+            while True:
+                time.sleep(300)
+
+        log(f"relay starting; Immich={IMMICH_URL} push_dir={PUSH_DIR}")
+        while True:
+            try:
+                wait_for_device()
+                state = load_state()
+                newly = run_pass(state)
+                if newly == 0:
+                    log(f"nothing new; idling {IDLE_INTERVAL_S}s before next pass")
+                    time.sleep(IDLE_INTERVAL_S)
+            except KeyboardInterrupt:
+                return 0
+            except Exception as e:  # noqa: BLE001 — the loop must never die
+                log(f"pass failed: {e}; retrying in {BACKUP_POLL_S}s")
+                time.sleep(BACKUP_POLL_S)
+
+
+    if __name__ == "__main__":
+        sys.exit(main())
