@@ -54,6 +54,49 @@ server:
               memory: 1Gi
             limits:
               memory: 8Gi
+          # Immich v3 runs the API and the CPU-bound video-transcoding worker in
+          # ONE process. While a batch of clips transcodes (GPU/CUDA is absent on
+          # this node, so ffmpeg falls back to CPU), the /api/server/ping health
+          # endpoint can miss the chart-default liveness timeout of 1s — kubelet
+          # then SIGTERMs a server that is actually healthy, just busy, throwing
+          # away in-flight transcode work and crash-looping (incident 2026-09-02).
+          # Override the chart's probes so liveness restarts only a genuinely
+          # HUNG process, not a busy one: 10s timeout, 5 misses (50s) before kill.
+          # Named port `http` matches the chart's container port (== 2283).
+          probes:
+            liveness:
+              enabled: true
+              custom: true
+              spec:
+                httpGet:
+                  path: /api/server/ping
+                  port: http
+                initialDelaySeconds: 0
+                periodSeconds: 10
+                timeoutSeconds: 10
+                failureThreshold: 5
+            readiness:
+              enabled: true
+              custom: true
+              spec:
+                httpGet:
+                  path: /api/server/ping
+                  port: http
+                initialDelaySeconds: 0
+                periodSeconds: 10
+                timeoutSeconds: 5
+                failureThreshold: 3
+            startup:
+              enabled: true
+              custom: true
+              spec:
+                httpGet:
+                  path: /api/server/ping
+                  port: http
+                initialDelaySeconds: 0
+                periodSeconds: 10
+                timeoutSeconds: 5
+                failureThreshold: 30
   persistence:
     # Chart 0.13.1 mounts the claim at the upstream-standard /data. Every
     # restored asset row still stores the historical /usr/src/app/upload prefix,
