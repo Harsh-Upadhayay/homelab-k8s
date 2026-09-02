@@ -247,7 +247,17 @@ data:
 
     def wait_for_device() -> None:
         """Block until the handset is present and authorized. Survives phone reboots
-        (e.g. after a system update) — the preserved adb key means no re-tap."""
+        (e.g. after a system update) — the preserved adb key means no re-tap.
+
+        Self-heals the USB-claim race: after a pod restart the fresh adb daemon can
+        come up 'blind' when the previous pod's adb server had not yet released the
+        device's USB interface, so `adb devices` stays empty even though passthrough
+        is fine. When the device stays absent, restart the adb server (kill + start)
+        to clear the stale claim instead of waiting for a human to nudge it.
+
+        Also heartbeats the status page each poll so 'waiting for phone' never looks
+        frozen (this is otherwise the one phase with no in-loop status write)."""
+        misses = 0
         while True:
             try:
                 adb("wait-for-device", timeout=BACKUP_POLL_S)
@@ -260,6 +270,19 @@ data:
                         "accepted; a physical 'Always allow' tap is required once")
             except Exception as e:  # noqa: BLE001 — keep polling through any transient
                 log(f"waiting for device: {e}")
+            misses += 1
+            set_status(phase="waiting_device",
+                       last_event=f"waiting for phone… ({misses} polls)")
+            # Clear a stale USB claim from the previous pod's adb server. Cheap and
+            # safe: wait-for-device has already timed out, so no handshake is in
+            # flight. Skip the very first miss so a phone that is merely mid-connect
+            # gets one clean poll before we cycle the server under it.
+            if misses > 1:
+                log("device still absent — restarting adb server to clear any stale "
+                    "USB claim")
+                adb("kill-server", timeout=30, check=False)
+                time.sleep(2)
+                adb("start-server", timeout=30, check=False)
             time.sleep(BACKUP_POLL_S)
 
 
