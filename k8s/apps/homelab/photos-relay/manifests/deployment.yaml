@@ -25,12 +25,18 @@ spec:
         kubernetes.io/hostname: k3s-worker-3
       # No k3s taint tolerations: this must never land on the control-plane node.
       securityContext:
-        # Root in-container == host root here (no userns remap on k3s), which is
-        # what lets adb open the root-owned /dev/bus/usb character devices without
-        # a privileged container. libusb needs raw device access, nothing more.
         runAsUser: 0
       containers:
         - name: relay
+          securityContext:
+            # Required, not optional. Root alone is NOT enough: Kubernetes applies
+            # a devices cgroup that denies open() on the handset's USB character
+            # node (major 189) even to root — libusb enumerates it from sysfs but
+            # every open fails with EPERM/EIO. There is no per-device cgroup allow
+            # in a pod spec without a device plugin, so a privileged container is
+            # the supported way to grant raw USB access. Contained blast radius:
+            # a single-purpose relay pinned to one node, driving one phone.
+            privileged: true
           # glibc base (Debian, via python-slim) + Google's static platform-tools
           # adb. This combination is load-bearing, not incidental: Alpine's
           # android-tools adb (musl, libusb 1.0.27) hits a libusb assertion crash
