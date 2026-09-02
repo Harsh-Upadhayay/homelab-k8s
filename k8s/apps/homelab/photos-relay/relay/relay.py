@@ -82,6 +82,7 @@ STATUS: dict = {
     "remaining": None,
     "batch_files": None,       # current batch, while one is in flight
     "batch_bytes": None,
+    "batch_done": None,        # files pushed so far within the current batch
     "session_start_done": None,  # `done` when this process started, for rate calc
     "immich_ok": None,         # did the last library scan reach Immich?
 }
@@ -160,7 +161,7 @@ async function tick(){try{
  $("rem").textContent=(total!=null&&done!=null)?(total-done).toLocaleString():"–";
  $("phase").textContent=(PH[s.phase]||s.phase||"–")+(s.last_event?" · "+s.last_event:"");
  $("ph2").textContent=PH[s.phase]?s.phase:(s.phase||"–");
- $("batch").textContent=s.batch_files?(s.batch_files+" files · "+(s.batch_bytes/1048576).toFixed(0)+" MiB"):"—";
+ $("batch").textContent=s.batch_files?((s.batch_done!=null?s.batch_done+"/":"")+s.batch_files+" files · "+(s.batch_bytes/1048576).toFixed(0)+" MiB"):"—";
  var rate="–",eta="–";
  if(s.session_start_done!=null&&done!=null){
   var el=s.updated_at-s.started_at,mv=done-s.session_start_done;
@@ -326,9 +327,13 @@ def backup_complete() -> bool:
 
 def wait_for_backup() -> bool:
     deadline = time.time() + BACKUP_TIMEOUT_S
+    start = time.time()
     while time.time() < deadline:
         if backup_complete():
             return True
+        # Heartbeat every poll so the status page stays fresh through the wait.
+        set_status(last_event="awaiting Google Photos backup… "
+                   f"{int(time.time() - start) // 60}m")
         time.sleep(BACKUP_POLL_S)
     return False
 
@@ -354,10 +359,16 @@ def push_batch(batch: list[dict]) -> list[str]:
     """Download each asset from Immich and adb-push it to the phone. Returns the
     remote paths actually pushed."""
     pushed: list[str] = []
-    for a in batch:
+    total = len(batch)
+    for i, a in enumerate(batch, 1):
         local = f"/tmp/{RELAY_PREFIX}{a['id']}"
         safe_name = a["name"].replace("/", "_")
         remote = f"{PUSH_DIR}/{RELAY_PREFIX}{a['id']}_{safe_name}"
+        # Per-file heartbeat: keeps the status page's updated_at fresh through the
+        # long push loop (a 15 GiB batch takes many minutes) and shows which file
+        # is in flight, so the page never looks frozen mid-batch.
+        set_status(batch_done=i - 1,
+                   last_event=f"pushing {i}/{total}: {a['name'][:48]}")
         try:
             download_original(a["id"], local)
             adb("push", local, remote, timeout=600)
@@ -367,6 +378,7 @@ def push_batch(batch: list[dict]) -> list[str]:
         finally:
             if os.path.exists(local):
                 os.remove(local)
+    set_status(batch_done=total)
     if pushed:
         # One scan for the whole batch is far cheaper than one per file.
         adb_shell("content call --uri content://media/external/file "
@@ -433,7 +445,7 @@ def run_pass(state: dict) -> int:
         delete_pushed(pushed)
         mirrored += len(batch)
         set_status(done=len(done), remaining=len(todo),
-                   batch_files=None, batch_bytes=None,
+                   batch_files=None, batch_bytes=None, batch_done=None,
                    last_event=f"{mirrored} mirrored this pass")
         log(f"batch mirrored and reclaimed; {mirrored} done this pass")
 
