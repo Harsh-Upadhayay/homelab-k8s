@@ -78,6 +78,24 @@ open("manifests/configmap.yaml","w").write(head+ind)
 PY
 ```
 
+## Status page (tailnet only)
+
+The relay serves a read-only status page from a built-in HTTP thread on `:8080`,
+exposed on the tailnet by `manifests/status-service.yaml` (a
+`loadBalancerClass: tailscale` Service, the same internal-only mechanism the
+platform uses for dashboards). Once the Tailscale operator has provisioned the
+proxy, it is reachable at the pinned MagicDNS name:
+
+```
+http://photos-relay.<your-tailnet>.ts.net/
+```
+
+It shows overall progress (done / total, %), the current batch, rate + ETA since
+the pod started, whether Immich is reachable, and a "last updated" heartbeat. It
+is strictly read-only — it renders the relay's own status snapshot and cannot
+drive adb or the phone. `/status.json` returns the raw snapshot; `/healthz`
+returns `ok`.
+
 ## Tunables (Deployment env)
 
 | Var | Default | Meaning |

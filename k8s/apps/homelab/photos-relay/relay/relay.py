@@ -21,9 +21,11 @@ import json
 import os
 import subprocess
 import sys
+import threading
 import time
 import urllib.request
 import urllib.error
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 # ── configuration (all overridable by env; defaults suit this homelab) ─────────
 # Immich serves its REST API under /api (the same host also serves the web SPA at
@@ -53,9 +55,166 @@ IDLE_INTERVAL_S = int(os.environ.get("IDLE_INTERVAL_S", str(3600)))
 PHOTOS_PKG = os.environ.get("PHOTOS_PKG", "app.revanced.android.photos")
 ADB = os.environ.get("ADB", "adb")
 
+# Where the live-status snapshot is written and the read-only status page served.
+# The page is exposed only on the tailnet (a tailscale LoadBalancer Service), so
+# it carries no auth of its own — reaching it already requires being on the
+# tailnet. It is strictly read-only: it renders progress, it cannot drive adb.
+STATUS_PATH = os.environ.get("STATUS_PATH", "/state/status.json")
+STATUS_PORT = int(os.environ.get("STATUS_PORT", "8080"))
+
 
 def log(msg: str) -> None:
     print(f"[relay] {time.strftime('%Y-%m-%d %H:%M:%S')} {msg}", flush=True)
+
+
+# ── live status (served as a read-only page over the tailnet) ───────────────────
+# The relay already tracks everything the page needs; set_status just publishes a
+# snapshot. It is deliberately best-effort: a status write or a page request must
+# never be able to disrupt the actual mirroring loop.
+_STATUS_LOCK = threading.Lock()
+STATUS: dict = {
+    "phase": "starting",       # coarse state machine, mapped to a label in the UI
+    "last_event": "",          # the most recent human-readable line
+    "started_at": time.time(),  # process start (rate/ETA are "since start")
+    "updated_at": time.time(),
+    "total": None,             # assets in the Immich library
+    "done": None,              # assets confirmed in Google Photos (persisted set)
+    "remaining": None,
+    "batch_files": None,       # current batch, while one is in flight
+    "batch_bytes": None,
+    "session_start_done": None,  # `done` when this process started, for rate calc
+    "immich_ok": None,         # did the last library scan reach Immich?
+}
+
+
+def set_status(**kw) -> None:
+    with _STATUS_LOCK:
+        STATUS.update(kw)
+        STATUS["updated_at"] = time.time()
+        snap = dict(STATUS)
+    try:  # mirror to disk so a restart (and any external reader) sees last state
+        tmp = STATUS_PATH + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(snap, f)
+        os.replace(tmp, STATUS_PATH)
+    except OSError:
+        pass
+
+
+# The page is a static shell; it fetches /status.json every few seconds and
+# renders client-side, so the server never string-builds a whole page per hit.
+_PAGE = """<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Immich → Google Photos relay</title>
+<style>
+ :root{--bg:#0f1117;--card:#1a1d27;--line:#252936;--fg:#e6e8ee;--muted:#8b90a0;--ok:#3fb950;--warn:#d29922;--bad:#f85149}
+ *{box-sizing:border-box}
+ body{margin:0;background:var(--bg);color:var(--fg);padding:24px;
+      font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+ .wrap{max-width:640px;margin:0 auto}
+ h1{font-size:17px;font-weight:600;margin:0 0 2px}
+ .sub{color:var(--muted);font-size:13px;margin-bottom:18px}
+ .big{font-size:30px;font-weight:700;letter-spacing:-.5px}
+ .big .m{color:var(--muted);font-size:17px;font-weight:600}
+ .bar{height:20px;background:var(--line);border-radius:10px;overflow:hidden;margin:12px 0 6px}
+ .fill{height:100%;width:0;transition:width .6s ease;
+       background:linear-gradient(90deg,#4f8cff,#3fb950)}
+ .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:16px}
+ .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:13px 15px}
+ .card .k{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.6px}
+ .card .v{font-size:17px;font-weight:600;margin-top:3px}
+ .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px}
+ .foot{color:var(--muted);font-size:12px;margin-top:16px;text-align:center}
+</style></head><body><div class="wrap">
+ <h1>Immich → Google Photos relay</h1>
+ <div class="sub" id="phase">loading…</div>
+ <div class="big"><span id="done">–</span> <span class="m">/ <span id="total">–</span> assets · <span id="pct">–%</span></span></div>
+ <div class="bar"><div class="fill" id="fill"></div></div>
+ <div class="grid">
+  <div class="card"><div class="k">Current batch</div><div class="v" id="batch">–</div></div>
+  <div class="card"><div class="k">Remaining</div><div class="v" id="rem">–</div></div>
+  <div class="card"><div class="k">Rate (since start)</div><div class="v" id="rate">–</div></div>
+  <div class="card"><div class="k">ETA</div><div class="v" id="eta">–</div></div>
+  <div class="card"><div class="k">Immich</div><div class="v" id="immich">–</div></div>
+  <div class="card"><div class="k">Phase</div><div class="v" id="ph2">–</div></div>
+ </div>
+ <div class="foot" id="foot">–</div>
+</div><script>
+var PH={starting:"Starting…",waiting_device:"Waiting for phone…",
+ scanning:"Scanning Immich library…",pushing:"Pushing batch to phone…",
+ backing_up:"Waiting for Google Photos backup…",reclaiming:"Reclaiming phone storage…",
+ idle:"Idle — watching for new assets"};
+function dur(s){if(!isFinite(s)||s<0)return "–";s=Math.round(s);
+ var d=Math.floor(s/86400);s-=d*86400;var h=Math.floor(s/3600);s-=h*3600;var m=Math.floor(s/60);
+ if(d)return d+"d "+h+"h";if(h)return h+"h "+m+"m";return m+"m";}
+function $(i){return document.getElementById(i);}
+async function tick(){try{
+ var s=await (await fetch("status.json",{cache:"no-store"})).json();
+ var total=s.total,done=s.done;
+ $("done").textContent=done==null?"–":done.toLocaleString();
+ $("total").textContent=total==null?"–":total.toLocaleString();
+ var pct=(total&&done!=null)?done/total*100:0;
+ $("pct").textContent=pct.toFixed(1)+"%";$("fill").style.width=pct+"%";
+ $("rem").textContent=(total!=null&&done!=null)?(total-done).toLocaleString():"–";
+ $("phase").textContent=(PH[s.phase]||s.phase||"–")+(s.last_event?" · "+s.last_event:"");
+ $("ph2").textContent=PH[s.phase]?s.phase:(s.phase||"–");
+ $("batch").textContent=s.batch_files?(s.batch_files+" files · "+(s.batch_bytes/1048576).toFixed(0)+" MiB"):"—";
+ var rate="–",eta="–";
+ if(s.session_start_done!=null&&done!=null){
+  var el=s.updated_at-s.started_at,mv=done-s.session_start_done;
+  if(el>60&&mv>0){rate=(mv/(el/3600)).toFixed(0)+" /hr";
+   if(total!=null)eta=dur((total-done)/(mv/el));}}
+ $("rate").textContent=rate;$("eta").textContent=eta;
+ var io=s.immich_ok,c=io===false?"var(--bad)":(io?"var(--ok)":"var(--muted)");
+ $("immich").innerHTML='<span class="dot" style="background:'+c+'"></span>'+
+  (io===false?"unreachable":(io?"reachable":"unknown"));
+ var age=Date.now()/1000-s.updated_at;
+ $("foot").innerHTML="updated "+dur(age)+" ago"+(age>180?
+  ' · <span style="color:var(--warn)">stale</span>':"")+" · auto-refresh 8s";
+}catch(e){$("phase").textContent="status unavailable ("+e+")";}}
+tick();setInterval(tick,8000);
+</script></body></html>"""
+
+
+class _StatusHandler(BaseHTTPRequestHandler):
+    def log_message(self, *a):  # keep HTTP access noise out of the relay log
+        pass
+
+    def _send(self, code: int, ctype: str, body: bytes) -> None:
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        try:
+            self.wfile.write(body)
+        except BrokenPipeError:
+            pass
+
+    def do_GET(self):  # noqa: N802 — BaseHTTPRequestHandler's required name
+        if self.path.startswith("/status.json"):
+            with _STATUS_LOCK:
+                body = json.dumps(dict(STATUS)).encode()
+            self._send(200, "application/json", body)
+        elif self.path.startswith("/healthz"):
+            self._send(200, "text/plain", b"ok")
+        else:
+            self._send(200, "text/html; charset=utf-8", _PAGE.encode())
+
+
+def start_status_server() -> None:
+    def serve():
+        while True:
+            try:
+                ThreadingHTTPServer(("0.0.0.0", STATUS_PORT),
+                                    _StatusHandler).serve_forever()
+            except Exception as e:  # noqa: BLE001 — page must never kill the relay
+                log(f"status server error: {e}; retrying in 10s")
+                time.sleep(10)
+    threading.Thread(target=serve, daemon=True, name="status-http").start()
+    log(f"status page serving on :{STATUS_PORT}")
 
 
 # ── adb helpers ────────────────────────────────────────────────────────────────
@@ -229,8 +388,15 @@ def delete_pushed(paths: list[str]) -> None:
 def run_pass(state: dict) -> int:
     """One reconciliation pass. Returns how many assets were newly mirrored."""
     done = set(state["done"])
-    assets = list_all_assets()
+    set_status(phase="scanning", last_event="scanning Immich library")
+    try:
+        assets = list_all_assets()
+    except Exception:  # surface Immich being unreachable on the status page
+        set_status(immich_ok=False, last_event="Immich unreachable")
+        raise
     todo = [a for a in assets if a["id"] not in done]
+    set_status(total=len(assets), done=len(done), remaining=len(todo),
+               immich_ok=True, last_event=f"{len(todo)} still to mirror")
     log(f"library has {len(assets)} assets; {len(todo)} still to mirror")
     mirrored = 0
 
@@ -240,14 +406,19 @@ def run_pass(state: dict) -> int:
             a = todo.pop(0)
             batch.append(a)
             size += a["size"] or 0
+        set_status(phase="pushing", batch_files=len(batch), batch_bytes=size,
+                   last_event=f"pushing {len(batch)} assets")
         log(f"pushing batch of {len(batch)} assets (~{size // 1024**2} MiB)")
         pushed = push_batch(batch)
         if not pushed:
             log("nothing pushed in this batch; moving on")
             continue
 
+        set_status(phase="backing_up",
+                   last_event=f"{len(pushed)} files pushed; awaiting backup")
         log(f"pushed {len(pushed)} files; waiting for Google Photos to back up")
         if not wait_for_backup():
+            set_status(last_event="backup timed out; will retry next pass")
             log("backup did not complete before timeout — leaving local files "
                 "in place and NOT marking done; will retry next pass")
             continue
@@ -258,32 +429,48 @@ def run_pass(state: dict) -> int:
                 done.add(a["id"])
                 state["done"].append(a["id"])
         save_state(state)
+        set_status(phase="reclaiming", last_event="reclaiming phone storage")
         delete_pushed(pushed)
         mirrored += len(batch)
+        set_status(done=len(done), remaining=len(todo),
+                   batch_files=None, batch_bytes=None,
+                   last_event=f"{mirrored} mirrored this pass")
         log(f"batch mirrored and reclaimed; {mirrored} done this pass")
 
     return mirrored
 
 
 def main() -> int:
+    # The status page comes up first so it is inspectable even while the relay is
+    # idle for want of a key, or blocked waiting for the handset.
+    start_status_server()
+
     if not IMMICH_API_KEY:
+        set_status(phase="idle", last_event="waiting for IMMICH_API_KEY")
         log("IMMICH_API_KEY is empty — set the photos-relay-immich Secret "
             "(see the app README). Idling so the pod stays up for inspection.")
         while True:
             time.sleep(300)
 
+    base_done = len(load_state().get("done", []))
+    set_status(phase="starting", done=base_done, session_start_done=base_done,
+               last_event="relay starting")
     log(f"relay starting; Immich={IMMICH_URL} push_dir={PUSH_DIR}")
     while True:
         try:
+            set_status(phase="waiting_device")
             wait_for_device()
             state = load_state()
             newly = run_pass(state)
             if newly == 0:
+                set_status(phase="idle",
+                           last_event=f"nothing new; idle {IDLE_INTERVAL_S // 60}m")
                 log(f"nothing new; idling {IDLE_INTERVAL_S}s before next pass")
                 time.sleep(IDLE_INTERVAL_S)
         except KeyboardInterrupt:
             return 0
         except Exception as e:  # noqa: BLE001 — the loop must never die
+            set_status(last_event=f"pass failed: {str(e)[:120]}")
             log(f"pass failed: {e}; retrying in {BACKUP_POLL_S}s")
             time.sleep(BACKUP_POLL_S)
 

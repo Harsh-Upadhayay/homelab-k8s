@@ -1,0 +1,33 @@
+# Read-only status page for the relay, exposed on the tailnet only — the same
+# "internal front door" mechanism the platform uses for dashboards (ADR-0018's
+# cluster half): a Service claimed by the Tailscale Kubernetes Operator via
+# loadBalancerClass: tailscale. The operator spins up a proxy pod that joins the
+# tailnet as its own device, so the page is reachable at a stable MagicDNS name
+# from tailnet devices ONLY — never the LAN, never the public internet.
+#
+# The page carries no auth of its own by design: reaching it already requires
+# being on the tailnet, and it is strictly read-only (renders progress; it cannot
+# touch adb or the phone). Port 80 → the relay's :8080 status thread.
+#
+# tailscale.com/hostname pins the MagicDNS name so it survives proxy re-creation.
+# NOTE: a cluster rebuild creates a NEW tailnet device — delete the stale
+# "photos-relay" device in the admin console first, or the replacement comes up
+# name-suffixed (photos-relay-1) and the URL changes.
+apiVersion: v1
+kind: Service
+metadata:
+  name: photos-relay-status
+  namespace: photos-relay
+  labels:
+    app.kubernetes.io/name: photos-relay
+  annotations:
+    tailscale.com/hostname: "photos-relay"
+spec:
+  type: LoadBalancer
+  loadBalancerClass: tailscale
+  selector:
+    app.kubernetes.io/name: photos-relay
+  ports:
+    - name: status
+      port: 80
+      targetPort: status   # named port on the relay pod → 8080

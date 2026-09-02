@@ -79,6 +79,12 @@ spec:
             - secretRef:
                 name: photos-relay-immich
                 optional: true
+          ports:
+            # The relay's built-in read-only status page. Exposed on the tailnet
+            # only, via manifests/status-service.yaml (loadBalancerClass:
+            # tailscale). Named so the Service can target it by name.
+            - name: status
+              containerPort: 8080
           volumeMounts:
             - name: usb
               mountPath: /dev/bus/usb
