@@ -91,7 +91,9 @@ PY
 
 ## Known follow-ups
 
-- Replace the apk-install entrypoint with the baked image (`relay/Dockerfile`) to
-  drop the runtime dependency on the Alpine CDN.
+- Replace the start-time platform-tools download with the baked image
+  (`relay/Dockerfile`) to drop the runtime fetch from dl.google.com.
+  (The base is Debian/glibc, not Alpine: Alpine's adb assert-crashes on this
+  handset over USB passthrough — see the Deployment comment.)
 - Move the SSM parameters into `terraform/aws` for the same IaC coverage the rest
   of the secrets have.
