@@ -1,0 +1,32 @@
+---
+# Stable permissions for the Google Photos relay handset's USB node.
+#
+# Terraform maps the handset into this worker as a USB device; inside the guest
+# it appears as /dev/bus/usb/<bus>/<dev>. The relay pod runs as root and can open
+# a root-owned node directly, so this rule is a guardrail rather than a hard
+# requirement: it tags the Android ADB interface and relaxes the node to 0664 so
+# the device is openable even if the relay is later run unprivileged. It is keyed
+# on the USB *interface class* (ADB = ff/42/01), not vendor:product, because
+# Android rewrites its product ID on every mode change.
+#
+# Scoped to k3s_agent but only meaningful on the worker the handset is cabled to;
+# on any other worker the rule simply never matches. Gated behind the
+# `photos_relay` tag so it does not run on ordinary plays.
+
+- name: Install udev rule for the ADB relay handset
+  ansible.builtin.copy:
+    dest: /etc/udev/rules.d/51-photos-relay-adb.rules
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by ansible/roles/photos_relay_udev — do not edit by hand.
+      # Match any USB device exposing Android's ADB interface (class ff / sub 42 /
+      # proto 01) and make its node group-readable/writable for the relay.
+      SUBSYSTEM=="usb", ENV{ID_USB_INTERFACES}=="*:ff4201:*", MODE="0664", TAG+="uaccess"
+  notify: Reload udev rules
+
+- name: Trigger udev so the rule applies to the already-attached handset
+  ansible.builtin.command:
+    cmd: udevadm trigger --subsystem-match=usb --action=add
+  changed_when: false

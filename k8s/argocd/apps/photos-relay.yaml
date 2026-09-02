@@ -1,0 +1,24 @@
+# Child Application: the Immich -> Google Photos relay. Plain manifests (no chart)
+# under one directory, same automated policy as the other homelab apps. The
+# handset's USB passthrough (Terraform) and udev perms (Ansible) are host-side and
+# deliberately not represented here — Argo owns only the in-cluster objects.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: photos-relay
+  namespace: argocd
+spec:
+  project: homelab
+  source:
+    repoURL: https://github.com/Harsh-Upadhayay/homelab-k8s.git
+    targetRevision: main
+    path: k8s/apps/homelab/photos-relay/manifests
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: photos-relay
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false

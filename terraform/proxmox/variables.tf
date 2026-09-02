@@ -105,6 +105,13 @@ variable "workers" {
     data_disk_cache     = string
     data_disk_backup    = bool
     data_disk_replicate = bool
+
+    # Physical USB devices mapped into the guest. Empty for every worker that
+    # doesn't need one, so adding this stays a no-op for existing VMs.
+    usb_devices = optional(list(object({
+      host = string
+      usb3 = optional(bool, false)
+    })), [])
   }))
 
   validation {
