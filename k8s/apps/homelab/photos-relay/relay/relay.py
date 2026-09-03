@@ -378,11 +378,33 @@ def save_state(state: dict) -> None:
 
 
 # ── batch push / verify / reclaim ──────────────────────────────────────────────
+class DeviceLost(Exception):
+    """The handset vanished mid-pass. Raised to abort the pass immediately so the
+    top-level loop re-enters wait_for_device() (which self-heals the adb server)
+    instead of churning every remaining asset against an absent phone — the cause
+    of the 2026-09-02 11-hour stall (a device drop turned into 14.5k failed
+    pushes, each a wasted Immich download, until the pass finally drained)."""
+
+
+def device_online() -> bool:
+    """Authoritative presence check: adb reports the handset as 'device'. Used to
+    tell a genuine device loss (abort the pass) apart from a single bad asset or
+    Immich being down (skip and continue — the phone is fine)."""
+    try:
+        return adb("get-state", timeout=15,
+                   check=False).stdout.decode().strip() == "device"
+    except Exception:  # noqa: BLE001 — treat any failure to ask as "not online"
+        return False
+
+
 def push_batch(batch: list[dict]) -> list[str]:
     """Download each asset from Immich and adb-push it to the phone. Returns the
     remote paths actually pushed."""
     pushed: list[str] = []
     total = len(batch)
+    # Don't download a whole batch to feed a phone that is already gone.
+    if not device_online():
+        raise DeviceLost("handset absent at batch start")
     for i, a in enumerate(batch, 1):
         local = f"/tmp/{RELAY_PREFIX}{a['id']}"
         safe_name = a["name"].replace("/", "_")
@@ -398,6 +420,11 @@ def push_batch(batch: list[dict]) -> list[str]:
             pushed.append(remote)
         except Exception as e:  # noqa: BLE001 — one bad asset must not stop the batch
             log(f"skip asset {a['id']} ({a['name']}): {e}")
+            # A single bad asset is skipped, but if the HANDSET itself has gone,
+            # abort the whole pass now rather than re-downloading every remaining
+            # asset only to fail the push against nothing.
+            if not device_online():
+                raise DeviceLost(f"handset lost after {a['id']}") from e
         finally:
             if os.path.exists(local):
                 os.remove(local)
@@ -444,7 +471,16 @@ def run_pass(state: dict) -> int:
         set_status(phase="pushing", batch_files=len(batch), batch_bytes=size,
                    last_event=f"pushing {len(batch)} assets")
         log(f"pushing batch of {len(batch)} assets (~{size // 1024**2} MiB)")
-        pushed = push_batch(batch)
+        try:
+            pushed = push_batch(batch)
+        except DeviceLost as e:
+            # End the pass so main() re-enters wait_for_device(), which restarts
+            # the adb server and recovers the handset — turning a device blip into
+            # a ~2-minute pause instead of an hours-long churn.
+            set_status(phase="waiting_device", batch_files=None, batch_bytes=None,
+                       batch_done=None, last_event="handset lost; recovering")
+            log(f"handset lost mid-pass ({e}); ending pass to recover the device")
+            break
         if not pushed:
             log("nothing pushed in this batch; moving on")
             continue
