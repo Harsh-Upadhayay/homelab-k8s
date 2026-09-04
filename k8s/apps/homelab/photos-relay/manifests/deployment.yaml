@@ -20,6 +20,10 @@ spec:
       labels:
         app.kubernetes.io/name: photos-relay
     spec:
+      # Give preStop (adb kill-server) room to release the USB claim before
+      # SIGKILL, so the pod terminates cleanly instead of lingering as a stuck
+      # Terminating ghost (which was piling up and causing blind-on-restart).
+      terminationGracePeriodSeconds: 45
       # The handset is physically on pve-asrock, mapped into this worker only.
       nodeSelector:
         kubernetes.io/hostname: k3s-worker-3
@@ -85,6 +89,31 @@ spec:
             # tailscale). Named so the Service can target it by name.
             - name: status
               containerPort: 8080
+          lifecycle:
+            preStop:
+              # Release the handset's USB interface before SIGTERM so the next
+              # pod's adb server claims it immediately (kills the blind-on-restart
+              # race) and this pod exits cleanly instead of wedging in Terminating.
+              exec:
+                command: ["/opt/platform-tools/adb", "kill-server"]
+          # Liveness reflects the MAIN LOOP, not just the HTTP thread: /healthz
+          # returns 503 once the loop stops heartbeating (LIVENESS_MAX_AGE), so a
+          # genuinely stuck relay (deadlock, wedged adb) is restarted on its own —
+          # the core of "always active". The startupProbe covers the slow
+          # start-time adb download before liveness begins policing.
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: status
+            periodSeconds: 10
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: status
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
           volumeMounts:
             - name: usb
               mountPath: /dev/bus/usb

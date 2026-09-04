@@ -30,6 +30,8 @@ data:
 
     import json
     import os
+    import re
+    import shutil
     import subprocess
     import sys
     import threading
@@ -73,6 +75,12 @@ data:
     STATUS_PATH = os.environ.get("STATUS_PATH", "/state/status.json")
     STATUS_PORT = int(os.environ.get("STATUS_PORT", "8080"))
 
+    # Liveness: /healthz reports unhealthy if the main loop hasn't heartbeated within
+    # this window, so Kubernetes restarts a genuinely stuck relay (deadlock, wedged
+    # adb). Generously larger than the longest legitimately-blocking step (a single
+    # adb push, capped at 600s) so a big-file transfer or the idle wait never trips it.
+    LIVENESS_MAX_AGE = int(os.environ.get("LIVENESS_MAX_AGE", "900"))
+
 
     def log(msg: str) -> None:
         print(f"[relay] {time.strftime('%Y-%m-%d %H:%M:%S')} {msg}", flush=True)
@@ -96,6 +104,7 @@ data:
         "batch_done": None,        # files pushed so far within the current batch
         "session_start_done": None,  # `done` when this process started, for rate calc
         "immich_ok": None,         # did the last library scan reach Immich?
+        "attention": None,         # set when the phone needs a human (backup off, etc.)
     }
 
 
@@ -111,6 +120,28 @@ data:
             os.replace(tmp, STATUS_PATH)
         except OSError:
             pass
+
+
+    _LAST_HB = [0.0]
+
+
+    def heartbeat() -> None:
+        """Cheap liveness tick for the long-running inner loops (big downloads, the
+        idle wait). Throttled so it can't hammer the disk, it just refreshes
+        updated_at so the liveness probe knows the main loop is alive."""
+        now = time.time()
+        if now - _LAST_HB[0] >= 10:
+            _LAST_HB[0] = now
+            set_status()
+
+
+    def idle_sleep(seconds: int) -> None:
+        """Sleep in short chunks, heartbeating between them, so the idle wait never
+        looks like a hang to the liveness probe."""
+        end = time.time() + seconds
+        while time.time() < end:
+            time.sleep(min(30, max(1, end - time.time())))
+            set_status()
 
 
     # The page is a static shell; it fetches /status.json every few seconds and
@@ -142,6 +173,7 @@ data:
     </style></head><body><div class="wrap">
      <h1>Immich → Google Photos relay</h1>
      <div class="sub" id="phase">loading…</div>
+     <div id="attn" style="display:none;background:var(--bad);color:#fff;padding:10px 14px;border-radius:10px;margin-bottom:14px;font-weight:600"></div>
      <div class="big"><span id="done">–</span> <span class="m">/ <span id="total">–</span> assets · <span id="pct">–%</span></span></div>
      <div class="bar"><div class="fill" id="fill"></div></div>
      <div class="grid">
@@ -170,6 +202,7 @@ data:
      var pct=(total&&done!=null)?done/total*100:0;
      $("pct").textContent=pct.toFixed(1)+"%";$("fill").style.width=pct+"%";
      $("rem").textContent=(total!=null&&done!=null)?(total-done).toLocaleString():"–";
+     var a=$("attn");if(s.attention){a.textContent="⚠ "+s.attention;a.style.display="block";}else{a.style.display="none";}
      $("phase").textContent=(PH[s.phase]||s.phase||"–")+(s.last_event?" · "+s.last_event:"");
      $("ph2").textContent=PH[s.phase]?s.phase:(s.phase||"–");
      $("batch").textContent=s.batch_files?((s.batch_done!=null?s.batch_done+"/":"")+s.batch_files+" files · "+(s.batch_bytes/1048576).toFixed(0)+" MiB"):"—";
@@ -211,7 +244,15 @@ data:
                     body = json.dumps(dict(STATUS)).encode()
                 self._send(200, "application/json", body)
             elif self.path.startswith("/healthz"):
-                self._send(200, "text/plain", b"ok")
+                # Liveness: healthy only if the main loop heartbeated recently. The
+                # status HTTP thread is a daemon independent of the loop, so a plain
+                # "ok" here would mask a wedged loop — check the heartbeat instead.
+                age = time.time() - STATUS.get("updated_at", 0)
+                if age < LIVENESS_MAX_AGE:
+                    self._send(200, "text/plain", b"ok")
+                else:
+                    self._send(503, "text/plain",
+                               f"stale: no heartbeat for {int(age)}s".encode())
             else:
                 self._send(200, "text/html; charset=utf-8", _PAGE.encode())
 
@@ -331,9 +372,42 @@ data:
                 if not chunk:
                     break
                 f.write(chunk)
+                heartbeat()  # a multi-GB video download must not look like a hang
 
 
     # ── Google Photos backup oracle ────────────────────────────────────────────────
+    # Promo/onboarding dialogs periodically cover the backup status text and would
+    # otherwise stall detection indefinitely. Tap these dismiss buttons to clear them.
+    DISMISS_LABELS = ("got it", "no thanks", "no, thanks", "not now", "skip",
+                      "dismiss", "maybe later", "done", "continue", "later")
+    # Text that means backup is not actually running — needs a human, so surface it.
+    ATTENTION_MARKERS = ("backup is off", "turn on backup", "back up & sync is off",
+                         "backup is paused", "sign in", "sign back in",
+                         "couldn't back up", "storage full", "account storage full")
+
+
+    def _dump_ui() -> str:
+        adb_shell("uiautomator dump /sdcard/ui.xml", timeout=60, check=False)
+        return adb_shell("cat /sdcard/ui.xml", timeout=30, check=False)
+
+
+    def _dismiss_dialog(ui_xml: str) -> bool:
+        """If a known promo-dialog button is on screen, tap its centre. uiautomator
+        emits attributes in a fixed order (text before bounds within one <node>), so
+        a per-node regex is enough. Returns True if it tapped something."""
+        for m in re.finditer(
+                r'<node[^>]*\btext="([^"]*)"[^>]*\bbounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"',
+                ui_xml):
+            txt = m.group(1).strip().lower()
+            if txt and any(lbl == txt for lbl in DISMISS_LABELS):
+                x1, y1, x2, y2 = (int(m.group(i)) for i in range(2, 6))
+                adb_shell(f"input tap {(x1 + x2) // 2} {(y1 + y2) // 2}",
+                          timeout=30, check=False)
+                log(f"dismissed Google Photos dialog button: {txt!r}")
+                return True
+        return False
+
+
     def backup_complete() -> bool:
         """True when Google Photos reports its backup queue is drained. The global
         'Backup complete' signal means every pushed item in the queue is in the
@@ -343,17 +417,33 @@ data:
             adb_shell(f"monkey -p {PHOTOS_PKG} -c android.intent.category.LAUNCHER 1",
                       timeout=30, check=False)
             time.sleep(6)
-            adb_shell("uiautomator dump /sdcard/ui.xml", timeout=60, check=False)
-            ui = adb_shell("cat /sdcard/ui.xml", timeout=30, check=False).lower()
+            # Clear up to a few chained promo dialogs before trusting the status text.
+            ui_xml = _dump_ui()
+            for _ in range(3):
+                if not _dismiss_dialog(ui_xml):
+                    break
+                time.sleep(2)
+                ui_xml = _dump_ui()
+            ui = ui_xml.lower()
         except Exception as e:  # noqa: BLE001
             log(f"backup-oracle read failed: {e}")
             return False
+        # Backup disabled / signed out / storage full: the pipeline is stuck until a
+        # human acts, so raise it on the status page instead of waiting silently.
+        for bad in ATTENTION_MARKERS:
+            if bad in ui:
+                set_status(attention=f"Google Photos needs a tap on the phone: '{bad}'")
+                log(f"ATTENTION: Google Photos not backing up ('{bad}') — needs "
+                    "manual action on the handset")
+                return False
         if "backup complete" in ui:
+            set_status(attention=None)
             return True
         # Any of these means the queue is still draining.
         for pending in ("backing up", "backup in progress", "waiting for",
                         "getting ready", "preparing"):
             if pending in ui:
+                set_status(attention=None)
                 return False
         # Neither string present (Photos not on its home screen): treat as not done.
         return False
@@ -373,19 +463,34 @@ data:
 
 
     # ── state ──────────────────────────────────────────────────────────────────────
+    # The `done` set is the dedup source of truth: losing it makes the relay re-push
+    # the whole library (Google Photos' content-hash dedup means no DUPLICATES appear,
+    # but it is days of wasted work). Two guards: the volume runs multiple Longhorn
+    # replicas (survives a disk/node loss), and every save also writes a .bak so a
+    # torn or corrupt primary can be recovered here rather than starting from zero.
     def load_state() -> dict:
-        try:
-            with open(STATE_PATH) as f:
-                return json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
-            return {"done": []}
+        for path in (STATE_PATH, STATE_PATH + ".bak"):
+            try:
+                with open(path) as f:
+                    st = json.load(f)
+                if path != STATE_PATH:
+                    log(f"primary state unreadable — restored from {path} "
+                        f"({len(st.get('done', []))} already done)")
+                return st
+            except (FileNotFoundError, json.JSONDecodeError):
+                continue
+        return {"done": []}
 
 
     def save_state(state: dict) -> None:
         tmp = STATE_PATH + ".tmp"
         with open(tmp, "w") as f:
             json.dump(state, f)
-        os.replace(tmp, STATE_PATH)
+        os.replace(tmp, STATE_PATH)  # atomic: a crash never leaves a torn primary
+        try:  # rolling backup for corruption/accidental-loss recovery
+            shutil.copyfile(STATE_PATH, STATE_PATH + ".bak")
+        except OSError:
+            pass
 
 
     # ── batch push / verify / reclaim ──────────────────────────────────────────────
@@ -532,7 +637,7 @@ data:
             log("IMMICH_API_KEY is empty — set the photos-relay-immich Secret "
                 "(see the app README). Idling so the pod stays up for inspection.")
             while True:
-                time.sleep(300)
+                idle_sleep(300)
 
         base_done = len(load_state().get("done", []))
         set_status(phase="starting", done=base_done, session_start_done=base_done,
@@ -548,7 +653,7 @@ data:
                     set_status(phase="idle",
                                last_event=f"nothing new; idle {IDLE_INTERVAL_S // 60}m")
                     log(f"nothing new; idling {IDLE_INTERVAL_S}s before next pass")
-                    time.sleep(IDLE_INTERVAL_S)
+                    idle_sleep(IDLE_INTERVAL_S)
             except KeyboardInterrupt:
                 return 0
             except Exception as e:  # noqa: BLE001 — the loop must never die
