@@ -112,6 +112,27 @@ variable "workers" {
       host = string
       usb3 = optional(bool, false)
     })), [])
+
+    # Proxmox machine type. q35 is required for PCIe passthrough (pcie = true);
+    # workers with no passthrough device leave this null and keep Proxmox's
+    # i440fx default, so this stays a no-op for them.
+    machine = optional(string)
+
+    # Physical PCI(e) devices mapped into the guest, same "empty by default"
+    # shape as usb_devices above.
+    #
+    # Prefer `mapping` (a Proxmox cluster resource mapping) over a raw `id`
+    # address: Proxmox only lets root@pam set an unmapped hostpci device, and
+    # this provider authenticates as the scoped terraform@pve token by design.
+    # `id` stays available for a root-authenticated run or a future device that
+    # has no mapping yet.
+    hostpci_devices = optional(list(object({
+      device  = string
+      mapping = optional(string)
+      id      = optional(string)
+      pcie    = optional(bool, true)
+      rombar  = optional(bool, true)
+    })), [])
   }))
 
   validation {

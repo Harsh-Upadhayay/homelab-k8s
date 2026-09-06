@@ -99,6 +99,10 @@ resource "proxmox_virtual_environment_vm" "k3s_worker" {
     dedicated = each.value.memory
   }
 
+  # Only the worker holding a passthrough card needs q35 (PCIe topology); the
+  # rest pass null and keep Proxmox's i440fx default.
+  machine = each.value.machine
+
   # The template supplies scsi0; every worker grows it to its declared size.
   # discard="on" is load-bearing, not cosmetic: the provider defaults it to
   # "ignore", under which QEMU silently drops the guest's TRIM requests. The
@@ -144,6 +148,26 @@ resource "proxmox_virtual_environment_vm" "k3s_worker" {
     content {
       host = usb.value.host
       usb3 = usb.value.usb3
+    }
+  }
+
+  # Physical PCI(e) passthrough.
+  #
+  # Devices are referenced by Proxmox resource MAPPING rather than raw address,
+  # because Proxmox refuses an unmapped hostpci device for any identity but
+  # root@pam and this provider deliberately uses the scoped terraform@pve token
+  # (ADR-0023/0024). Ansible owns both sides of that handle: it creates the
+  # mapping, grants terraform@pve PVEMappingUser on just that mapping, and binds
+  # every function of the card to vfio-pci so the IOMMU group is assignable at
+  # all. Terraform's job is only to attach the resulting device to the VM.
+  dynamic "hostpci" {
+    for_each = each.value.hostpci_devices
+    content {
+      device  = hostpci.value.device
+      mapping = hostpci.value.mapping
+      id      = hostpci.value.id
+      pcie    = hostpci.value.pcie
+      rombar  = hostpci.value.rombar
     }
   }
 

@@ -34,6 +34,9 @@ proxmox_lvmthin_storage:
 # The command line is declared in full rather than appended to, so what boots is
 # exactly what is reviewable here.
 proxmox_vfio_passthrough:
+  # Device address with NO function suffix — this addresses the whole card,
+  # which is what its shared IOMMU group requires.
+  pci_path: "0000:01:00"
   pci_ids:
     - "10de:21c4" # TU116 VGA
     - "10de:1aeb" # TU116 HDMI audio
@@ -56,3 +59,13 @@ proxmox_vfio_passthrough:
   kernel_cmdline:
     - quiet
     - initcall_blacklist=sysfb_init
+  # Proxmox refuses raw hostpci config for any non-root identity ("only root can
+  # set 'hostpci0' config for non-mapped devices"), and Terraform deliberately
+  # authenticates as the least-privilege terraform@pve token rather than root
+  # (ADR-0004, ADR-0023, ADR-0024). A cluster resource mapping is the supported
+  # way to hand a non-root identity one specific device: the mapping is created
+  # here as root, and terraform@pve is granted PVEMappingUser scoped to just this
+  # mapping — the same "scope the ACL to the exact object" reasoning ADR-0023
+  # applied to storage.
+  mapping_name: "gpu-gtx1660s"
+  mapping_description: "GeForce GTX 1660 SUPER on pve-asrock, passed through to k3s-worker-3 (ADR-0067)"

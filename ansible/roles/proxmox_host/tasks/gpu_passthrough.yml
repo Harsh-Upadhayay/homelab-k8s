@@ -264,3 +264,109 @@
       nothing. See the task's stderr for which. nic0 reads
       '{{ proxmox_vfio_nic_state.stdout | default('') | trim }}'.
   when: proxmox_vfio_driver_loaded.stat.isdir | default(false)
+
+# --- Make the device reachable by the non-root Terraform identity ------------
+#
+# Proxmox refuses a raw hostpci device address for anyone but root@pam:
+#   "only root can set 'hostpci0' config for non-mapped devices"
+# Terraform authenticates as the scoped terraform@pve token by design (ADR-0004,
+# ADR-0023, ADR-0024), so the supported route is a cluster resource mapping —
+# a named, ACL-able handle on one specific device. This is the same shape as
+# ADR-0023/0024: a real apply surfaced a missing privilege, and the answer is a
+# narrowly scoped ACL rather than widening the identity.
+#
+# Both steps are checked independently against live state so a partially
+# configured cluster self-heals, matching proxmox_cluster/tasks/terraform_api.yml.
+
+# Proxmox re-validates a mapping against live hardware every time a VM using it
+# starts, and refuses one that is missing the properties it expects
+# ("PCI device mapping invalid (hardware probably changed): missing expected
+# property 'iommugroup'"). The web UI records those automatically; pvesh does
+# not, so they are discovered here rather than hardcoded — that way a BIOS
+# update or a slot change that renumbers the IOMMU group self-heals on the next
+# run instead of silently breaking VM start.
+- name: Read the live properties Proxmox validates the mapping against
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      d=/sys/bus/pci/devices/{{ proxmox_vfio_passthrough.pci_path }}.0
+      printf '%s %s:%s\n' \
+        "$(basename "$(readlink -f "$d/iommu_group")")" \
+        "$(sed 's/^0x//' "$d/subsystem_vendor")" \
+        "$(sed 's/^0x//' "$d/subsystem_device")"
+    executable: /bin/bash
+  changed_when: false
+  check_mode: false
+  register: proxmox_vfio_device_props
+
+- name: Build the mapping entry this host should publish
+  ansible.builtin.set_fact:
+    # No function suffix on the path: this hands over the whole multi-function
+    # card, which is what its shared IOMMU group requires.
+    proxmox_vfio_map_entry: >-
+      node={{ inventory_hostname }},path={{ proxmox_vfio_passthrough.pci_path }},id={{ proxmox_vfio_passthrough.pci_ids[0] }},iommugroup={{ proxmox_vfio_device_props.stdout.split()[0] }},subsystem-id={{ proxmox_vfio_device_props.stdout.split()[1] }}
+
+- name: Read existing Proxmox PCI resource mappings
+  ansible.builtin.command: pvesh get /cluster/mapping/pci --output-format json
+  changed_when: false
+  check_mode: false
+  register: proxmox_vfio_mappings
+
+- name: Note the current state of this mapping
+  ansible.builtin.set_fact:
+    proxmox_vfio_mapping_current: >-
+      {{ proxmox_vfio_mappings.stdout | from_json
+         | selectattr('id', 'equalto', proxmox_vfio_passthrough.mapping_name)
+         | list }}
+
+- name: Create the PCI resource mapping for the passthrough device
+  ansible.builtin.command:
+    argv:
+      - pvesh
+      - create
+      - /cluster/mapping/pci
+      - --id
+      - "{{ proxmox_vfio_passthrough.mapping_name }}"
+      - --description
+      - "{{ proxmox_vfio_passthrough.mapping_description }}"
+      - --map
+      - "{{ proxmox_vfio_map_entry }}"
+  when: proxmox_vfio_mapping_current | length == 0
+
+- name: Correct the mapping if it no longer matches this host's hardware
+  ansible.builtin.command:
+    argv:
+      - pvesh
+      - set
+      - "/cluster/mapping/pci/{{ proxmox_vfio_passthrough.mapping_name }}"
+      - --description
+      - "{{ proxmox_vfio_passthrough.mapping_description }}"
+      - --map
+      - "{{ proxmox_vfio_map_entry }}"
+  when:
+    - proxmox_vfio_mapping_current | length > 0
+    - proxmox_vfio_map_entry not in (proxmox_vfio_mapping_current[0].map | default([]))
+
+- name: Read current Proxmox ACL entries
+  ansible.builtin.command: pveum acl list --output-format json
+  changed_when: false
+  check_mode: false
+  register: proxmox_vfio_acls
+
+- name: Determine whether Terraform may already use this mapping
+  ansible.builtin.set_fact:
+    proxmox_vfio_mapping_acl_exists: >-
+      {{ (proxmox_vfio_acls.stdout | from_json
+          | selectattr('ugid', 'defined')
+          | selectattr('ugid', 'equalto', 'terraform@pve')
+          | selectattr('path', 'equalto', '/mapping/pci/' + proxmox_vfio_passthrough.mapping_name)
+          | selectattr('roleid', 'equalto', 'PVEMappingUser')
+          | list | length) > 0 }}
+
+# PVEMappingUser is exactly Mapping.Audit + Mapping.Use — not PVEMappingAdmin,
+# which would also carry Mapping.Modify and let Terraform redefine the mapping.
+- name: Grant terraform@pve use of this one mapping
+  ansible.builtin.command: >-
+    pveum aclmod /mapping/pci/{{ proxmox_vfio_passthrough.mapping_name }}
+    -user terraform@pve -role PVEMappingUser
+  when: not proxmox_vfio_mapping_acl_exists
