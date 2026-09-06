@@ -43,6 +43,42 @@ operator:
 nfd:
   enabled: true
 
+devicePlugin:
+  # TIME-SLICING: one physical card, more than one consumer.
+  #
+  # By default `nvidia.com/gpu` is an exclusive resource — the first pod to
+  # request it owns the card and every other request stays Pending forever.
+  # Immich needs two consumers at once (ADR-0069): immich-server for NVENC
+  # transcoding and immich-machine-learning for CUDA inference. Time-slicing
+  # makes the plugin advertise `replicas` schedulable units of the same physical
+  # GPU, and the driver round-robins kernels between them.
+  #
+  # WHAT THIS DOES NOT DO: it does not partition VRAM. Every sharer sees the
+  # whole 6 GiB and they can starve each other — this is cooperative sharing,
+  # not isolation (MIG would isolate, but Turing does not support MIG). The
+  # workloads here fit comfortably: Immich's CLIP and facial-recognition models
+  # are ~1-2 GiB and NVENC sessions are a few hundred MiB, since NVENC is a
+  # dedicated encoder block rather than a CUDA consumer.
+  #
+  # 4 replicas rather than exactly 2: it leaves room for the validation Job and
+  # one future consumer (ollama is on the migration checklist) without
+  # pretending 6 GiB is unlimited. Raising this number never adds capacity — it
+  # only adds contention.
+  config:
+    create: true
+    name: device-plugin-config
+    default: shared
+    data:
+      shared: |-
+        version: v1
+        flags:
+          migStrategy: none
+        sharing:
+          timeSlicing:
+            resources:
+              - name: nvidia.com/gpu
+                replicas: 4
+
 # DCGM metrics are one of the reasons the operator was chosen over a bare
 # device plugin. Prometheus here discovers ServiceMonitors cluster-wide
 # (ADR-0039), so turning this on is all the wiring required.

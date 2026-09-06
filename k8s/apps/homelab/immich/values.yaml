@@ -1,5 +1,6 @@
 # Official immich-app community chart 0.13.1 defaults to Immich v3.0.0. Pin
-# both the server and CPU-only ML images to the targeted v3.0.3 patch release.
+# both the server and ML images to the targeted v3.0.3 patch release; the ML
+# image additionally carries the `-cuda` suffix since ADR-0069.
 # The required v2.7.3 VectorChord migration completed before this image bump.
 #
 # The workstation rebuild recovery completed on 2026-07-24 JST. The library
@@ -22,6 +23,15 @@ immich:
 
 server:
   enabled: true
+  # NVENC hardware transcoding (ADR-0069). Immich's own docs require the
+  # official NVIDIA driver plus the container toolkit on the host and the
+  # `nvidia` runtime on the container; both are provided by the nvidia_gpu_node
+  # Ansible role and the k3s-registered RuntimeClass (ADR-0067). `accel: nvenc`
+  # was already set in Immich's system config — before the card existed the
+  # server tried NVENC on every clip, failed with `Cannot load libcuda.so.1`,
+  # and fell back to software.
+  defaultPodOptions:
+    runtimeClassName: nvidia
   controllers:
     main:
       # One server writes one RWO library. Recreate guarantees no overlapping
@@ -54,12 +64,20 @@ server:
               memory: 1Gi
             limits:
               memory: 8Gi
-          # Immich v3 runs the API and the CPU-bound video-transcoding worker in
-          # ONE process. While a batch of clips transcodes (GPU/CUDA is absent on
-          # this node, so ffmpeg falls back to CPU), the /api/server/ping health
-          # endpoint can miss the chart-default liveness timeout of 1s — kubelet
-          # then SIGTERMs a server that is actually healthy, just busy, throwing
-          # away in-flight transcode work and crash-looping (incident 2026-09-02).
+              # Requesting the GPU is also what PLACES this pod: k3s-worker-3 is
+              # the only node advertising the resource, so no nodeSelector is
+              # needed. That placement is a second win — the immich-library
+              # replica already lives on worker-3's HDD, so the engine stops
+              # reading its 291 GiB library across the network from worker-1.
+              nvidia.com/gpu: 1
+          # Immich v3 runs the API and the video-transcoding worker in ONE
+          # process. While a batch of clips transcodes, the /api/server/ping
+          # health endpoint can miss the chart-default liveness timeout of 1s —
+          # kubelet then SIGTERMs a server that is actually healthy, just busy,
+          # throwing away in-flight transcode work and crash-looping (incident
+          # 2026-09-02). NVENC shortens those batches but does not remove the
+          # race: ffmpeg still falls back to CPU for codecs NVENC cannot encode
+          # (VP9), and decoding stays on CPU unless hardware decoding is enabled.
           # Override the chart's probes so liveness restarts only a genuinely
           # HUNG process, not a busy one: 10s timeout, 5 misses (50s) before kill.
           # Named port `http` matches the chart's container port (== 2283).
@@ -109,17 +127,32 @@ server:
 
 machine-learning:
   enabled: true
+  # CUDA inference (ADR-0069). Immich's docs require compute capability >= 5.2
+  # and driver >= 545; this card is 7.5 on 580.173.02, both verified live rather
+  # than assumed — the 580 branch is also where NVIDIA dropped Maxwell/Pascal/
+  # Volta, so "it's an NVIDIA card" was not sufficient.
+  defaultPodOptions:
+    runtimeClassName: nvidia
   controllers:
     main:
       containers:
         main:
+          # The `-cuda` suffix is the whole switch, per Immich's docs: same
+          # release, ONNX Runtime built against CUDA instead of the CPU EP.
+          image:
+            tag: v3.0.3-cuda
           resources:
             requests:
               cpu: 500m
               memory: 1Gi
             limits:
               memory: 12Gi
-  # CPU-only image; model cache is intentionally ephemeral for this transition.
+              nvidia.com/gpu: 1
+  # The model cache stays an emptyDir, so every pod restart re-downloads CLIP
+  # and the facial-recognition model. That was acceptable while this was a
+  # CPU-only transitional deployment; it is worth revisiting now that the
+  # component is a permanent GPU consumer, but changing it is a storage
+  # decision, not part of wiring up the card.
   persistence:
     cache:
       enabled: true
