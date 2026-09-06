@@ -90,13 +90,21 @@ zero and ranking fell back to raw consumption — which is why the eviction set 
 indiscriminate rather than targeting the actual consumer, and why unrelated user-facing services
 went down alongside the GPU components.
 
-The recovery then produced a second-order effect. Evicting workloads off `k3s-worker-3` moved them to
-`k3s-worker-1`, and the RWO workspace volume followed. Kubelet applies `fsGroup` ownership
-recursively on mount, and the workspace volume holds a development tree with very many small files
-(`node_modules`, `.git`), so that chown saturated the node's I/O long enough for liveness probes on
-co-resident pods to time out. The Prometheus operator was healthy the whole time — its logs show a
-clean startup, cache sync, then `received SIGTERM, exiting gracefully` with exit code 0 — it was
-being killed by its own probe, not crashing.
+The recovery then produced a second-order effect that lasted far longer than the original fault.
+Evicting workloads off `k3s-worker-3` moved them to `k3s-worker-1` — which ended up holding 68 pods
+against worker-3's 12, because Kubernetes does not move pods back once rescheduled — and the RWO
+workspace volume followed them. Kubelet applies `fsGroup` ownership recursively at mount time under
+the default `fsGroupChangePolicy: Always`, and that volume holds **444,457 files** (a development
+tree of `node_modules` and `.git` across every project). The resulting chown, competing with 16
+Longhorn replicas on a node that normally hosts 8, progressed at roughly 1,000 files per minute and
+saturated the node's I/O long enough for liveness probes on co-resident pods to time out.
+
+Two components were killed repeatedly by those probes while being entirely healthy: the Prometheus
+operator and `argocd-server` both show a clean startup and cache sync, then `received SIGTERM` /
+`API Server received signal: terminated` with exit code 0. Neither was crashing; both were being
+killed by a probe that could not get a response from a saturated node. Moving those two plus Alloy
+onto the now-idle `k3s-worker-3` stopped the restart loops immediately and roughly doubled the chown
+rate, which is the clearest evidence that the "crash" was contention, not fault.
 
 ## Contributing factors
 
@@ -133,8 +141,22 @@ RWO workspace volume so the rescheduled `workbench` pods could attach:
 kubectl delete pods -A --field-selector=status.phase=Failed
 ```
 
-Recovery was verified rather than assumed: Longhorn reported the workspace volume `attached` and
-`healthy` on `k3s-worker-1` with both replicas; `immich`, `photos-relay` and the `workbench`
+The pile-up on `k3s-worker-1` was then relieved by cordoning it, deleting the three heaviest
+stateless pods with no PVCs (`alloy`, `kube-prometheus-stack-operator`, `argocd-server`) so the
+scheduler placed them on the idle `k3s-worker-3`, and uncordoning:
+
+```bash
+kubectl cordon k3s-worker-1
+kubectl -n monitoring delete pod -l app.kubernetes.io/name=alloy
+kubectl -n monitoring delete pod <prometheus-operator-pod>
+kubectl -n argocd delete pod <argocd-server-pod>
+kubectl uncordon k3s-worker-1
+```
+
+That ended both probe-kill loops and cut Longhorn's CPU on the node from roughly 226% to 27%.
+
+Recovery was verified rather than assumed: Longhorn reported all 22 volumes `healthy` with no
+rebuild in progress, and the workspace volume `attached` on `k3s-worker-1` with both replicas; `immich`, `photos-relay` and the `workbench`
 applications returned to Running; and the GPU chain was re-proven end to end with a pod requesting
 `nvidia.com/gpu: 1` running `nvidia-smi`.
 
@@ -182,7 +204,9 @@ applications returned to Running; and the GPU chain was re-proven end to end wit
 | P1 | Give `k3s-worker-3` more room for its image store — either relocate containerd's root to the 1300 GiB data disk or grow the OS disk, noting the 74.68 GiB thin pool constrains the latter | Operator | Open | `df` on the node showing sustained headroom after a GPU-image pull |
 | P2 | Declare `ephemeral-storage` requests on user-facing and stateful workloads so kubelet eviction ranking protects them instead of being arbitrary | Operator | Open | Requests present in manifests; eviction ranking exercised |
 | P2 | Add image-store growth to the pre-flight checklist for any change that installs drivers or pulls a new operator's image set onto a node | Operator | Open | Checklist step in the relevant plan/runbook |
+| P1 | Set `fsGroupChangePolicy: OnRootMismatch` on the devbox and every other pod mounting the `workbench` workspace volume — measured at **444,457 files**, the default `Always` policy re-chowns all of them on every mount and dominated recovery time | Operator | Open | Devbox restart time measured before and after |
 | P2 | Investigate why kubelet image GC (default `imageGCHighThresholdPercent` 85) did not reclaim before the eviction threshold was crossed | Operator | Open | Finding recorded, settings adjusted if warranted |
+| P2 | Consider a rebalancing story for post-eviction pile-up — Kubernetes does not move pods back, so one node held 68 pods against another's 12 until pods were manually relocated | Operator | Open | Documented procedure, or a descheduler decision recorded as an ADR |
 
 ## Lessons and review questions
 
