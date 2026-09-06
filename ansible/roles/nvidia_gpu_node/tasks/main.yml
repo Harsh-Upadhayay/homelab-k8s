@@ -1,0 +1,111 @@
+---
+# NVIDIA driver + container runtime for a worker that has a GPU passed through.
+#
+# Scoped to k3s_agent but only meaningful on a worker that actually holds the
+# card; everywhere else the block below is skipped entirely. Gated behind the
+# `nvidia_gpu` tag so it never runs on ordinary plays — the same shape as
+# photos_relay_udev.
+#
+# Two deliberate choices, both recorded in ADR-0067:
+#
+#  - The driver comes from Ubuntu's own archive, not an NVIDIA driver container.
+#    The packaged driver is built for this exact kernel, pins per ADR-0002, and —
+#    decisively — can be proven working with nvidia-smi BEFORE anything in
+#    Kubernetes depends on it. A generic driver container would instead compile
+#    kernel modules unattended, in a privileged pod, on a host with no console.
+#
+#  - The container toolkit is installed here rather than by the GPU Operator,
+#    because k3s auto-detects nvidia-container-runtime at startup and writes the
+#    containerd runtime itself. Letting the operator's toolkit do it would mean
+#    pointing it at k3s's non-standard containerd config path to duplicate work
+#    k3s already does natively.
+
+- name: Look for a passed-through NVIDIA device
+  ansible.builtin.shell:
+    cmd: set -o pipefail && lspci -nn | grep -ci '\[10de:' || true
+    executable: /bin/bash
+  changed_when: false
+  check_mode: false
+  register: nvidia_gpu_present
+
+- name: Configure the NVIDIA stack on workers that have a GPU
+  when: (nvidia_gpu_present.stdout | int) > 0
+  block:
+
+    - name: Install the pinned NVIDIA driver
+      ansible.builtin.apt:
+        name: "{{ nvidia_driver_package }}"
+        state: present
+        update_cache: true
+      notify: Reboot the GPU node
+
+    - name: Ensure the APT keyring directory exists
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+
+    - name: Add the NVIDIA container toolkit signing key
+      ansible.builtin.get_url:
+        url: "{{ nvidia_container_toolkit_key_url }}"
+        dest: /etc/apt/keyrings/nvidia-container-toolkit.asc
+        mode: "0644"
+
+    # $(ARCH) is apt's own substitution, not a shell command — apt expands it to
+    # the host architecture when it reads the sources file.
+    - name: Add the NVIDIA container toolkit repository
+      ansible.builtin.apt_repository:
+        repo: >-
+          deb [signed-by=/etc/apt/keyrings/nvidia-container-toolkit.asc]
+          {{ nvidia_container_toolkit_repo }}
+        filename: nvidia-container-toolkit
+        state: present
+
+    - name: Install the pinned NVIDIA container toolkit
+      ansible.builtin.apt:
+        name: "nvidia-container-toolkit={{ nvidia_container_toolkit_version }}"
+        state: present
+        update_cache: true
+        allow_downgrade: true
+      notify: Reboot the GPU node
+
+    # The driver's kernel module cannot be loaded into the running kernel over
+    # whatever already holds the card, and k3s only rescans for alternative
+    # container runtimes when it starts. One reboot settles both, so it is taken
+    # here rather than left for the verification below to trip over.
+    - name: Apply the pending reboot before verifying the result
+      ansible.builtin.meta: flush_handlers
+
+    - name: Read the GPU the driver now sees
+      ansible.builtin.command: nvidia-smi --query-gpu=name,driver_version --format=csv,noheader
+      changed_when: false
+      check_mode: false
+      failed_when: false
+      register: nvidia_smi_gpu
+
+    - name: Read the container runtimes k3s wrote into containerd
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail &&
+          grep -c 'nvidia'
+          /var/lib/rancher/k3s/agent/etc/containerd/config.toml || true
+        executable: /bin/bash
+      changed_when: false
+      check_mode: false
+      register: nvidia_containerd_runtime
+
+    - name: Require a working driver and a registered nvidia container runtime
+      ansible.builtin.assert:
+        that:
+          - nvidia_smi_gpu.rc == 0
+          - nvidia_smi_gpu.stdout | length > 0
+          - (nvidia_containerd_runtime.stdout | int) > 0
+        fail_msg: >-
+          nvidia-smi exited {{ nvidia_smi_gpu.rc }} reporting
+          '{{ nvidia_smi_gpu.stdout | trim }}', and containerd holds
+          {{ nvidia_containerd_runtime.stdout | trim }} nvidia runtime
+          references. k3s only writes that runtime when
+          nvidia-container-runtime is on PATH as it starts, so check the toolkit
+          install first, then restart k3s-agent.
+        success_msg: >-
+          GPU ready: {{ nvidia_smi_gpu.stdout | trim }}
