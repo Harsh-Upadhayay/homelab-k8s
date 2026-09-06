@@ -27,3 +27,8 @@
     # explicit `--tags photos_relay`, and no-ops on workers without the handset.
     - role: photos_relay_udev
       tags: [never, photos_relay]
+    # NVIDIA driver + container runtime for the worker holding the passed-through
+    # GPU (ADR-0067). Tag-gated like the role above, and skips itself entirely on
+    # any worker with no NVIDIA device.
+    - role: nvidia_gpu_node
+      tags: [never, nvidia_gpu]

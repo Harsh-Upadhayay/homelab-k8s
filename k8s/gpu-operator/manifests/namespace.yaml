@@ -1,0 +1,14 @@
+# Namespace for the NVIDIA GPU Operator (ADR-0067).
+#
+# Explicit, like every other namespace here, because this repo's Argo CD
+# Applications all set CreateNamespace=false.
+#
+# No `neovara-external-secrets` label: the operator consumes no secrets, so it
+# is not opted in to the ESO ClusterSecretStore (which is gated on that label).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gpu-operator
+  labels:
+    app.kubernetes.io/name: gpu-operator
+    app.kubernetes.io/part-of: gpu-operator

@@ -54,6 +54,10 @@ repurposed it; those off-HDD copies now carry the preservation requirement.
 
 - Immich machine learning is CPU-only. The workstation GPU (GTX 1660 SUPER) is not carried into
   the cluster as part of this migration.
+  **Updated 2026-09-06 (ADR-0067):** the GPU *is* now in the cluster — passed through to
+  `k3s-worker-3` and schedulable as `nvidia.com/gpu`. Immich itself is still CPU-only; pointing it
+  (or `ollama`, above) at the card is the separate "GPU enablement" project this checklist already
+  anticipated.
 - `gluetun` was still unhealthy in the source Compose stack on 2026-07-22; that predates its future
   Kubernetes migration and is not an Immich recovery blocker.
 - Nextcloud and Kiroku currently use `Delete`-reclaim Longhorn claims. Their preserved source data is

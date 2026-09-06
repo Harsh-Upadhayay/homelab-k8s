@@ -1,0 +1,43 @@
+# Child Application: NVIDIA GPU Operator — turns the GTX 1660 SUPER passed
+# through to k3s-worker-3 into a schedulable nvidia.com/gpu resource (ADR-0067).
+#
+# Installed with Helm first at this exact chart version and adopted here, the
+# same bootstrap-then-adopt path Traefik, Longhorn and cert-manager took
+# (ADR-0042, ADR-0044): the cluster had to be live before this branch could
+# merge, and the root Application only syncs `main`. The first sync should
+# therefore be a tracking-annotation-only diff.
+#
+# Only the Kubernetes layer is managed here. The driver, the container toolkit
+# and the host-side vfio-pci binding are node/hypervisor concerns owned by the
+# nvidia_gpu_node and proxmox_host Ansible roles — see k8s/gpu-operator/values.yaml
+# for why that split exists.
+#
+# The smoke test in k8s/gpu-operator/validation/ is deliberately NOT in the
+# manifests path below: it is a Job, and a completed Job would sit in this
+# Application's diff forever.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gpu-operator
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://helm.ngc.nvidia.com/nvidia
+      chart: gpu-operator
+      targetRevision: v26.7.0 # matches the version installed live; check NVIDIA's releases before bumping
+      helm:
+        valueFiles:
+          - $values/k8s/gpu-operator/values.yaml
+    - repoURL: https://github.com/Harsh-Upadhayay/homelab-k8s.git
+      targetRevision: main
+      ref: values
+    - repoURL: https://github.com/Harsh-Upadhayay/homelab-k8s.git
+      targetRevision: main
+      path: k8s/gpu-operator/manifests
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: gpu-operator
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=false

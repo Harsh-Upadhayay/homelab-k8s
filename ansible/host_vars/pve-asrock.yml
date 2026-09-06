@@ -8,3 +8,64 @@ proxmox_lvmthin_storage:
   thin_pool_size: "95%FREE"
   storage_id: "longhorn-hdd"
   owner_vm_id: 103
+
+# Host-topology data again, same split as the datastore above: the generic
+# proxmox_host role consumes this only with the explicit gpu-passthrough tag.
+#
+# The GeForce GTX 1660 SUPER (TU116) shares IOMMU group 1 with nothing but its
+# own four functions and the PCIe root port bridge, which VFIO ignores — so the
+# whole card passes through cleanly and no ACS override is needed. All four
+# functions are listed because Proxmox is given the device address without a
+# function suffix (0000:01:00) and vfio-pci must own every one of them.
+#
+# TWO CONSEQUENCES, both accepted deliberately (ADR-0067):
+#
+#  1. This card is pve-asrock's ONLY display adapter and its boot VGA device
+#     (`boot_vga` is 1). Once vfio-pci owns it the host has no Linux console.
+#     BIOS and GRUB still render on a physical monitor, so rescue-boot recovery
+#     survives; there is simply no login prompt.
+#  2. Because it IS the boot VGA device, the EFI framebuffer would otherwise
+#     claim its BARs the moment nouveau is blacklisted, and vfio-pci would fail
+#     to reserve them. `initcall_blacklist=sysfb_init` stops the kernel from
+#     creating that system framebuffer at all. This is the only reason this host
+#     needs a kernel command line of its own — IOMMU is already active without
+#     any parameter (verified: 7 populated groups), so none is set for it.
+#
+# The command line is declared in full rather than appended to, so what boots is
+# exactly what is reviewable here.
+proxmox_vfio_passthrough:
+  # Device address with NO function suffix — this addresses the whole card,
+  # which is what its shared IOMMU group requires.
+  pci_path: "0000:01:00"
+  pci_ids:
+    - "10de:21c4" # TU116 VGA
+    - "10de:1aeb" # TU116 HDMI audio
+    - "10de:1aec" # TU116 USB 3.1 controller
+    - "10de:1aed" # TU116 USB Type-C UCSI controller
+  # Drivers that exist only to drive this card and can be refused outright.
+  blacklist_modules:
+    - nouveau
+  # Drivers that must still load — they run OTHER hardware on this host — but
+  # must not reach the passthrough card before vfio-pci does. Observed live: on
+  # the first passthrough boot vfio-pci won 01:00.0 and .1, while xhci_pci took
+  # .2 and i2c_nvidia_gpu took .3, leaving IOMMU group 1 non-viable. Blacklisting
+  # xhci_pci is NOT an option: the Google Photos relay handset, the TP-Link WiFi
+  # NIC and a wireless receiver all sit on the Intel controller at 00:14.0 that
+  # the same module drives. Ordering vfio-pci first gives it the NVIDIA functions
+  # while these modules still bind everything else normally.
+  softdep_modules:
+    - xhci_pci
+    - i2c_nvidia_gpu
+  kernel_cmdline:
+    - quiet
+    - initcall_blacklist=sysfb_init
+  # Proxmox refuses raw hostpci config for any non-root identity ("only root can
+  # set 'hostpci0' config for non-mapped devices"), and Terraform deliberately
+  # authenticates as the least-privilege terraform@pve token rather than root
+  # (ADR-0004, ADR-0023, ADR-0024). A cluster resource mapping is the supported
+  # way to hand a non-root identity one specific device: the mapping is created
+  # here as root, and terraform@pve is granted PVEMappingUser scoped to just this
+  # mapping — the same "scope the ACL to the exact object" reasoning ADR-0023
+  # applied to storage.
+  mapping_name: "gpu-gtx1660s"
+  mapping_description: "GeForce GTX 1660 SUPER on pve-asrock, passed through to k3s-worker-3 (ADR-0067)"

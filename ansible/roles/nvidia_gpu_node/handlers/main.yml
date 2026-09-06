@@ -1,0 +1,9 @@
+---
+# One reboot settles both halves of this role: the NVIDIA kernel module gets a
+# clean load (rather than fighting whatever claimed the card first), and k3s
+# re-runs the runtime detection that writes the nvidia runtime into its
+# containerd config — something it only does at startup.
+- name: Reboot the GPU node
+  ansible.builtin.reboot:
+    reboot_timeout: 900
+    post_reboot_delay: 45

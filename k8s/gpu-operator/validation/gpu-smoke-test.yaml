@@ -1,0 +1,45 @@
+# On-demand proof that the whole passthrough chain works end to end:
+#
+#   pve-asrock vfio-pci  ->  Proxmox mapping  ->  VM 103 hostpci0
+#     ->  guest NVIDIA driver  ->  nvidia containerd runtime
+#       ->  GPU Operator device plugin  ->  a pod that asked for a GPU
+#
+# Deliberately NOT synced by Argo CD — this directory sits outside the
+# gpu-operator Application's `path`. A Job that runs once and completes would
+# otherwise sit in that Application's diff forever.
+#
+#   kubectl apply -f k8s/gpu-operator/validation/gpu-smoke-test.yaml
+#   kubectl -n gpu-operator wait --for=condition=complete job/gpu-smoke-test --timeout=300s
+#   kubectl -n gpu-operator logs job/gpu-smoke-test
+#   kubectl -n gpu-operator delete job gpu-smoke-test
+#
+# Requesting nvidia.com/gpu is what pulls this onto k3s-worker-3: it is the only
+# node advertising that resource, so no nodeSelector is needed or wanted.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: gpu-smoke-test
+  namespace: gpu-operator
+  labels:
+    app.kubernetes.io/name: gpu-smoke-test
+    app.kubernetes.io/part-of: gpu-operator
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: gpu-smoke-test
+    spec:
+      restartPolicy: Never
+      # The node's default runtime is runc on purpose (see values.yaml), so a
+      # GPU pod has to ask for the nvidia runtime explicitly.
+      runtimeClassName: nvidia
+      containers:
+        - name: nvidia-smi
+          # Pinned like every other image in this repo (ADR-0002).
+          image: nvidia/cuda:13.0.1-base-ubuntu24.04
+          command: ["nvidia-smi"]
+          resources:
+            limits:
+              nvidia.com/gpu: 1

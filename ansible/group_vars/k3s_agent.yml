@@ -4,3 +4,20 @@
 longhorn_data_device: "/dev/sdb"
 longhorn_data_label: "k3s-data"
 longhorn_mount_path: "/var/lib/longhorn"
+
+# NVIDIA GPU worker (ADR-0067). Pinned deliberately, like k3s_version — check
+# the upstream releases before bumping either of these.
+#
+# 580 is the most settled branch in Ubuntu 26.04 that still supports this card.
+# That needed checking rather than assuming: NVIDIA dropped Maxwell, Pascal and
+# Volta in the 580 branch, so the GTX 1660 SUPER's PCI ID (10de:21c4) was
+# confirmed present in the package's Modaliases first. The `-server` variant is
+# used because this is a headless compute node — it keeps X/Wayland off it.
+#
+# These vars are consumed only by the nvidia_gpu_node role, which skips itself
+# entirely on any worker with no NVIDIA device, so they are harmless on worker-1.
+nvidia_driver_package: "nvidia-driver-580-server"
+nvidia_container_toolkit_version: "1.20.0-1"
+nvidia_container_toolkit_key_url: "https://nvidia.github.io/libnvidia-container/gpgkey"
+# $(ARCH) is apt's own substitution, expanded when apt reads the sources file.
+nvidia_container_toolkit_repo: "https://nvidia.github.io/libnvidia-container/stable/deb/$(ARCH) /"

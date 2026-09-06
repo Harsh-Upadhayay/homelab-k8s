@@ -91,5 +91,24 @@ workers = {
     usb_devices = [
       { host = "1-4" },
     ]
+
+    # GeForce GTX 1660 SUPER, passed through whole from pve-asrock (ADR-0067).
+    # q35 is what makes pcie = true legal — i440fx has no PCIe topology to
+    # attach it to. Changing an existing VM's machine type is safe here because
+    # this guest's netplan matches its NIC by MAC address and renames it to
+    # eth0, so the interface survives the move; virtio-scsi-pci behaves
+    # identically on both machine types, so the root disk does too.
+    #
+    # The device is referenced by Proxmox resource MAPPING, not by raw address.
+    # Proxmox rejects a raw hostpci address for any non-root identity ("only
+    # root can set 'hostpci0' config for non-mapped devices"), and this provider
+    # authenticates as the scoped terraform@pve token by design (ADR-0023/0024).
+    # The mapping — and the PVEMappingUser ACL that lets this token use it — are
+    # created by the proxmox_host Ansible role, which also owns the whole-card
+    # vfio-pci binding behind it.
+    machine = "q35"
+    hostpci_devices = [
+      { device = "hostpci0", mapping = "gpu-gtx1660s" },
+    ]
   }
 }

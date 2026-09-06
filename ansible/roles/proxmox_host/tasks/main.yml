@@ -4,8 +4,11 @@
 #   --tags storage-bootstrap initialize a host-declared LVM-thin datastore
 #   --tags maintenance-upgrade
 #                            explicit apt update + full-upgrade; skipped by default
-# Untagged runs deliberately skip destructive storage initialization and
-# package maintenance because both imports carry Ansible's special `never` tag.
+#   --tags gpu-passthrough   bind a host-declared PCI device to vfio-pci; add
+#                            -e proxmox_vfio_reboot=true to also reboot the host
+# Untagged runs deliberately skip destructive storage initialization, package
+# maintenance, and passthrough binding because all three imports carry Ansible's
+# special `never` tag.
 
 - name: Configure Proxmox package repositories
   ansible.builtin.import_tasks: repositories.yml
@@ -19,3 +22,8 @@
 - name: Explicit Proxmox package maintenance upgrade
   ansible.builtin.import_tasks: upgrade.yml
   tags: [never, maintenance-upgrade]
+
+- name: Bind a declared PCI device to vfio-pci for guest passthrough
+  ansible.builtin.import_tasks: gpu_passthrough.yml
+  when: proxmox_vfio_passthrough is defined
+  tags: [never, gpu-passthrough]

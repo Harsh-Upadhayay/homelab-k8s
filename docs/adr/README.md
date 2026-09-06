@@ -12,7 +12,7 @@ The Ansible/Terraform/Kubernetes/platform *mechanics* these decisions rely on li
 - [[v0.2 - Cluster Bootstrap]] — ADR-0008 … ADR-0012
 - [[v0.3 - Ingress and TLS]] — ADR-0013 … ADR-0015, ADR-0027
 - [[v0.4 - Public and Private Access]] — ADR-0016 … ADR-0018, ADR-0025 … ADR-0026, ADR-0028 … ADR-0029
-- [[v2.0 - Operability]] — ADR-0030 … ADR-0048, ADR-0051 … ADR-0053
+- [[v2.0 - Operability]] — ADR-0030 … ADR-0048, ADR-0051 … ADR-0053, ADR-0067 … ADR-0068
 - [[v4.0 - Developer Workspace]] — ADR-0054 … ADR-0064
 
 (0019–0021 live in the v0.1 log despite the number gap: 0019 records the
@@ -91,3 +91,5 @@ v1.0 has no log — it produced no architecture decisions of its own, only valid
 | 0064 | Tailscale SSH in the devbox container, not a Service on port 22 | Accepted (amended: in-container, not sidecar) | [[v4.0 - Developer Workspace]] |
 | 0065 | The devbox holds namespace-admin on `workbench`, secrets included | Accepted | [[v4.0 - Developer Workspace]] |
 | 0066 | `devx` discovers workloads by label; lifecycle lives in the manifest | Accepted | [[v4.0 - Developer Workspace]] |
+| 0067 | The ASRock GPU is bound whole to vfio-pci and passed into `k3s-worker-3` | Accepted | [[v2.0 - Operability]] |
+| 0068 | `terraform@pve` needs a mapping-scoped ACL for PCI passthrough | Accepted | [[v2.0 - Operability]] |
