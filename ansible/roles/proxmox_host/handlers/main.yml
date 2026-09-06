@@ -1,0 +1,14 @@
+---
+# Handlers run in the order they are DEFINED here, not the order they are
+# notified. The initramfs is rebuilt first so that the bootloader entries GRUB
+# then writes point at an initrd that already contains the vfio stack.
+#
+# -k is pinned to the RUNNING kernel deliberately. On pve-asrock the patched,
+# ABI-specific e1000e module exists for exactly one kernel version, and a bare
+# `update-initramfs -u` on some other kernel tree would produce an initramfs
+# without a working NIC driver for the kernel this host actually boots.
+- name: Rebuild the Proxmox initramfs
+  ansible.builtin.command: "update-initramfs -u -k {{ ansible_kernel }}"
+
+- name: Regenerate the GRUB configuration
+  ansible.builtin.command: update-grub

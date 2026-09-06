@@ -1,0 +1,213 @@
+---
+# Generic host-side VFIO binding: claim the PCI functions declared in host_vars
+# for vfio-pci at boot, so a guest can take the device exclusively.
+#
+# Boot-time binding (blacklist + vfio-pci) rather than letting Proxmox rebind the
+# device when the VM starts. On this host the GPU is also the console
+# framebuffer device — precisely the case where runtime unbinding is unreliable,
+# because a live framebuffer holds the BARs.
+#
+# NOTHING here touches the kernel packages. VFIO is in-tree, and the NVIDIA
+# driver lives in the guest, never on the hypervisor. On pve-asrock that
+# separation is load-bearing: its I219-V NIC works only through an unsigned,
+# ABI-specific e1000e patch built for one kernel (see
+# docs/troubleshooting/proxmox-ve-9.2-1-i219v-recovery/). This file also never
+# edits /etc/modprobe.d/e1000e-nvm-workaround.conf — it only adds new files.
+#
+# The initramfs rebuild below is the same operation that recovery runbook
+# already prescribes, but it is ASSERTED afterwards and before any reboot,
+# because on this host a wrong initramfs means a host that comes back with no
+# network and no console.
+
+- name: Require a usable VFIO passthrough declaration
+  ansible.builtin.assert:
+    that:
+      - proxmox_vfio_passthrough.pci_ids | default([]) | length > 0
+      - proxmox_vfio_passthrough.kernel_cmdline | default([]) | length > 0
+    fail_msg: >-
+      proxmox_vfio_passthrough must declare at least one PCI ID and a full
+      kernel command line.
+
+- name: Blacklist the host drivers that would otherwise claim the device
+  ansible.builtin.copy:
+    dest: /etc/modprobe.d/vfio-passthrough-blacklist.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by ansible/roles/proxmox_host (gpu-passthrough tag) — do not edit by hand.
+      # Deliberately a separate file from e1000e-nvm-workaround.conf, which must
+      # never be touched by this automation.
+      {% for module in proxmox_vfio_passthrough.blacklist_modules %}
+      blacklist {{ module }}
+      options {{ module }} modeset=0
+      {% endfor %}
+  notify: Rebuild the Proxmox initramfs
+
+- name: Bind the declared PCI functions to vfio-pci
+  ansible.builtin.copy:
+    dest: /etc/modprobe.d/vfio-passthrough.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by ansible/roles/proxmox_host (gpu-passthrough tag) — do not edit by hand.
+      # disable_vga=1: this card is the host's boot VGA device, and vfio-pci must
+      # not participate in VGA arbitration for it once the host has given it up.
+      options vfio-pci ids={{ proxmox_vfio_passthrough.pci_ids | join(',') }} disable_vga=1
+      {% for module in proxmox_vfio_passthrough.blacklist_modules %}
+      softdep {{ module }} pre: vfio-pci
+      {% endfor %}
+  notify: Rebuild the Proxmox initramfs
+
+# Two files on purpose. initramfs-tools/modules gets vfio into the *initramfs*,
+# so it claims the device in early boot before anything else can; modules-load.d
+# is the systemd-era backstop if an initramfs is ever rebuilt without it.
+- name: Load the vfio stack from the initramfs
+  ansible.builtin.copy:
+    dest: /etc/initramfs-tools/modules
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by ansible/roles/proxmox_host (gpu-passthrough tag) — do not edit by hand.
+      vfio
+      vfio_iommu_type1
+      vfio_pci
+  notify: Rebuild the Proxmox initramfs
+
+- name: Load the vfio stack at systemd time as a backstop
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/vfio.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by ansible/roles/proxmox_host (gpu-passthrough tag) — do not edit by hand.
+      vfio
+      vfio_iommu_type1
+      vfio_pci
+  notify: Rebuild the Proxmox initramfs
+
+# The declared command line is written in full rather than appended to, so what
+# boots is exactly what is reviewable in host_vars. On this host its only real
+# payload is initcall_blacklist=sysfb_init: the passthrough GPU is the boot VGA
+# device, so without it the EFI system framebuffer claims the card's BARs the
+# instant nouveau is blacklisted and vfio-pci cannot reserve them. No IOMMU
+# parameter is needed or set — IOMMU is already active on this board.
+- name: Declare the host kernel command line
+  ansible.builtin.lineinfile:
+    path: /etc/default/grub
+    regexp: '^GRUB_CMDLINE_LINUX_DEFAULT='
+    line: 'GRUB_CMDLINE_LINUX_DEFAULT="{{ proxmox_vfio_passthrough.kernel_cmdline | join('' '') }}"'
+    backup: true
+  notify: Regenerate the GRUB configuration
+
+- name: Apply pending bootloader and initramfs rebuilds before verifying them
+  ansible.builtin.meta: flush_handlers
+
+# --- Pre-reboot safety gate ---------------------------------------------------
+# Everything above only takes effect on the next boot, and on this host the next
+# boot is the dangerous moment. Verify the NIC will survive it BEFORE rebooting.
+
+# NOTE for future readers: the patched e1000e is deliberately NOT expected in
+# the initramfs, and asserting that it is would be wrong. It lives in
+# updates/nic-recovery/, outside the kernel tree that initramfs-tools' MODULES
+# policy copies from, and the stock copy was deleted during the original
+# recovery — so no e1000e module is in the initramfs at all. That is harmless
+# here because root is local LVM (/dev/mapper/pve-root), not network storage:
+# udev loads the patched driver from the real root after it is mounted. What
+# actually has to hold is that module resolution can only ever find the patched
+# copy, which is what these tasks check.
+
+- name: Read the e1000e module the running kernel resolves
+  ansible.builtin.command: modinfo -F filename e1000e
+  changed_when: false
+  check_mode: false
+  register: proxmox_vfio_e1000e_module
+
+- name: Look for a stock e1000e that could outrank the patched module
+  ansible.builtin.find:
+    paths: "/lib/modules/{{ ansible_kernel }}/kernel/drivers/net/ethernet/intel/e1000e"
+    patterns: "e1000e.ko*"
+  register: proxmox_vfio_stock_e1000e
+
+- name: Count how many e1000e modules the dependency map offers
+  ansible.builtin.shell:
+    cmd: set -o pipefail && grep -c 'e1000e\.ko' "/lib/modules/{{ ansible_kernel }}/modules.dep"
+    executable: /bin/bash
+  changed_when: false
+  check_mode: false
+  failed_when: false
+  register: proxmox_vfio_e1000e_dep_entries
+
+# The module is named vfio_pci but its FILE is vfio-pci.ko, so match either
+# separator. The `\.ko` anchor keeps this from also counting vfio-pci-core.ko.
+- name: Count the vfio stack in the rebuilt initramfs
+  ansible.builtin.shell:
+    cmd: set -o pipefail && lsinitramfs "/boot/initrd.img-{{ ansible_kernel }}" | grep -c 'vfio[-_]pci\.ko'
+    executable: /bin/bash
+  changed_when: false
+  check_mode: false
+  failed_when: false
+  register: proxmox_vfio_initramfs_vfio
+
+- name: Require this host to be safe to reboot
+  ansible.builtin.assert:
+    that:
+      - proxmox_vfio_e1000e_module.stdout == asrock_recovery_module_path
+      - proxmox_vfio_stock_e1000e.matched == 0
+      - (proxmox_vfio_e1000e_dep_entries.stdout | int) == 1
+      - (proxmox_vfio_initramfs_vfio.stdout | int) > 0
+    fail_msg: >-
+      Refusing to leave this host reboot-ready. e1000e resolves to
+      '{{ proxmox_vfio_e1000e_module.stdout }}' (expected
+      '{{ asrock_recovery_module_path }}');
+      {{ proxmox_vfio_stock_e1000e.matched }} stock e1000e module(s) are present
+      where there must be none;
+      {{ proxmox_vfio_e1000e_dep_entries.stdout }} e1000e entries are in
+      modules.dep where there must be exactly one; and the rebuilt initramfs
+      holds {{ proxmox_vfio_initramfs_vfio.stdout }} copies of vfio_pci.ko.
+      Repair this before rebooting — the host has no console to recover from.
+
+# --- Reboot, opt-in only ------------------------------------------------------
+# Rebooting this host takes the whole Kubernetes cluster down with it: it runs
+# k3s-server-1 (the sole control plane) as well as k3s-worker-3. So the reboot
+# never happens on an ordinary tagged run; it requires -e proxmox_vfio_reboot=true.
+
+- name: Reboot the hypervisor so vfio-pci can claim the device
+  ansible.builtin.reboot:
+    reboot_timeout: 900
+    post_reboot_delay: 45
+  when: proxmox_vfio_reboot | default(false) | bool
+
+- name: Read the driver now bound to the first declared function
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail &&
+      lspci -nnk -d {{ proxmox_vfio_passthrough.pci_ids[0] }} |
+      awk -F': ' '/Kernel driver in use/ {print $2}'
+    executable: /bin/bash
+  changed_when: false
+  check_mode: false
+  register: proxmox_vfio_bound_driver
+  when: proxmox_vfio_reboot | default(false) | bool
+
+- name: Read the link state of the patched NIC after the reboot
+  ansible.builtin.command: ip -br link show nic0
+  changed_when: false
+  check_mode: false
+  failed_when: false
+  register: proxmox_vfio_nic_state
+  when: proxmox_vfio_reboot | default(false) | bool
+
+- name: Require vfio-pci ownership and a surviving NIC
+  ansible.builtin.assert:
+    that:
+      - proxmox_vfio_bound_driver.stdout | trim == "vfio-pci"
+      - "'UP' in proxmox_vfio_nic_state.stdout"
+    fail_msg: >-
+      After reboot the device is bound to
+      '{{ proxmox_vfio_bound_driver.stdout | trim }}' (expected vfio-pci) and
+      nic0 reads '{{ proxmox_vfio_nic_state.stdout | trim }}'.
+  when: proxmox_vfio_reboot | default(false) | bool
