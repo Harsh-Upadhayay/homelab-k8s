@@ -55,7 +55,11 @@
       # disable_vga=1: this card is the host's boot VGA device, and vfio-pci must
       # not participate in VGA arbitration for it once the host has given it up.
       options vfio-pci ids={{ proxmox_vfio_passthrough.pci_ids | join(',') }} disable_vga=1
-      {% for module in proxmox_vfio_passthrough.blacklist_modules %}
+      # Load vfio-pci ahead of every driver that could otherwise claim one of
+      # the card's functions first. A multi-function card is assigned as a whole
+      # IOMMU group, so a single function left on a host driver makes the entire
+      # group non-viable and the guest cannot take the device.
+      {% for module in (proxmox_vfio_passthrough.blacklist_modules + proxmox_vfio_passthrough.softdep_modules | default([])) %}
       softdep {{ module }} pre: vfio-pci
       {% endfor %}
   notify: Rebuild the Proxmox initramfs
@@ -181,33 +185,82 @@
     post_reboot_delay: 45
   when: proxmox_vfio_reboot | default(false) | bool
 
-- name: Read the driver now bound to the first declared function
+# Everything below verifies and converges the LIVE binding, which only means
+# anything once vfio-pci is actually loaded. On the very first run — config
+# written but the host not yet rebooted — the driver is absent and these tasks
+# correctly skip rather than failing a host that simply is not there yet.
+- name: Check whether the vfio-pci driver is loaded yet
+  ansible.builtin.stat:
+    path: /sys/bus/pci/drivers/vfio-pci
+  changed_when: false
+  check_mode: false
+  register: proxmox_vfio_driver_loaded
+
+# The softdep ordering above fixes this at the NEXT boot. This converges the
+# RUNNING host as well, so a single straggling function does not cost a whole
+# extra cluster outage to correct. Rebinding these functions is safe: nothing on
+# this host uses the card. driver_override makes the choice sticky, so a later
+# driver load cannot steal the function back.
+- name: Rebind any declared function still held by a host driver
   ansible.builtin.shell:
-    cmd: >-
-      set -o pipefail &&
-      lspci -nnk -d {{ proxmox_vfio_passthrough.pci_ids[0] }} |
-      awk -F': ' '/Kernel driver in use/ {print $2}'
+    cmd: |
+      set -o pipefail
+      rebound=0
+      for id in {{ proxmox_vfio_passthrough.pci_ids | join(' ') }}; do
+        for addr in $(lspci -Dn -d "$id" | awk '{print $1}'); do
+          cur=$(basename "$(readlink -f "/sys/bus/pci/devices/$addr/driver" 2>/dev/null)" 2>/dev/null)
+          [ "$cur" = "vfio-pci" ] && continue
+          echo vfio-pci > "/sys/bus/pci/devices/$addr/driver_override"
+          [ -n "$cur" ] && echo "$addr" > "/sys/bus/pci/devices/$addr/driver/unbind"
+          echo "$addr" > /sys/bus/pci/drivers/vfio-pci/bind 2>/dev/null || true
+          rebound=1
+        done
+      done
+      echo "rebound=$rebound"
+    executable: /bin/bash
+  register: proxmox_vfio_rebind
+  changed_when: "'rebound=1' in proxmox_vfio_rebind.stdout"
+  when: proxmox_vfio_driver_loaded.stat.isdir | default(false)
+
+- name: Count how many declared functions are NOT owned by vfio-pci
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      stray=0
+      for id in {{ proxmox_vfio_passthrough.pci_ids | join(' ') }}; do
+        for addr in $(lspci -Dn -d "$id" | awk '{print $1}'); do
+          cur=$(basename "$(readlink -f "/sys/bus/pci/devices/$addr/driver" 2>/dev/null)" 2>/dev/null)
+          if [ "$cur" != "vfio-pci" ]; then
+            echo "not-vfio: $addr is on '${cur:-none}'" >&2
+            stray=$((stray+1))
+          fi
+        done
+      done
+      echo "$stray"
     executable: /bin/bash
   changed_when: false
   check_mode: false
-  register: proxmox_vfio_bound_driver
-  when: proxmox_vfio_reboot | default(false) | bool
+  register: proxmox_vfio_stray_functions
+  when: proxmox_vfio_driver_loaded.stat.isdir | default(false)
 
-- name: Read the link state of the patched NIC after the reboot
+- name: Read the link state of the patched NIC
   ansible.builtin.command: ip -br link show nic0
   changed_when: false
   check_mode: false
   failed_when: false
   register: proxmox_vfio_nic_state
-  when: proxmox_vfio_reboot | default(false) | bool
 
-- name: Require vfio-pci ownership and a surviving NIC
+# Every function of a multi-function card must be owned by vfio-pci or the whole
+# IOMMU group is non-viable and the guest gets nothing.
+- name: Require whole-card vfio-pci ownership and a surviving NIC
   ansible.builtin.assert:
     that:
-      - proxmox_vfio_bound_driver.stdout | trim == "vfio-pci"
+      - (proxmox_vfio_stray_functions.stdout | trim | int) == 0
       - "'UP' in proxmox_vfio_nic_state.stdout"
     fail_msg: >-
-      After reboot the device is bound to
-      '{{ proxmox_vfio_bound_driver.stdout | trim }}' (expected vfio-pci) and
-      nic0 reads '{{ proxmox_vfio_nic_state.stdout | trim }}'.
-  when: proxmox_vfio_reboot | default(false) | bool
+      {{ proxmox_vfio_stray_functions.stdout | default('?') | trim }} declared
+      function(s) are still on a host driver — every function of the card must
+      be owned by vfio-pci or the IOMMU group is not viable and the guest gets
+      nothing. See the task's stderr for which. nic0 reads
+      '{{ proxmox_vfio_nic_state.stdout | default('') | trim }}'.
+  when: proxmox_vfio_driver_loaded.stat.isdir | default(false)

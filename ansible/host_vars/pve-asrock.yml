@@ -39,8 +39,20 @@ proxmox_vfio_passthrough:
     - "10de:1aeb" # TU116 HDMI audio
     - "10de:1aec" # TU116 USB 3.1 controller
     - "10de:1aed" # TU116 USB Type-C UCSI controller
+  # Drivers that exist only to drive this card and can be refused outright.
   blacklist_modules:
     - nouveau
+  # Drivers that must still load — they run OTHER hardware on this host — but
+  # must not reach the passthrough card before vfio-pci does. Observed live: on
+  # the first passthrough boot vfio-pci won 01:00.0 and .1, while xhci_pci took
+  # .2 and i2c_nvidia_gpu took .3, leaving IOMMU group 1 non-viable. Blacklisting
+  # xhci_pci is NOT an option: the Google Photos relay handset, the TP-Link WiFi
+  # NIC and a wireless receiver all sit on the Intel controller at 00:14.0 that
+  # the same module drives. Ordering vfio-pci first gives it the NVIDIA functions
+  # while these modules still bind everything else normally.
+  softdep_modules:
+    - xhci_pci
+    - i2c_nvidia_gpu
   kernel_cmdline:
     - quiet
     - initcall_blacklist=sysfb_init
