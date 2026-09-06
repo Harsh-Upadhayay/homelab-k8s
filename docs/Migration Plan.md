@@ -28,6 +28,10 @@ exists here:
   Proxmox VMs with no GPU passthrough (yet). Anything that *requires* the GPU stays off-cluster
   for now. Immich runs CPU-only machine learning; its completed workstation rebuild and
   preserved-disk UUID reassociation are recorded in `docs/migrations/immich.md`.
+  **Superseded 2026-09-06 (ADR-0067):** the GTX 1660 SUPER in `pve-asrock` is now passed through
+  to `k3s-worker-3` and schedulable as `nvidia.com/gpu`. The premise above no longer holds — a
+  workload that requires the GPU can now run on-cluster, pinned to that node. Immich's machine
+  learning and transcoding are still CPU-only; wiring an actual consumer is separate work.
 - **Authelia + LLDAP removed entirely.** They gave finicky, never-quite-one-click integration and
   are not worth porting. New auth model:
   - **Internal apps → Tailscale reachability *is* the auth.** Not on the tailnet = the hostname

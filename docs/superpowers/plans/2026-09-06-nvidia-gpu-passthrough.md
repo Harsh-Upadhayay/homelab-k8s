@@ -10,6 +10,16 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-06-nvidia-gpu-passthrough-design.md`
 
+**Status: executed 2026-09-06.** All six tasks are done and the result is
+verified end to end (a pod requesting `nvidia.com/gpu: 1` ran `nvidia-smi`
+against the card). The checkboxes below are left as written rather than
+back-ticked, because execution diverged from them in four places worth reading
+before trusting this plan as a runbook — a bootloader change *was* needed, a
+multi-function card needs `softdep` ordering, Terraform needed a Proxmox
+resource mapping instead of a raw address, and worker-3's OS disk hit
+`DiskPressure`. Those are written up in the spec's *Amendments* section and
+recorded as ADR-0067 and ADR-0068.
+
 ## Global Constraints
 
 - **Never touch `pve-asrock`'s kernel.** The I219-V NIC depends on an unsigned, ABI-specific `e1000e` patch built for `7.0.2-6-pve`. The three APT holds (`proxmox-default-kernel`, `proxmox-kernel-7.0`, `proxmox-kernel-7.0.2-6-pve-signed`) stay in place.

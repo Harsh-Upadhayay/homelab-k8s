@@ -25,7 +25,7 @@ Everything below was confirmed live before designing, not assumed:
 |---|---|---|
 | GPU | `01:00.0` NVIDIA TU116 [GTX 1660 SUPER] `10de:21c4` | Turing (SM 7.5) — still supported by current drivers |
 | Host | `pve-asrock` (also runs `k3s-server-1`, the sole control plane) | any host reboot is a full-cluster outage |
-| IOMMU | already active, 7 groups | **no GRUB/bootloader change needed** |
+| IOMMU | already active, 7 groups | no IOMMU kernel parameter needed (one is still required for the framebuffer — see Amendments) |
 | GPU IOMMU group | group 1 = root port `00:01.0` + `01:00.0/.1/.2/.3` | all four endpoints are functions of the *same card*; bridges are ignored by VFIO — a cleanly passable group, no ACS override |
 | Current GPU driver | `nouveau`, refcount 0 | nothing is using it |
 | Other display adapter | **none** | host loses its Linux console (accepted) |
@@ -197,6 +197,47 @@ Phases B and C do not require another host reboot.
 5. `kubectl describe node k3s-worker-3` shows `nvidia.com/gpu: 1` allocatable.
 6. A committed validation Job with `runtimeClassName: nvidia` and
    `nvidia.com/gpu: 1` runs `nvidia-smi` to completion inside the cluster.
+
+## Amendments — what implementation actually taught us
+
+Four things this design did not anticipate. All four are now in the code and in
+ADR-0067/0068; they are recorded here rather than edited away, because each one
+is a fact about this hardware that the next person will need.
+
+1. **A kernel parameter was needed after all — for the framebuffer, not IOMMU.**
+   The design correctly established that IOMMU needs no parameter here, then
+   wrongly concluded no bootloader change at all. The card is the host's *boot
+   VGA* device (`boot_vga` is 1, and `/proc/fb` showed `nouveaudrmfb`), so once
+   nouveau is blacklisted the EFI system framebuffer takes the BARs instead and
+   vfio-pci cannot reserve them. `initcall_blacklist=sysfb_init` prevents that
+   framebuffer existing at all.
+
+2. **`vfio-pci ids=` alone does not win a multi-function card.** On the first
+   passthrough boot vfio-pci took `01:00.0` and `.1`, while `xhci_pci` took `.2`
+   and `i2c_nvidia_gpu` took `.3` — dmesg shows `xhci_hcd` binding at t=1.3s
+   against vfio-pci initialising at t=3.7s. Two stray functions leave IOMMU
+   group 1 non-viable and the guest gets nothing. The fix is `softdep` load
+   *ordering*, emphatically not blacklisting: that same `xhci_pci` drives the
+   Intel controller at `00:14.0` carrying the Photos-relay handset, the TP-Link
+   WiFi NIC and a wireless receiver. The role also now converges the running
+   host via `driver_override`, so a stray function costs a rebind rather than
+   another full-cluster reboot.
+
+3. **Terraform could not set `hostpci` at all.** Proxmox reserves unmapped
+   passthrough for `root@pam` — `only root can set 'hostpci0' config for
+   non-mapped devices` — and this platform's Terraform identity is deliberately
+   scoped. The device is therefore referenced by a Proxmox *resource mapping*,
+   with `PVEMappingUser` granted on just that mapping. This is ADR-0023/0024
+   recurring a third time, and it got its own record as ADR-0068. The mapping's
+   `iommugroup` and `subsystem-id` are discovered from sysfs, because Proxmox
+   re-validates them on every VM start and refuses a mapping that has drifted.
+
+4. **`k3s-worker-3`'s 40 GiB OS disk is a real constraint.** The driver plus the
+   operator's images took it to 97% and `DiskPressure=True`, which got the CUDA
+   validator evicted; pruning unused images and journals took it to 29%. Nothing
+   in the design accounted for image-store growth on that node, and its
+   datastore pool has little headroom to grow into. This is the most likely next
+   thing to bite.
 
 ## Deliberately out of scope
 
