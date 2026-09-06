@@ -1,0 +1,52 @@
+# NVIDIA GPU Operator values (ADR-0067).
+#
+# The operator is deliberately reduced to its Kubernetes-facing job. The two
+# node-level pieces it would normally own — the driver and the container
+# toolkit — are installed on the node by the nvidia_gpu_node Ansible role
+# instead, for three reasons:
+#
+#   1. Ubuntu 26.04 is new enough that NVIDIA's driver *container* images lag
+#      it. A generic driver container would compile kernel modules against
+#      7.0.0-29-generic unattended, in a privileged pod, on a hypervisor that
+#      now has no console at all (its only GPU is the one passed through).
+#   2. Ubuntu's packaged driver is built for exactly this kernel, pins per
+#      ADR-0002, and — decisively — can be proven working with nvidia-smi
+#      BEFORE anything in Kubernetes depends on it.
+#   3. k3s auto-detects nvidia-container-runtime at startup and writes the
+#      containerd runtime itself. Letting the operator's toolkit do it instead
+#      would mean overriding CONTAINERD_CONFIG/CONTAINERD_SOCKET to k3s's
+#      non-standard paths to duplicate work k3s already does natively.
+#
+# What the operator still provides, and why it was chosen over a bare device
+# plugin: the device plugin itself, DCGM/Prometheus metrics, node feature
+# discovery, and the validator.
+driver:
+  enabled: false
+toolkit:
+  enabled: false
+
+operator:
+  # k3s ships a predefined `nvidia` RuntimeClass and, once the toolkit is
+  # present, registers a matching containerd runtime handler. The operator's
+  # GPU-touching pods opt into it per-pod through this.
+  #
+  # This is the chart default, set explicitly because it is load-bearing here:
+  # the node's DEFAULT runtime stays runc on purpose. k3s-worker-3 also runs
+  # Argo CD, cert-manager, cloudflared, Longhorn CSI and Immich ML, and
+  # switching the container runtime under all of them to benefit a handful of
+  # pods is a far wider blast radius than this needs.
+  runtimeClass: nvidia
+
+# Node Feature Discovery labels nodes with the PCI vendors present on them,
+# which is how the device plugin and DCGM exporter land only on the node that
+# actually holds the card instead of every node in the cluster.
+nfd:
+  enabled: true
+
+# DCGM metrics are one of the reasons the operator was chosen over a bare
+# device plugin. Prometheus here discovers ServiceMonitors cluster-wide
+# (ADR-0039), so turning this on is all the wiring required.
+dcgmExporter:
+  enabled: true
+  serviceMonitor:
+    enabled: true
