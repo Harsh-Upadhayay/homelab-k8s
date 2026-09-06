@@ -6,11 +6,11 @@
 | --- | --- |
 | Date | 2026-09-06 JST |
 | Severity | SEV-3 |
-| Status | Resolved; preventive actions open |
+| Status | Mitigated; devbox recovery still in progress at time of writing; preventive actions open |
 | Systems | `k3s-worker-3`, Immich, photos-relay, `workbench` (devbox and project apps), GPU Operator, `kube-prometheus-stack` operator, Longhorn |
 | Start | 2026-09-06 ~17:50 JST (kubelet set `DiskPressure=True`; reconstructed from the first eviction) |
-| End | 2026-09-06 ~18:30 JST (last rescheduled workload mounted its volume and became Ready) |
-| Duration | Roughly 40 minutes of degraded service, overlapping a planned maintenance window whose *reboots* were expected but whose *evictions* were not |
+| End | 2026-09-06 ~18:00 JST for the GPU rollout and all evicted services except the devbox; the devbox's own recovery was still running at 18:35 JST, waiting on a 444,457-file `fsGroup` chown |
+| Duration | ~10 minutes for the GPU rollout stall; ~25 minutes for Immich, photos-relay and the project apps; the devbox exceeded 45 minutes and was still recovering at time of writing. The window's *reboots* were planned; its *evictions* were not |
 | Detection | `nvidia-cuda-validator` showed `Evicted` while checking GPU Operator rollout; `DiskPressure=True` on the node confirmed it |
 | Data impact | No loss. Longhorn reported every volume `attached`/`healthy` with replicas intact throughout; `immich-postgres` was never evicted; the 50 GiB `workbench` workspace volume remounted cleanly with both replicas healthy. |
 
@@ -75,7 +75,8 @@ All times JST (UTC+9). Times marked ~ are reconstructed from object ages and log
 | ~18:20 | 18 evicted pod tombstones deleted; they had been holding the RWO workspace volume and blocking rescheduled pods with `Multi-Attach error` |
 | ~18:22 | Rescheduled `workbench` pods land on `k3s-worker-1`; kubelet begins a recursive `fsGroup` ownership change across the 50 GiB workspace volume |
 | ~18:22 | `kube-prometheus-stack-operator` liveness probes begin timing out on the saturated node; kubelet SIGTERM-kills it repeatedly |
-| ~18:30 | Ownership change completes; workspace pods mount and become Ready |
+| ~18:31 | `k3s-worker-1` cordoned; Alloy, the Prometheus operator and `argocd-server` moved to the idle `k3s-worker-3`; both probe-kill loops stop and the chown rate roughly triples |
+| 18:35+ | Devbox still waiting on the `fsGroup` chown (12,828 of 444,457 files); every other workload Running |
 
 ## Technical root cause
 
