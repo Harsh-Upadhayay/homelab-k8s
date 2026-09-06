@@ -6,11 +6,11 @@
 | --- | --- |
 | Date | 2026-09-06 JST |
 | Severity | SEV-3 |
-| Status | Mitigated; devbox recovery still in progress at time of writing; preventive actions open |
+| Status | Resolved; preventive actions open |
 | Systems | `k3s-worker-3`, Immich, photos-relay, `workbench` (devbox and project apps), GPU Operator, `kube-prometheus-stack` operator, Longhorn |
 | Start | 2026-09-06 ~17:50 JST (kubelet set `DiskPressure=True`; reconstructed from the first eviction) |
-| End | 2026-09-06 ~18:00 JST for the GPU rollout and all evicted services except the devbox; the devbox's own recovery was still running at 18:35 JST, waiting on a 444,457-file `fsGroup` chown |
-| Duration | ~10 minutes for the GPU rollout stall; ~25 minutes for Immich, photos-relay and the project apps; the devbox exceeded 45 minutes and was still recovering at time of writing. The window's *reboots* were planned; its *evictions* were not |
+| End | 2026-09-06 ~19:20 JST (devbox completed its `fsGroup` chown and started; zero pods cluster-wide outside Running/Completed) |
+| Duration | ~10 minutes for the GPU rollout stall; ~25 minutes for Immich, photos-relay and the project apps; ~90 minutes for the devbox, almost all of it the `fsGroup` chown. The window's *reboots* were planned; its *evictions* were not |
 | Detection | `nvidia-cuda-validator` showed `Evicted` while checking GPU Operator rollout; `DiskPressure=True` on the node confirmed it |
 | Data impact | No loss. Longhorn reported every volume `attached`/`healthy` with replicas intact throughout; `immich-postgres` was never evicted; the 50 GiB `workbench` workspace volume remounted cleanly with both replicas healthy. |
 
@@ -76,7 +76,7 @@ All times JST (UTC+9). Times marked ~ are reconstructed from object ages and log
 | ~18:22 | Rescheduled `workbench` pods land on `k3s-worker-1`; kubelet begins a recursive `fsGroup` ownership change across the 50 GiB workspace volume |
 | ~18:22 | `kube-prometheus-stack-operator` liveness probes begin timing out on the saturated node; kubelet SIGTERM-kills it repeatedly |
 | ~18:31 | `k3s-worker-1` cordoned; Alloy, the Prometheus operator and `argocd-server` moved to the idle `k3s-worker-3`; both probe-kill loops stop and the chown rate roughly triples |
-| 18:35+ | Devbox still waiting on the `fsGroup` chown (12,828 of 444,457 files); every other workload Running |
+| ~19:20 | Devbox completes the chown and starts; `ratelimiter-docs` follows. Zero pods cluster-wide outside Running/Completed |
 
 ## Technical root cause
 
@@ -172,6 +172,9 @@ applications returned to Running; and the GPU chain was re-proven end to end wit
   would have taken down a workload that had just recovered.
 - The GPU work itself was unaffected in substance: every artefact of it re-verified clean afterwards
   (`terraform plan` no changes, both Ansible roles `changed=0`).
+- Relieving the node rather than waiting on it was measurably the right call: extrapolating the
+  pre-rebalance chown rate predicted roughly 2.4 more hours, and moving three pods off the node
+  brought the actual remaining time to about 50 minutes.
 
 ## What did not go well
 
