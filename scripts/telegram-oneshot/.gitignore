@@ -1,0 +1,6 @@
+# Never commit filled-in credentials — session + api_hash are full-account access.
+config.json
+*.session
+tg_session.txt
+tg_login.json
+__pycache__/

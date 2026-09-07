@@ -1,0 +1,29 @@
+# TEMPORARY live-status page for the one-shot Telegram backfill, exposed on the
+# tailnet only (same mechanism as the relay's own page: a Service claimed by the
+# Tailscale operator via loadBalancerClass: tailscale). It targets port 8090 on the
+# relay pod, where tg_oneshot.py's built-in status server listens.
+#
+# This is NOT GitOps-managed — apply it by hand for the duration of a backfill and
+# `kubectl delete -f` it when done (it also removes the `photos-relay-tg` tailnet
+# device; if the device lingers in the Tailscale admin console, remove it there).
+# targetPort is the numeric 8090 on purpose: the relay Deployment does not declare
+# an 8090 containerPort, and a numeric targetPort routes regardless.
+apiVersion: v1
+kind: Service
+metadata:
+  name: tg-oneshot-status
+  namespace: photos-relay
+  labels:
+    app.kubernetes.io/name: photos-relay
+    tmp/purpose: telegram-oneshot-backfill
+  annotations:
+    tailscale.com/hostname: "photos-relay-tg"
+spec:
+  type: LoadBalancer
+  loadBalancerClass: tailscale
+  selector:
+    app.kubernetes.io/name: photos-relay
+  ports:
+    - name: status
+      port: 80
+      targetPort: 8090

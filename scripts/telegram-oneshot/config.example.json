@@ -1,0 +1,11 @@
+{
+  "_comment": "Copy to config.json and fill in. NEVER commit the filled version — api_hash and session are full-account credentials. channels is an ordered [id, display-name] list; put small chats first so you validate the pipeline before the big one. Get ids from tg_list_chats.py.",
+  "api_id": "PUT_API_ID_HERE",
+  "api_hash": "PUT_API_HASH_HERE",
+  "session": "PUT_STRINGSESSION_HERE",
+  "channels": [
+    ["111111111", "Small Chat (validate first)"],
+    ["222222222", "Another Chat"],
+    ["999999999", "Biggest Chat (last)"]
+  ]
+}
