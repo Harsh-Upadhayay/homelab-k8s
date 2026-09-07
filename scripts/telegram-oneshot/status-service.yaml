@@ -1,13 +1,16 @@
-# TEMPORARY live-status page for the one-shot Telegram backfill, exposed on the
-# tailnet only (same mechanism as the relay's own page: a Service claimed by the
-# Tailscale operator via loadBalancerClass: tailscale). It targets port 8090 on the
-# relay pod, where tg_oneshot.py's built-in status server listens.
+# TEMPORARY live-status page for the one-shot Telegram backfill, routed through the
+# platform's internal front door (Traefik IngressRoute on websecure + the default
+# *.in.neovara.uk wildcard TLSStore) — reachable over the tailnet at
+# https://photos-relay-tg.in.neovara.uk. Targets port 8090 on the relay pod, where
+# tg_oneshot.py's built-in status server listens.
 #
-# This is NOT GitOps-managed — apply it by hand for the duration of a backfill and
-# `kubectl delete -f` it when done (it also removes the `photos-relay-tg` tailnet
-# device; if the device lingers in the Tailscale admin console, remove it there).
-# targetPort is the numeric 8090 on purpose: the relay Deployment does not declare
-# an 8090 containerPort, and a numeric targetPort routes regardless.
+# This reuses the single traefik-internal Tailscale device. Do NOT use a
+# loadBalancerClass: tailscale Service here: it mints a per-service tailnet device,
+# and the operator's OAuth client cannot delete devices (403), so deleting it hangs
+# the Service in Terminating forever on its finalizer.
+#
+# NOT GitOps-managed — apply for the duration of a backfill, `kubectl delete -f`
+# when done. The ClusterIP + IngressRoute delete cleanly (no finalizer, no device).
 apiVersion: v1
 kind: Service
 metadata:
@@ -16,14 +19,30 @@ metadata:
   labels:
     app.kubernetes.io/name: photos-relay
     tmp/purpose: telegram-oneshot-backfill
-  annotations:
-    tailscale.com/hostname: "photos-relay-tg"
 spec:
-  type: LoadBalancer
-  loadBalancerClass: tailscale
+  type: ClusterIP
   selector:
     app.kubernetes.io/name: photos-relay
   ports:
     - name: status
       port: 80
       targetPort: 8090
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: tg-oneshot-status
+  namespace: photos-relay
+  labels:
+    app.kubernetes.io/name: photos-relay
+    tmp/purpose: telegram-oneshot-backfill
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`photos-relay-tg.in.neovara.uk`)
+      kind: Rule
+      services:
+        - name: tg-oneshot-status
+          port: 80
+  tls: {} # default TLSStore cert (*.in.neovara.uk)

@@ -98,13 +98,14 @@ kubectl -n photos-relay exec "$POD" -- tail -f /state/tg-oneshot/run.log   # wat
 ### 7. (Optional) live status page
 
 ```sh
-kubectl apply -f status-service.yaml
-kubectl -n photos-relay get svc tg-oneshot-status -o \
-  jsonpath='{.status.loadBalancer.ingress[0].hostname}'   # → photos-relay-tg.<tailnet>.ts.net
+kubectl apply -f status-service.yaml   # ClusterIP + IngressRoute on the *.in front door
 ```
 
-Open `http://photos-relay-tg.<tailnet>.ts.net/` — shows per-channel progress, totals,
+Open `https://photos-relay-tg.in.neovara.uk/` — shows per-channel progress, totals,
 skips, and a heartbeat that goes **stale** if the process dies (your relaunch signal).
+It routes through the shared `traefik-internal` device; do NOT use a
+`loadBalancerClass: tailscale` Service (per-device, and it hangs on delete because
+the operator's OAuth client can't delete tailnet devices).
 
 ### 8. Monitor & the one gotcha — relaunching after a pod restart
 
@@ -131,7 +132,8 @@ kubectl -n photos-relay exec "$POD" -- pip uninstall -y telethon   # or just let
 # and shred config.json / the session locally.
 ```
 
-If the `photos-relay-tg` device lingers in the Tailscale admin console, delete it there.
+With the ClusterIP + IngressRoute page (step 7), `kubectl delete -f status-service.yaml`
+removes it cleanly — no per-service tailnet device to chase in the admin console.
 
 ## Gotchas learned the hard way
 

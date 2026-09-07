@@ -78,17 +78,22 @@ open("manifests/configmap.yaml","w").write(head+ind)
 PY
 ```
 
-## Status page (tailnet only)
+## Status page (internal, tailnet only)
 
 The relay serves a read-only status page from a built-in HTTP thread on `:8080`,
-exposed on the tailnet by `manifests/status-service.yaml` (a
-`loadBalancerClass: tailscale` Service, the same internal-only mechanism the
-platform uses for dashboards). Once the Tailscale operator has provisioned the
-proxy, it is reachable at the pinned MagicDNS name:
+fronted by a plain ClusterIP (`manifests/status-service.yaml`) and routed through
+the platform's internal front door — a Traefik `IngressRoute`
+(`manifests/ingressroute.yaml`) on the `websecure` entrypoint with the default
+`*.in.neovara.uk` wildcard TLSStore, the same shape as ArgoCD/Grafana/Longhorn.
+Reachable over the tailnet at:
 
 ```
-http://photos-relay.<your-tailnet>.ts.net/
+https://photos-relay.in.neovara.uk/
 ```
+
+This reuses the single `traefik-internal` Tailscale device rather than minting a
+per-service one via `loadBalancerClass: tailscale` (which additionally hangs on
+deletion — the operator's OAuth client cannot delete tailnet devices).
 
 It shows overall progress (done / total, %), the current batch, rate + ETA since
 the pod started, whether Immich is reachable, and a "last updated" heartbeat. It
