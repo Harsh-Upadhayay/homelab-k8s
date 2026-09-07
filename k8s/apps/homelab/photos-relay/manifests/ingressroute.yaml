@@ -1,0 +1,26 @@
+# Internal-ONLY route for the relay's status page — same shape as ArgoCD's,
+# Grafana's, and Longhorn's routes (websecure entrypoint, *.in name, default
+# TLSStore wildcard cert, reachable only through the traefik-internal Tailscale
+# Service). This is the platform's internal front door (ADR-0018's cluster half);
+# it reuses the one traefik-internal tailnet device rather than a per-service
+# loadBalancerClass: tailscale Service.
+#
+# The page is read-only and exposes no controls, but it must never get a public
+# (web-entrypoint / Cloudflare) twin — it reveals library size and backup state.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: photos-relay-status
+  namespace: photos-relay
+  labels:
+    app.kubernetes.io/name: photos-relay
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`photos-relay.in.neovara.uk`)
+      kind: Rule
+      services:
+        - name: photos-relay-status
+          port: 80
+  tls: {} # empty = enable TLS, serve the default TLSStore cert (*.in.neovara.uk)
