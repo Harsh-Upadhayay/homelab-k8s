@@ -76,6 +76,14 @@ spec:
               value: /state/relay-state.json
             - name: ADB
               value: /opt/platform-tools/adb
+            # Poll Immich every 5 min when caught up (default is 1h). Google Photos
+            # is the primary backup now, so new iOS→Immich assets should propagate
+            # within minutes, not up to an hour. The cost is a full asset-list scan
+            # every interval (a few seconds over ~22k assets); the backup oracle is
+            # only woken when there is actually a batch to push, so idle overhead
+            # stays low.
+            - name: IDLE_INTERVAL_S
+              value: "300"
             # IMMICH_API_KEY comes from the ESO-materialized Secret. Absent/empty
             # until the user stores the key in SSM; the relay idles (not crashes)
             # in that case so the pod stays inspectable.
