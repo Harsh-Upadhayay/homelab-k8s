@@ -5,7 +5,10 @@ through a dedicated Android handset (Moto G13, Google One 2 TB) whose on-device
 Google Photos app does the actual backup. Batches are pushed, confirmed in the
 cloud, then deleted from the phone to reclaim space — forever.
 
-Full rationale and the safety model are in
+This README is **setup** (repo layout, bring-up, tunables). For **runtime behaviour,
+recovery, and failure modes** — the loop, latency, the backup oracle, self-healing,
+what happens on a worker-3/pod/phone restart, and the signals for each — see
+[`BEHAVIOR.md`](BEHAVIOR.md). Full rationale and the safety model are in
 `docs/superpowers/specs/2026-09-02-immich-google-photos-relay-design.md`.
 **One-line safety summary:** Immich is the source of truth and the phone is
 disposable, so the reclaim-space deletes can never lose an original.

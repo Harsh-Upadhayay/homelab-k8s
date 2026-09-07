@@ -13,7 +13,13 @@ Proxmox cluster neovara
 │   └── k3s-worker-1   application workloads + consolidated Longhorn data disk
 └── pve-asrock
     └── k3s-worker-3   application workloads + longhorn-hdd managed data disk
+                       └── 📱 Android phone USB-cabled here (passthrough)
 ```
+
+> A physical Android phone (Moto G13) is USB-cabled to **pve-asrock** and passed
+> through to **k3s-worker-3** for the **photos-relay** app, which mirrors the Immich
+> library to Google Photos and keeps new iOS→Immich uploads flowing there. Runtime,
+> recovery, and failure behaviour: `k8s/apps/homelab/photos-relay/BEHAVIOR.md`.
 
 | Layer | Choice | Why (short version — see GUIDE.md / wiki for the full reasoning) |
 |---|---|---|
