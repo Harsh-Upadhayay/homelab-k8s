@@ -37,13 +37,28 @@ prometheus:
     # eliminate physical disk contention with etcd on pve-dell's USB SSD.
     # Control-plane VM migration (issue #49) no longer blocks monitoring restoration.
     replicas: 1
-    # Extended from 15d (2026-09-08, Task 2 of the cardinality reduction):
-    # series count drives RAM, but series×time drives disk. Task 1 cut the
-    # head series count roughly 5x (control-plane duplication, _bucket
-    # histograms, cAdvisor detail), so 90 days of retention now costs about
-    # what 15 days cost before the cut. Fewer metrics, not more disk, is
-    # what makes the longer history affordable.
-    retention: 90d
+    # Extended from 15d to 30d, NOT 90d (2026-09-08, Task 2 of the
+    # cardinality reduction — revised after final review). Measured on the
+    # live cluster: prometheus_tsdb_storage_blocks_bytes = 16.72GiB on the
+    # 20Gi PVC at 15d retention — already 84% full — which is 1.11GiB/day
+    # at 335k series (16.72/15). 90d was rejected: even post-cut, 90 days of
+    # new data alone is ~19.4GiB, and during the transition the existing
+    # 16.72GiB of pre-cut high-cardinality blocks don't expire until they
+    # age past 15d, so usage would peak near 36GiB on a 20Gi volume before
+    # settling. A full Prometheus volume fails writes outright — TSDB has no
+    # graceful eviction — so 30d is the safer step and can be revisited once
+    # the cardinality cut's real per-day ingest is measured.
+    #
+    # retentionSize is a hard guard on top of the time-based retention:
+    # whichever limit trips first wins, so no combination of series count
+    # and time can overflow the volume. 14GiB is 70% of the 20Gi PVC,
+    # leaving headroom for compaction (which needs roughly 2x the largest
+    # block to run). Applying this will immediately prune the oldest
+    # existing blocks to get back under 14GiB — that's intended, not a
+    # bug: it reclaims the space the old, pre-cut high-cardinality data is
+    # still holding.
+    retention: 30d
+    retentionSize: 14GiB
     storageSpec:
       volumeClaimTemplate:
         spec:
@@ -66,19 +81,24 @@ prometheus:
         # reaching /-/ready — a death spiral where each SIGKilled restart
         # left more mmap chunks corrupted and the next WAL replay bigger.
         #
-        # Lowered back to 1Gi (2026-09-08, Task 2 of the cardinality
-        # reduction): Task 1's scrape-job and histogram cuts took the head
-        # down to roughly 65k series; at Prometheus's usual ~3-5KB/series
-        # in-memory cost, that's only ~200-320Mi of head. 1Gi leaves 3-5x
-        # real headroom above that steady state, rather than sizing the
-        # limit just above the working set — a limit that tight is what
-        # turns a transient spike into silent thrash (creeping GC pressure,
-        # growing readiness-probe timeouts) instead of a clean, loud
-        # OOMKill you'd actually notice. The WAL-replay death spiral
-        # documented above is a separate startup-time failure mode, one
-        # Task 1's cardinality cut also shrinks (less data to replay and
-        # compact) — not something this limit alone was ever going to fix.
-        memory: 1Gi
+        # Left at 2Gi, deliberately NOT lowered (2026-09-08, Task 2 of the
+        # cardinality reduction — reverted after final review flagged a
+        # 1Gi attempt here as unsafe). Metric relabelings only change what
+        # gets scraped going forward; on the very first restart after this
+        # change ships, Prometheus still has to replay the EXISTING WAL and
+        # rebuild the current ~335k-series head before any cut takes
+        # effect, which measured at ~1.0-1.7GiB — above a 1Gi ceiling. A
+        # limit that tight would crash-loop the pod on that very restart,
+        # before the cardinality cut it's supposed to validate ever runs. A
+        # memory limit is also a ceiling, not a reservation: lowering it
+        # frees no RAM on the node (requests stay 400Mi) — real RAM is
+        # freed by the cardinality cut making Prometheus USE less, which
+        # this limit does nothing to help or hinder. Any future resize of
+        # this limit must be driven by a MEASURED post-cut steady-state
+        # prometheus_tsdb_head_series, never a projection — sizing a limit
+        # from a projection instead of a measurement is what caused the
+        # 2026-08-10 incident above in the first place.
+        memory: 2Gi
 
 alertmanager:
   alertmanagerSpec:
@@ -374,17 +394,28 @@ prometheus-node-exporter:
       cpu: 25m
       memory: 32Mi
 
-# Histogram _bucket series exist only to feed histogram_quantile() percentile
-# queries, which this platform's owner does not use — _sum/_count survive
-# right alongside them, so every rate()/average this platform's dashboards
-# and alerts actually rely on keeps working. Applied identically to
-# kubeApiServer, kubelet, and kubeEtcd below (each job's own histograms).
+# A blanket ".*_bucket" drop (this branch's original approach) was reverted
+# after final review (2026-09-08): it silently killed
+# KubeClientCertificateExpiration (warning + critical), which reads
+# apiserver_client_certificate_expiration_seconds_bucket — a low-cardinality
+# histogram and a genuinely important k3s alert — along with
+# kubelet_pleg_relist_duration_seconds_bucket. A blanket regex can't tell a
+# 335k-series histogram from a 10-series one; it only knows "_bucket". This
+# is a named deny-list of the MEASURED expensive histograms instead: only
+# what's named here is dropped, everything else (including any new
+# histogram this platform later starts scraping) survives by default. It's
+# also the far easier thing for the repo owner to audit — a wildcard grows
+# invisibly, a name list doesn't. Applied identically to kubeApiServer,
+# kubelet, and kubeEtcd below (each job's own copy of these histograms).
+# The blanket ".*_bucket" drop is kept ONLY inside kubelet's
+# cAdvisorMetricRelabelings further down — cAdvisor exposes no alert-bearing
+# histograms, so there's nothing there for a wildcard to accidentally kill.
 kubeApiServer:
   serviceMonitor:
     metricRelabelings:
       - action: drop
         sourceLabels: [__name__]
-        regex: ".*_bucket"
+        regex: "(apiserver_request_duration_seconds|apiserver_request_sli_duration_seconds|apiserver_request_body_size_bytes|apiserver_watch_list_duration_seconds|apiserver_response_sizes|apiserver_watch_cache_read_wait_seconds|apiserver_watch_events_sizes|apiserver_admission_controller_admission_duration_seconds|apiserver_flowcontrol_request_execution_seconds|etcd_request_duration_seconds|workqueue_work_duration_seconds|workqueue_queue_duration_seconds|rest_client_request_duration_seconds|scheduler_plugin_execution_duration_seconds|scheduler_event_handling_duration_seconds|kubelet_runtime_operations_duration_seconds|storage_operation_duration_seconds|prober_probe_duration_seconds|longhorn_rest_client_rate_limiter_latency_seconds|longhorn_rest_client_request_latency_seconds|longhorn_workqueue_work_duration_seconds|longhorn_workqueue_queue_duration_seconds)_bucket"
 
 # kubelet/cAdvisor is the largest remaining scrape job (92,626 series
 # measured on this cluster) even after the control-plane duplication and
@@ -392,11 +423,62 @@ kubeApiServer:
 # network/filesystem series — what this platform's dashboards and alerts
 # actually read — and drop everything else cAdvisor exposes by default:
 # cgroup accounting detail (tasks_state, threads, ulimits, sockets,
-# processes, file descriptors), per-device blkio/memory-failure counters,
-# and spec_* metadata labels. None of it backs a panel or alert here.
+# processes, file descriptors), start-time/last-seen bookkeeping
+# (container_start_time_seconds, container_last_seen), per-device
+# blkio/memory-failure counters, and spec_* metadata labels. None of it
+# backs a panel or alert here.
 kubelet:
   serviceMonitor:
+    # cAdvisorMetricRelabelings below restates the chart's OWN default list
+    # (kube-prometheus-stack 87.10.1 values.yaml) verbatim before appending
+    # this platform's rules, because Helm REPLACES a list value, it doesn't
+    # merge it — an earlier pass on this branch set this key to only this
+    # platform's own two rules, which silently deleted all of the chart's
+    # defaults. The worst loss was `sourceLabels: [id, pod], regex: '.+;'`,
+    # which drops every cgroup with no pod label (system.slice, the
+    # kubepods parent cgroup, ...) — losing it adds back tens of thousands
+    # of series and would have invalidated this whole cardinality estimate.
+    # Anything under "chart default:" below must be kept in sync with
+    # upstream if the chart version in the install command at the top of
+    # this file is ever bumped.
     cAdvisorMetricRelabelings:
+      # --- chart default (kube-prometheus-stack 87.10.1 values.yaml), copied verbatim ---
+      # Drop less useful container CPU metrics.
+      - sourceLabels: [__name__]
+        action: drop
+        regex: 'container_cpu_(cfs_throttled_seconds_total|load_average_10s|system_seconds_total|user_seconds_total)'
+      # Drop less useful container / always zero filesystem metrics.
+      - sourceLabels: [__name__]
+        action: drop
+        regex: 'container_fs_(io_current|io_time_seconds_total|io_time_weighted_seconds_total|reads_merged_total|sector_reads_total|sector_writes_total|writes_merged_total)'
+      # Drop less useful / always zero container memory metrics.
+      - sourceLabels: [__name__]
+        action: drop
+        regex: 'container_memory_(mapped_file|swap)'
+      # Drop less useful container process metrics.
+      - sourceLabels: [__name__]
+        action: drop
+        regex: 'container_(file_descriptors|tasks_state|threads_max)'
+      # Drop container_memory_failures_total{scope="hierarchy"} metrics,
+      # we only need the container scope.
+      - sourceLabels: [__name__, scope]
+        action: drop
+        regex: 'container_memory_failures_total;hierarchy'
+      # Drop container_network_... metrics that match various interfaces that
+      # correspond to CNI and similar interfaces. This avoids capturing network
+      # metrics for host network containers.
+      - sourceLabels: [__name__, interface]
+        action: drop
+        regex: 'container_network_.*;(cali|cilium|cni|lxc|nodelocaldns|tunl).*'
+      # Drop container spec metrics that overlap with kube-state-metrics.
+      - sourceLabels: [__name__]
+        action: drop
+        regex: 'container_spec.*'
+      # Drop cgroup metrics with no pod.
+      - sourceLabels: [id, pod]
+        action: drop
+        regex: '.+;'
+      # --- this platform's own additions, appended after the chart defaults above ---
       - action: drop
         sourceLabels: [__name__]
         regex: "container_(tasks_state|memory_failures_total|blkio_device_usage_total|memory_(mapped_file|swap|failcnt)|file_descriptors|threads.*|ulimits_soft|sockets|processes|last_seen|start_time_seconds|spec_.*)"
@@ -406,7 +488,7 @@ kubelet:
     metricRelabelings:
       - action: drop
         sourceLabels: [__name__]
-        regex: ".*_bucket"
+        regex: "(apiserver_request_duration_seconds|apiserver_request_sli_duration_seconds|apiserver_request_body_size_bytes|apiserver_watch_list_duration_seconds|apiserver_response_sizes|apiserver_watch_cache_read_wait_seconds|apiserver_watch_events_sizes|apiserver_admission_controller_admission_duration_seconds|apiserver_flowcontrol_request_execution_seconds|etcd_request_duration_seconds|workqueue_work_duration_seconds|workqueue_queue_duration_seconds|rest_client_request_duration_seconds|scheduler_plugin_execution_duration_seconds|scheduler_event_handling_duration_seconds|kubelet_runtime_operations_duration_seconds|storage_operation_duration_seconds|prober_probe_duration_seconds|longhorn_rest_client_rate_limiter_latency_seconds|longhorn_rest_client_request_latency_seconds|longhorn_workqueue_work_duration_seconds|longhorn_workqueue_queue_duration_seconds)_bucket"
 
 # k3s runs kube-scheduler/kube-controller-manager/etcd inside its own single
 # binary, not as pods — so the chart's default Service selectors
@@ -439,6 +521,12 @@ kubeControllerManager:
     # same trust boundary as every other in-cluster TLS hop on this platform.
     insecureSkipVerify: true
 
+# Disabled for the same reason as kubeControllerManager immediately above —
+# see that block's comment (k3s serves scheduler/controller-manager/
+# apiserver metrics off one shared registry, so this would just be a
+# second copy of series already scraped via :6443). Do not re-enable this
+# blind just because it's grep-able on its own; the duplication argument
+# lives on kubeControllerManager, not here.
 kubeScheduler:
   enabled: false
   endpoints:
@@ -453,12 +541,14 @@ kubeEtcd:
   # --etcd-expose-metrics listener is plain HTTP by design (a separate,
   # unauthenticated metrics-only port, not the mTLS client/peer ports).
   serviceMonitor:
-    # Same _bucket-drop reasoning as kubeApiServer/kubelet above — etcd's
-    # own request-duration histograms feed percentiles nobody queries here.
+    # Same named-deny-list reasoning as kubeApiServer above (see that
+    # comment) — etcd's own request-duration histogram is in the list, but
+    # a blanket ".*_bucket" drop was reverted because it also killed
+    # low-cardinality, alert-bearing histograms elsewhere in this file.
     metricRelabelings:
       - action: drop
         sourceLabels: [__name__]
-        regex: ".*_bucket"
+        regex: "(apiserver_request_duration_seconds|apiserver_request_sli_duration_seconds|apiserver_request_body_size_bytes|apiserver_watch_list_duration_seconds|apiserver_response_sizes|apiserver_watch_cache_read_wait_seconds|apiserver_watch_events_sizes|apiserver_admission_controller_admission_duration_seconds|apiserver_flowcontrol_request_execution_seconds|etcd_request_duration_seconds|workqueue_work_duration_seconds|workqueue_queue_duration_seconds|rest_client_request_duration_seconds|scheduler_plugin_execution_duration_seconds|scheduler_event_handling_duration_seconds|kubelet_runtime_operations_duration_seconds|storage_operation_duration_seconds|prober_probe_duration_seconds|longhorn_rest_client_rate_limiter_latency_seconds|longhorn_rest_client_request_latency_seconds|longhorn_workqueue_work_duration_seconds|longhorn_workqueue_queue_duration_seconds)_bucket"
 
 # Each rule group below evaluates against series removed above and would
 # otherwise fail silently rather than loudly: alerts using
@@ -466,8 +556,29 @@ kubeEtcd:
 # and recording rules for the now-disabled kubeControllerManager/
 # kubeScheduler scrape jobs evaluate against nothing. Disabled here for the
 # same reason in each case — their input series are no longer collected.
+# kubernetesSystem and kubelet are deliberately NOT in this list: I1's named
+# deny-list (replacing the earlier blanket ".*_bucket" drop) keeps their
+# input series, so those two groups stay enabled (chart default) and firing.
+# What each disabled group lost, specifically:
+#   - kubeApiserverBurnrate / kubeApiserverHistogram / kubeApiserverSlos:
+#     apiserver_request_duration_seconds_bucket — named in the kubeApiServer
+#     deny-list above precisely because it's the measured high-cardinality
+#     one; still gone even with the blanket drop removed.
+#   - kubeApiserverAvailability: apiserver_request_sli_duration_seconds_bucket
+#     — also named in that same deny-list, same reasoning. Added here
+#     (2026-09-08, final review) because leaving this rule group enabled
+#     against a deny-listed input is exactly the silent-failure mode this
+#     comment already warns about for the other groups.
+#   - kubeControllerManager: the whole kubeControllerManager scrape job is
+#     `enabled: false` above (duplicate registry) — no series at all.
+#   - kubeSchedulerAlerting / kubeSchedulerRecording: same, for the disabled
+#     kubeScheduler scrape job.
+#   - etcd: etcd_request_duration_seconds_bucket — also named in the
+#     kubeEtcd deny-list above (the etcd scrape job itself stays enabled;
+#     only this specific histogram is dropped).
 defaultRules:
   rules:
+    kubeApiserverAvailability: false
     kubeApiserverBurnrate: false
     kubeApiserverHistogram: false
     kubeApiserverSlos: false
