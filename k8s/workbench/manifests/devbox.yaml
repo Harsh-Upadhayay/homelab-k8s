@@ -81,6 +81,36 @@ spec:
               --statedir=/home/vscode/.local/share/tailscale \
               --socket=/tmp/ts.sock </dev/null >/tmp/tsd.log 2>&1 &
             exec sleep infinity
+        # Why requests, and deliberately NO limits (devbox lag investigation, 2026-09-08).
+        #
+        # With no resources block at all the kubelet classified this pod BestEffort and
+        # implemented that as cpu.weight=1 — the floor — nested inside a besteffort.slice
+        # also at weight 1, competing with burstable.slice at 224. cpu.weight is not a cap;
+        # it only arbitrates when the run queue is deep, which is why `kubectl top` showed a
+        # comfortable 58% node average and hid this completely. Measured during a burst:
+        # 59-82 runnable tasks on 14 vCPUs, and this pod's own cgroup reporting
+        # cpu.pressure full avg60=12.77 — frozen, doing zero work, 13% of wall-clock time.
+        # Same CPU benchmark, same node, same instant: 21.1M iterations as an ordinary host
+        # process vs 4.3M inside this pod.
+        #
+        # requests.cpu IS the fix — it is the only thing that sets cpu.weight.
+        #
+        # No limits.cpu on purpose: that sets cpu.max (CFS quota), which throttles in every
+        # 100ms window even when the node is idle, reintroducing the exact stutter this
+        # block exists to remove.
+        #
+        # No limits.memory on purpose either — it contributes NOTHING to OOM ranking.
+        # Verified here: ais-celery-low (limit 2Gi) and ais-celery-high (limit 10Gi) both
+        # sit at oom_score_adj=991 because they share a 256Mi *request*. The kubelet reads
+        # only the request:  oom_score_adj = 1000 - 1000 * (request / node capacity).
+        # The 8Gi request below moves this pod off 1000 (BestEffort — killed first) to ~700,
+        # and kubelet eviction ranks by usage ABOVE request, so a limit would buy no
+        # protection and only add a ceiling that kills live Claude sessions while the node
+        # still has free RAM.
+        resources:
+          requests:
+            cpu: "2"       # more weight than the entire 15-pod celery fleet combined
+            memory: 8Gi    # measured RSS 4.4Gi: 5 Claude sessions + the VS Code server
         volumeMounts:
           - name: workspace
             mountPath: /workspace
