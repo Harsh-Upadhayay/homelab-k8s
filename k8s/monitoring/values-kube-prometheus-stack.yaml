@@ -381,6 +381,42 @@ grafana:
         datasource:
           - name: datasource
             value: prometheus
+      kubernetes-global:
+        # https://grafana.com/grafana/dashboards/15757-kubernetes-views-global/
+        # Restores the cluster-wide Kubernetes view that defaultDashboardsEnabled:
+        # false removed. 1860 above covers the HOSTS (per-VM CPU/RAM/disk/net);
+        # this covers the CLUSTER (node count, running pods, request-vs-capacity
+        # commitment, aggregate container CPU/RAM, pod restarts) — the "is the
+        # cluster healthy as a whole" question that had no home after the
+        # cardinality reduction.
+        #
+        # Chosen because it reads only kube-state-metrics, node-exporter and
+        # cAdvisor — all deliberately left intact by the cardinality cuts, whose
+        # savings came from apiserver/etcd histogram buckets, not from these.
+        # So this dashboard cannot be broken by that work, now or later.
+        #
+        # $cluster caveat, same class as the tailscale entry above and verified
+        # the same way (reading the raw JSON, not guessing): all 73 queries
+        # filter with EXACT equality cluster="$cluster", and the variable is
+        # populated by label_values(kube_node_info, cluster) with
+        # includeAll: false. This stack sets no cluster label on kube_node_info
+        # (the only `cluster` label anywhere belongs to Loki's own metrics), so
+        # the variable resolves empty and the filters become cluster="", which
+        # in PromQL matches series where the label is absent — the panels
+        # populate. Confirmed against the live TSDB on 2026-09-08: 10 of 10
+        # representative panel queries returned real values (nodes=3,
+        # running pods=106, RAM utilisation=41%, disk=31%). If a future change
+        # ever DOES introduce a real cluster label, these panels go blank until
+        # the variable is repointed — that would be the fix, not a dashboard swap.
+        #
+        # Note the input name here is DS_PROMETHEUS (this dashboard's __inputs),
+        # matching cloudflared/cert-manager above — not the bare `datasource`
+        # shape used by tailscale and node-exporter.
+        gnetId: 15757
+        revision: 43
+        datasource:
+          - name: DS_PROMETHEUS
+            value: prometheus
 
 kubeStateMetrics:
   resources:
