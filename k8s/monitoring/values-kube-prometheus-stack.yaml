@@ -318,6 +318,40 @@ prometheus-node-exporter:
       cpu: 25m
       memory: 32Mi
 
+# Histogram _bucket series exist only to feed histogram_quantile() percentile
+# queries, which this platform's owner does not use — _sum/_count survive
+# right alongside them, so every rate()/average this platform's dashboards
+# and alerts actually rely on keeps working. Applied identically to
+# kubeApiServer, kubelet, and kubeEtcd below (each job's own histograms).
+kubeApiServer:
+  serviceMonitor:
+    metricRelabelings:
+      - action: drop
+        sourceLabels: [__name__]
+        regex: ".*_bucket"
+
+# kubelet/cAdvisor is the largest remaining scrape job (92,626 series
+# measured on this cluster) even after the control-plane duplication and
+# _bucket histograms above are dropped. Keep per-container CPU/memory/
+# network/filesystem series — what this platform's dashboards and alerts
+# actually read — and drop everything else cAdvisor exposes by default:
+# cgroup accounting detail (tasks_state, threads, ulimits, sockets,
+# processes, file descriptors), per-device blkio/memory-failure counters,
+# and spec_* metadata labels. None of it backs a panel or alert here.
+kubelet:
+  serviceMonitor:
+    cAdvisorMetricRelabelings:
+      - action: drop
+        sourceLabels: [__name__]
+        regex: "container_(tasks_state|memory_failures_total|blkio_device_usage_total|memory_(mapped_file|swap|failcnt)|file_descriptors|threads.*|ulimits_soft|sockets|processes|last_seen|start_time_seconds|spec_.*)"
+      - action: drop
+        sourceLabels: [__name__]
+        regex: ".*_bucket"
+    metricRelabelings:
+      - action: drop
+        sourceLabels: [__name__]
+        regex: ".*_bucket"
+
 # k3s runs kube-scheduler/kube-controller-manager/etcd inside its own single
 # binary, not as pods — so the chart's default Service selectors
 # (component: kube-scheduler, etc.) never match anything (issue #25). These
@@ -327,7 +361,21 @@ prometheus-node-exporter:
 # config.yaml.j2) has opened each component's metrics listener beyond
 # 127.0.0.1. Single-server cluster today (ADR-0008) — one IP is the whole
 # list; a future HA control plane would add its other members here too.
+#
+# kubeControllerManager/kubeScheduler are disabled (2026-09-08): issue #25's
+# endpoint work above was correct at the time, but it was scraping a second
+# copy of the same data — k3s runs apiserver/scheduler/controller-manager in
+# a single process sharing one metrics registry, so :10257 and :10259
+# re-serve the same apiserver_*/etcd_* series already scraped once from
+# :6443, measured at 138,933 duplicate series (41% of the whole database)
+# for zero extra information. endpoints/serviceMonitor below are kept, not
+# deleted: a future non-k3s or HA control plane runs these as genuinely
+# separate processes with their own registries and would need `enabled`
+# flipped back to true rather than this config re-authored from scratch.
+# kubeEtcd stays enabled below — :2381 is a genuinely separate listener,
+# not a re-export of :6443.
 kubeControllerManager:
+  enabled: false
   endpoints:
     - 192.168.1.21
   serviceMonitor:
@@ -336,6 +384,7 @@ kubeControllerManager:
     insecureSkipVerify: true
 
 kubeScheduler:
+  enabled: false
   endpoints:
     - 192.168.1.21
   serviceMonitor:
@@ -347,3 +396,26 @@ kubeEtcd:
   # No serviceMonitor.scheme/insecureSkipVerify override needed here — etcd's
   # --etcd-expose-metrics listener is plain HTTP by design (a separate,
   # unauthenticated metrics-only port, not the mTLS client/peer ports).
+  serviceMonitor:
+    # Same _bucket-drop reasoning as kubeApiServer/kubelet above — etcd's
+    # own request-duration histograms feed percentiles nobody queries here.
+    metricRelabelings:
+      - action: drop
+        sourceLabels: [__name__]
+        regex: ".*_bucket"
+
+# Each rule group below evaluates against series removed above and would
+# otherwise fail silently rather than loudly: alerts using
+# histogram_quantile() over now-dropped _bucket series simply never fire,
+# and recording rules for the now-disabled kubeControllerManager/
+# kubeScheduler scrape jobs evaluate against nothing. Disabled here for the
+# same reason in each case — their input series are no longer collected.
+defaultRules:
+  rules:
+    kubeApiserverBurnrate: false
+    kubeApiserverHistogram: false
+    kubeApiserverSlos: false
+    kubeControllerManager: false
+    kubeSchedulerAlerting: false
+    kubeSchedulerRecording: false
+    etcd: false
