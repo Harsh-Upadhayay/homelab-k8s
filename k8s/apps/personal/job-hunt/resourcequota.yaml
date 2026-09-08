@@ -31,4 +31,14 @@ spec:
     pods: "20" # 7 workloads x2 during a full-fleet rollout surge, plus margin
     services: "10"
     persistentvolumeclaims: "4"
-    requests.storage: 10Gi
+    # Raised 10Gi -> 64Gi on 2026-09-08 after the mysql PVC filled to 100%
+    # (7.8G of 8Gi). MySQL keeps 30 days of binary logs (binlog_expire_logs_seconds
+    # 2592000) at ~1GB/day while the actual jobhunt_db is only 1.4GB, so the volume
+    # filled with 6.1GB of binlogs. A full data volume made every InnoDB write hang
+    # in "waiting for handler commit", those connections never released, MySQL hit
+    # max_connections=151, and django CrashLooped on ERROR 1040 "Too many
+    # connections" — which is what broke login. 64Gi = mysql 58Gi + redis 1Gi plus
+    # margin for a 4th PVC. Worker-1's Longhorn disk has ~568Gi free (ADR-0021).
+    # NOTE: this only buys headroom — binlog retention is the actual fix and is
+    # tracked separately in the app repo (deep-astaad/job-hunt).
+    requests.storage: 64Gi
