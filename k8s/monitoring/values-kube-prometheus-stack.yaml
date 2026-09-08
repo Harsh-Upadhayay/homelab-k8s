@@ -37,7 +37,13 @@ prometheus:
     # eliminate physical disk contention with etcd on pve-dell's USB SSD.
     # Control-plane VM migration (issue #49) no longer blocks monitoring restoration.
     replicas: 1
-    retention: 15d
+    # Extended from 15d (2026-09-08, Task 2 of the cardinality reduction):
+    # series count drives RAM, but series×time drives disk. Task 1 cut the
+    # head series count roughly 5x (control-plane duplication, _bucket
+    # histograms, cAdvisor detail), so 90 days of retention now costs about
+    # what 15 days cost before the cut. Fewer metrics, not more disk, is
+    # what makes the longer history affordable.
+    retention: 90d
     storageSpec:
       volumeClaimTemplate:
         spec:
@@ -59,7 +65,20 @@ prometheus:
         # pushed past 1Gi and got OOMKilled (exit 137) moments after
         # reaching /-/ready — a death spiral where each SIGKilled restart
         # left more mmap chunks corrupted and the next WAL replay bigger.
-        memory: 2Gi
+        #
+        # Lowered back to 1Gi (2026-09-08, Task 2 of the cardinality
+        # reduction): Task 1's scrape-job and histogram cuts took the head
+        # down to roughly 65k series; at Prometheus's usual ~3-5KB/series
+        # in-memory cost, that's only ~200-320Mi of head. 1Gi leaves 3-5x
+        # real headroom above that steady state, rather than sizing the
+        # limit just above the working set — a limit that tight is what
+        # turns a transient spike into silent thrash (creeping GC pressure,
+        # growing readiness-probe timeouts) instead of a clean, loud
+        # OOMKill you'd actually notice. The WAL-replay death spiral
+        # documented above is a separate startup-time failure mode, one
+        # Task 1's cardinality cut also shrinks (less data to replay and
+        # compact) — not something this limit alone was ever going to fix.
+        memory: 1Gi
 
 alertmanager:
   alertmanagerSpec:
@@ -121,6 +140,17 @@ grafana:
     # visible beforehand as growing readiness/liveness probe timeouts —
     # same failure shape as the Prometheus OOM death spiral this file
     # already documents above.
+    #
+    # Left at 512Mi, not lowered (2026-09-08, Task 2 of the cardinality
+    # reduction): defaultDashboardsEnabled: false, set further down in this
+    # same grafana: block, removes ~28 dashboards from the bleve index that
+    # this comment blames for the RSS growth above — but that's a
+    # hypothesis about the mechanism, not yet a measurement of steady-state
+    # RSS with them gone. Shaving this limit on that guess would repeat the
+    # exact mistake being fixed elsewhere in this file: a limit sized to an
+    # assumption about the working set, discovered wrong only via an
+    # OOMKill or a slow thrash. Revisit once the pruned dashboard set has
+    # actually run long enough to show real numbers.
     limits:
       memory: 512Mi
   # This platform never uses raw Ingress — every internal service gets a
@@ -158,6 +188,22 @@ grafana:
       access: proxy
       url: http://loki:3100 # the pinned Service name from values-loki.yaml
       isDefault: false
+  # The chart bundles ~28 default dashboards (apiserver, scheduler,
+  # controller-manager, etcd, proxy, nodes-aix, nodes-darwin,
+  # k8s-resources-multicluster, and more) that all get loaded into
+  # Grafana's unified-storage bleve search index alongside the platform
+  # dashboards below — every loaded dashboard costs index memory whether
+  # anyone opens it or not, which is exactly what the 512Mi limit comment
+  # above is about. Turning it off removes that cost, and most of them
+  # would render empty panels anyway: Task 1 (2026-09-08) stopped
+  # collecting the apiserver/scheduler/controller-manager/etcd histogram
+  # series they depend on, and this platform has neither a multi-cluster
+  # setup nor non-Linux nodes for the rest to describe. The hand-picked
+  # dashboards below (traefik, longhorn, argocd, tailscale, ...) are
+  # unaffected — they come in through the separate file-based
+  # dashboards:/dashboardProviders: mechanism just below, not this
+  # chart-bundled default set.
+  defaultDashboardsEnabled: false
   # Chart-native dashboard import: an init container curls each JSON straight
   # from grafana.com by gnetId/revision at pod start, so the platform commits
   # a version number instead of a copy-pasted dashboard export. Replaces the
@@ -302,6 +348,16 @@ grafana:
         # swap.
         gnetId: 24178
         revision: 4
+        datasource:
+          - name: datasource
+            value: prometheus
+      node-exporter:
+        # gnetId 1860 "Node Exporter Full" — the one dashboard that covers the
+        # owner's actual ask: per-server CPU, memory, disk, network and connection
+        # counts, over time. Node-exporter series are cheap and untouched by the
+        # Task 1 cardinality cuts, so this keeps working long-term.
+        gnetId: 1860
+        revision: 37
         datasource:
           - name: datasource
             value: prometheus
