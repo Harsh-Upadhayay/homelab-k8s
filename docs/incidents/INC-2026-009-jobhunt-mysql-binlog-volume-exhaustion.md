@@ -6,12 +6,12 @@
 | --- | --- |
 | Date | 2026-09-08 |
 | Severity | SEV-3 |
-| Status | Resolved; binlog retention and replica locality remain open |
+| Status | Resolved; alert delivery (#92) and replica locality remain open. Detection findings corrected 2026-09-09 |
 | Systems | job-hunt (Django, MySQL 8, Celery), Longhorn v1.12.0, `k3s-worker-1`, `k3s-worker-3` |
 | Start | 2026-09-07 20:56 JST (reconstructed from the oldest wedged transaction's 82,069s age) |
 | End | 2026-09-08 20:03 JST (Django served `/api/jobs/stats/` 200) |
 | Duration | Approximately 23 hours of total application unavailability |
-| Detection | User reported "can't login to jobhunt"; no alert fired |
+| Detection | User reported "can't login to jobhunt". Prometheus fired the correct alerts throughout, but Alertmanager routed them to the `"null"` receiver, so none were delivered |
 | Data impact | No loss. Freeing space let the 151 in-flight transactions commit rather than roll back; `jobhunt_db.jobs_job` verified at 54,086 rows afterwards. Eleven rotated binary logs were deliberately deleted, discarding point-in-time-recovery material that had no configured consumer |
 
 ## Executive summary
@@ -47,7 +47,37 @@ irreversible risk. The duration alone would otherwise argue for SEV-2.
 
 ## Detection
 
-The first and only signal was a user report that login did not work. Nothing alerted.
+The first signal *received by a human* was a user report that login did not work. This was initially
+recorded as "nothing alerted", which is wrong and was corrected on 2026-09-09.
+
+Prometheus detected this incident correctly and promptly. Querying
+`max_over_time(ALERTS{namespace="job-hunt",alertstate="firing"}[36h])` after recovery shows the
+following fired during the outage:
+
+| Alert | Severity | Object |
+| --- | --- | --- |
+| `KubePersistentVolumeFillingUp` | critical | `job-hunt/mysql-data` |
+| `KubePodCrashLooping` | warning | `django-57c4bcd54f-dqf2n` |
+| `KubePodNotReady` | warning | `django-57c4bcd54f-dqf2n` |
+| `KubeDeploymentReplicasMismatch` | warning | `job-hunt/django` |
+
+The stock kube-prometheus-stack rules named the root cause — a filling PersistentVolume — at critical
+severity, not merely the downstream symptom. The detection layer worked exactly as intended.
+
+**The delivery layer does not exist.** Alertmanager's only receiver is the chart's placeholder
+`"null"`, and the root route sends every alert to it:
+
+```yaml
+receivers:
+- name: "null"
+route:
+  receiver: "null"
+```
+
+Every alert this cluster has produced in 65 days has been discarded. At the time of writing, 22
+alerts are firing and undelivered, including a critical `KubePersistentVolumeFillingUp` on
+`immich/immich-library`, which sits at 2.7% free of 350Gi — the same failure shape as this incident,
+on a volume 40 times larger.
 
 The failure was silently visible in the cluster for roughly a day: a Deployment stuck at zero
 available replicas, a pod with hundreds of restarts, and a PersistentVolumeClaim at 100% usage. Any
@@ -55,10 +85,11 @@ one of those is a straightforward alert. The most valuable of the three is volum
 it fires *before* user impact — the volume filled at approximately 20:56 JST on 2026-09-07 and the
 symptom the user noticed was a consequence that only mattered once someone tried to log in.
 
-A `kubelet_volume_stats_available_bytes / kubelet_volume_stats_capacity_bytes` alert would have
-caught this with hours of lead time, and would equally have caught INC-2026-005 (Prometheus TSDB)
-and is adjacent to INC-2026-006 and INC-2026-008 (ephemeral storage). This is the fourth
-capacity-exhaustion incident in this cluster's log.
+No new rule would have helped here. The rule already existed, already fired, and already carried the
+right severity. What was missing was any path from Alertmanager to a human. This is the fourth
+capacity-exhaustion incident in this cluster's log (INC-2026-005, -006, -008), and the previous three
+each produced a narrow "add an alert rule" issue (#51, #53, #54) that never shipped — all three were
+scoped to the layer that was not broken. Tracked correctly now as #92.
 
 ## Timeline
 
@@ -148,8 +179,10 @@ invalid, and both were cleared by forcing the caching process to restart.
 - Binary logging is enabled with no consumer: there is no replica, no configured point-in-time-recovery
   procedure, and no backup shipping the logs anywhere. The volume was being filled by material that
   nothing could use.
-- No alert exists on PersistentVolumeClaim fullness, despite three prior capacity-exhaustion incidents
-  (INC-2026-005, INC-2026-006, INC-2026-008).
+- Alertmanager has no configured receiver, so all alerting is silently discarded. The monitoring stack
+  has been installed and correctly detecting problems for 65 days while delivering nothing, which is
+  arguably worse than having no monitoring at all: it produced false confidence that the cluster was
+  observed.
 - Django's liveness and readiness probes both target `/api/jobs/stats/`, so a database-dependent
   failure presents identically to an application failure and offers no signal about which layer broke.
 - MySQL's own liveness probe kept passing while the server was functionally unable to serve any new
@@ -198,7 +231,12 @@ the frontend both return 200; `jobhunt_db.jobs_job` contains 54,086 rows.
 
 ## What did not go well
 
-- Nothing alerted for roughly 23 hours on a completely unavailable application.
+- No notification reached anyone for roughly 23 hours on a completely unavailable application, despite
+  Prometheus correctly firing a critical alert naming the exact root cause.
+- The initial version of this report concluded "nothing alerted" and proposed writing a new PVC alert
+  rule. That diagnosis was wrong and would have wasted the corrective effort on the one layer that was
+  working. It was only caught by checking the live Alertmanager config while filing the follow-up
+  issue.
 - The volume expansion turned a resolved incident into a second, self-inflicted outage: scaling MySQL
   down and back up while the expansion ticket pinned the volume to `k3s-worker-1` left the pod unable
   to attach for several minutes.
@@ -223,7 +261,9 @@ the frontend both return 200; `jobhunt_db.jobs_job` contains 54,086 rows.
 | Priority | Action | Owner | Status | Completion evidence |
 | --- | --- | --- | --- | --- |
 | P0 | Bound MySQL binary log growth in `deep-astaad/job-hunt` — either `binlog_expire_logs_seconds` cut to ~3 days or `skip-log-bin`, since there is no replica and no PITR consumer | Harsh | Open | MySQL config in the app repo plus `SHOW VARIABLES LIKE 'binlog_expire%'` output |
-| P0 | Alert on PersistentVolumeClaim fullness cluster-wide (warn at 75%, critical at 90%) using `kubelet_volume_stats_available_bytes / kubelet_volume_stats_capacity_bytes` | Harsh | Open | Firing test alert in Alertmanager and a panel on the capacity dashboard |
+| P0 | Give Alertmanager a real receiver and route alerts to it instead of `"null"`, with severity-based routing and the noise backlog cleared first (#92) | Harsh | Open | A real notification received on a real device from a deliberately triggered alert |
+| P0 | Add an earlier PVC warning tier at <25% free; the stock critical rule fires at <3%, which gave no usable warning window for a database | Harsh | Open | Rule in `values-kube-prometheus-stack.yaml` and a fired test alert |
+| P1 | Triage `immich/immich-library` at 2.7% free of 350Gi — currently firing critical and undelivered | Harsh | Open | Volume below the critical threshold |
 | P1 | Return the `mysql` pod to `k3s-worker-1` where its only replica lives, or raise the volume to two replicas, so MySQL I/O stops crossing the network | Harsh | Open | `kubectl get pod -o wide` and replica `nodeID` on the same node, or `numberOfReplicas: 2` Healthy |
 | P1 | Alert on Deployments with zero available replicas for more than 15 minutes, so a crash-looping app is never invisible for a day | Harsh | Open | Firing test alert |
 | P2 | Give Django a startup/readiness probe that distinguishes "app not up" from "database unreachable", so the failing layer is visible from pod status | Harsh | Open | Probe definitions in the app repo |
@@ -243,6 +283,13 @@ The second lesson is that **remediation carries its own risk budget.** The outag
 the expansion that followed caused a second, avoidable outage. Once service is restored, the correct
 posture is to slow down, not to keep operating at incident tempo.
 
+The third lesson came after the fact and is the most uncomfortable: **a monitoring stack that detects
+perfectly and delivers nowhere is worse than no monitoring**, because it produces confidence without
+coverage. Prometheus named the root cause of this incident at critical severity while the application
+was down for a day, and that alert went to a receiver literally named `"null"`. The first version of
+this report compounded the error by concluding that the alert did not exist and proposing to write
+it. Always verify which layer of a pipeline is broken before scoping work against it.
+
 Review questions:
 
 - Why does InnoDB block indefinitely on a full filesystem instead of returning an error? What would
@@ -256,8 +303,12 @@ Review questions:
   namespace?
 - Why did detaching the workload not restart the engine process, and what is the difference between an
   attachment ticket held by a workload and one held by the expansion controller?
-- This is the fourth capacity-exhaustion incident. What distinguishes the ones that alerted from the
-  ones that did not, and what single alert would have caught the most of them?
+- This is the fourth capacity-exhaustion incident, and every one of them fired an alert nobody
+  received. What is the difference between a monitoring stack that detects and one that is
+  *operationally useful*, and which of the two did this cluster have for 65 days?
+- Why did the initial investigation conclude "nothing alerted" without checking the Alertmanager
+  config? What is the general lesson about verifying which layer of a pipeline is actually broken
+  before proposing work on it?
 
 ## Evidence
 
@@ -274,3 +325,7 @@ Review questions:
 - Filesystem after: `57G 2.1G 55G 4% /var/lib/mysql`; PVC `58Gi`; engine `currentSize 62277025792`.
 - Recovery verification: `POST /api/auth/login/` 401, `GET /api/jobs/stats/` 200, frontend 200,
   `jobhunt_db.jobs_job` 54,086 rows.
+- Alert delivery (added 2026-09-09): `max_over_time(ALERTS{namespace="job-hunt",alertstate="firing"}[36h])`
+  returned `KubePersistentVolumeFillingUp` (critical, `mysql-data`), `KubePodCrashLooping`,
+  `KubePodNotReady`, and `KubeDeploymentReplicasMismatch`. Alertmanager's config declares exactly one
+  receiver, `"null"`, as the root route target. 22 alerts firing and undelivered at time of writing.
