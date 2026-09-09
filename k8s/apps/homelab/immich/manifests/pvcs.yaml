@@ -17,7 +17,18 @@ spec:
   storageClassName: longhorn-immich-hdd-retain
   resources:
     requests:
-      storage: 350Gi
+      # Raised 350Gi -> 450Gi on 2026-09-09. The library had reached 335G of
+      # 344G usable (98%, ~9.2G left) and was firing a critical
+      # KubePersistentVolumeFillingUp that nobody could see, because
+      # Alertmanager discards every alert (#92). INC-2026-009 is what a full
+      # Longhorn volume does to the workload on top of it, so this is expanded
+      # well before it gets there rather than after.
+      #
+      # Capacity check before raising: worker-3's longhorn-hdd disk has 874Gi
+      # actually free of 1278Gi, and 472Gi scheduled against 1268Gi schedulable
+      # (storage-over-provisioning-percentage 100, 10Gi reserved), so +100Gi of
+      # provisioned size is comfortably within both real and scheduled space.
+      storage: 450Gi
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
