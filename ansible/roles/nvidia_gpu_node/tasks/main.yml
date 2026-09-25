@@ -67,7 +67,59 @@
         state: present
         update_cache: true
         allow_downgrade: true
+        # The hold below covers this package too. The version pinned above is
+        # the source of truth, so this task alone may move a held package.
+        allow_change_held_packages: true
       notify: Reboot the GPU node
+
+    # --- Freeze the driver (INC-2026-011) --------------------------------------
+    # The driver is two halves that must match: a kernel module, loaded once at
+    # boot, and userspace libraries, replaced on disk the moment apt upgrades
+    # them. On 2026-09-12 unattended-upgrades moved the libraries 580.173 ->
+    # 580.178 on a node that did not reboot, leaving nvidia-smi failing with
+    # "Driver/library version mismatch", and stopped nvidia-persistenced without
+    # restarting it. Every GPU pod then failed to start on the missing
+    # persistenced socket. Naming a package in group_vars chose it once; it did
+    # not stop apt upgrading it afterwards. These two tasks do.
+    #
+    # Every installed *nvidia* package is held, not just the metapackage: apt
+    # upgraded ~15 of them independently, and the firmware package carries its
+    # version in its name, so a fixed list would go stale on the first bump.
+    # A deliberate bump is therefore: apt-mark unhold, upgrade, reboot, verify
+    # nvidia-smi, then re-run this role to hold the new set.
+    - name: List the installed NVIDIA packages
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail &&
+          dpkg-query -W -f='${Package} ${Status}\n' '*nvidia*'
+          | awk '$NF == "installed" { print $1 }'
+        executable: /bin/bash
+      changed_when: false
+      check_mode: false
+      register: nvidia_installed_packages
+
+    - name: Hold the NVIDIA packages at their installed versions
+      ansible.builtin.dpkg_selections:
+        name: "{{ item }}"
+        selection: hold
+      loop: "{{ nvidia_installed_packages.stdout_lines }}"
+
+    # Belt and braces: unattended-upgrades already honours dpkg holds, but this
+    # keeps it off the driver even if a hold is lost (a manual unhold left
+    # behind, a package renamed on the next branch). Entries are regexes
+    # matched from the start of the package name. Security updates for every
+    # other package keep flowing.
+    - name: Keep unattended-upgrades away from the NVIDIA driver
+      ansible.builtin.copy:
+        dest: /etc/apt/apt.conf.d/51nvidia-no-unattended
+        content: |
+          // Managed by Ansible (nvidia_gpu_node). See INC-2026-011.
+          Unattended-Upgrade::Package-Blacklist {
+            "nvidia-";
+            "libnvidia-";
+            "xserver-xorg-video-nvidia-";
+          };
+        mode: "0644"
 
     # The driver's kernel module cannot be loaded into the running kernel over
     # whatever already holds the card, and k3s only rescans for alternative
