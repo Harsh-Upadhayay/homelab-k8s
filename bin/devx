@@ -259,9 +259,14 @@ connect() {
   # LC_ALL pins a UTF-8 locale that exists on BOTH ends: mosh-client refuses a
   # non-UTF-8 locale, and forwards it to mosh-server, which must find it too
   # (the devbox image has en_US.utf8 and C.utf8).
+  #
+  # --bind-server=any: by default mosh-server binds the IP from SSH_CONNECTION,
+  # which under Tailscale SSH is the tailnet IP. With --tun=userspace-networking
+  # that address is not on any interface in the pod, so it fails 999 ports with
+  # "Cannot assign requested address" before falling back to any anyway.
   if [[ "$TRANSPORT" == "mosh" ]] && command -v mosh >/dev/null && [[ "$probe" == *mosh* ]]; then
     info "connecting to ${project} (mosh — no agent; use 'devx -s ${project}' to git push)"
-    LC_ALL=en_US.UTF-8 exec mosh "$SSH_HOST" -- bash -c "$tmux_cmd"
+    LC_ALL=en_US.UTF-8 exec mosh --bind-server=any "$SSH_HOST" -- bash -c "$tmux_cmd"
   fi
 
   if [[ "$TRANSPORT" == "mosh" ]]; then

@@ -93,6 +93,18 @@ spec:
         # 41642, NOT the default 41641: the node's own tailscaled already holds
         # 41641 on the node IP, so MASQUERADE could not keep that port and would
         # fall back to picking one per flow — hard NAT again.
+        #
+        # THE SECOND HALF is the hostPort below (2026-10-02). The SNAT rule alone
+        # only works if the pod's packet to a peer leaves FIRST. When the peer's
+        # packet arrives first — the normal case, since peers probe the advertised
+        # node:41642 constantly — nothing listens there, the kernel still records
+        # it as a node-local flow, and that record occupies the tuple
+        # node:41642 <-> peer. The pod's own reply then cannot use 41642, MASQUERADE
+        # picks another port, and the two sides never meet (observed live: pod
+        # flow to the Mac rewritten to :46669, 0/20 direct). hostPort makes the
+        # CNI portmap plugin DNAT inbound node:41642 to this pod, so the peer's
+        # packet IS the pod's flow instead of blocking it. Verified with the
+        # equivalent hand-written DNAT rule: 30/30 direct, p50 260ms.
         args:
           - |
             setsid /usr/local/bin/tailscaled \
@@ -101,6 +113,17 @@ spec:
               --statedir=/home/vscode/.local/share/tailscale \
               --socket=/tmp/ts.sock </dev/null >/tmp/tsd.log 2>&1 &
             exec sleep infinity
+        # hostPort is safe here despite registry.yaml rejecting it: that objection
+        # is about reaching a hostPort via 127.0.0.1 from the node itself, which
+        # portmap does not handle. This traffic arrives on the node's LAN IP from
+        # outside, which it does (k3s's flannel conflist includes portmap). Only
+        # WireGuard listens on it, and tailscaled drops anything not from a tailnet
+        # node key. Side effect: one devbox per node — already true (replicas: 1).
+        ports:
+          - name: tailscale
+            containerPort: 41642
+            hostPort: 41642
+            protocol: UDP
         # Why requests, and deliberately NO limits (devbox lag investigation, 2026-09-08).
         #
         # With no resources block at all the kubelet classified this pod BestEffort and
