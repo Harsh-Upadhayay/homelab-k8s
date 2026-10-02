@@ -53,6 +53,24 @@ spec:
     matchLabels:
       app.kubernetes.io/name: devbox
   replicas: 1
+  # Recreate, not the default RollingUpdate (2026-10-02). RollingUpdate starts the
+  # new pod BEFORE stopping the old one, which deadlocks here:
+  #   - the old pod holds hostPort 41642 on its node, so the scheduler must put
+  #     the new pod on a DIFFERENT node;
+  #   - the workspace PVC is RWO, so it can only attach where it already is.
+  # Observed on the first restart after #100: new pod on k3s-worker-3 stuck in
+  # ContainerCreating (Multi-Attach error) while the old one waited for it.
+  # Recreate stops the old pod first. It costs nothing real, since a single-
+  # replica devbox has a gap on every restart anyway, and the old pod was only
+  # a dead terminal session by then.
+  #
+  # KNOWN GAP, not fixed here: nothing makes the scheduler put the devbox on the
+  # node where the volume is attached. The other workspace pods (kiroku,
+  # neovara-homepage, ...) keep it attached wherever they run, and if the
+  # devbox lands on another node it sticks in Multi-Attach until deleted. Fixing
+  # that needs a label shared by every workspace pod for podAffinity to match.
+  strategy:
+    type: Recreate
   template:
     metadata:
       labels:
