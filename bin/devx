@@ -7,6 +7,8 @@
 # repo as your working directory.
 #
 #   devx <project>        ensure devbox + project up, attach tmux, cd to the repo
+#                         (over mosh when both ends have it, else ssh)
+#   devx -s <project>     same, but force plain ssh — needed to git push (agent)
 #   devx -v <project>     same, but open VS Code (Remote-SSH) instead of tmux
 #   devx <project> down   scale on-demand workloads to 0, leave always-on ones
 #   devx ls               projects and their up/down state
@@ -33,6 +35,7 @@ WORKSPACE="/workspace"
 VSCODE_BIN="code"             # Shell Command: Install 'code' command in PATH
 LABEL_PROJECT="workbench.neovara/project"
 LABEL_LIFECYCLE="workbench.neovara/lifecycle"
+TRANSPORT="mosh"              # `-s` switches to ssh; see connect()
 
 # Colours only when stdout is a terminal, so piping devx stays clean.
 if [[ -t 1 ]]; then
@@ -50,7 +53,8 @@ usage() {
   cat <<EOF
 ${BOLD}devx${RESET} — in-cluster development workspace driver
 
-  devx <project>          bring the project up and attach a shell
+  devx <project>          bring the project up and attach a shell (mosh if available)
+  devx -s <project>       same, over plain ssh — use when you need to git push
   devx -v <project>       bring the project up and open it in VS Code instead
   devx <project> down     scale the project's on-demand workloads to zero
   devx ls                 list projects and their state
@@ -216,7 +220,13 @@ connect() {
 
   # If the directory is missing, land in /workspace rather than failing — the
   # repo may simply not be cloned yet, and a shell is more useful than an error.
-  if ! ssh -o BatchMode=yes "$SSH_HOST" "test -d '$dir'" 2>/dev/null; then
+  #
+  # One probe answers both questions (dir present? mosh-server installed?):
+  # every ssh round trip here costs ~0.3s+ from where the Mac usually is.
+  local probe
+  probe=$(ssh -o BatchMode=yes "$SSH_HOST" \
+    "test -d '$dir' && echo dir; command -v mosh-server >/dev/null && echo mosh" 2>/dev/null)
+  if [[ "$probe" != *dir* ]]; then
     warn "${dir} does not exist — opening in ${WORKSPACE} instead"
     dir="$WORKSPACE"
   fi
@@ -228,9 +238,40 @@ connect() {
     exec "$VSCODE_BIN" --remote "ssh-remote+${SSH_HOST}" "$dir"
   fi
 
+  local tmux_cmd="tmux has-session -t '=${project}' 2>/dev/null || tmux new-session -d -s '${project}' -c '${dir}'; tmux new-session -A -t '${project}' -s '${project}-ssh' -c '${dir}'"
+
+  # mosh by default (devbox lag investigation, 2026-10-02). Over ssh every
+  # keystroke waits a full round trip (~160-260ms to the homelab) before it is
+  # drawn; mosh-client predicts the echo and draws it immediately, and survives
+  # Wi-Fi changes and laptop sleep without a reconnect. ssh is still used, but
+  # only to log in and start mosh-server; the session itself runs over UDP.
+  #
+  # THE TRADE-OFF, and why -s exists: mosh does not forward the SSH agent, so
+  # inside a mosh session git cannot use the Mac's key (ADR-0056 / #60) — no
+  # `git push`. `devx -s` is the same session over plain ssh -A for that.
+  # Both transports attach the same '${project}-ssh' tmux session, so
+  # switching is just quitting one and running the other.
+  #
+  # Falls back to ssh when either end lacks mosh, rather than failing: the
+  # Mac needs `brew install mosh`, the devbox needs an image built after the
+  # Dockerfile gained it.
+  #
+  # LC_ALL pins a UTF-8 locale that exists on BOTH ends: mosh-client refuses a
+  # non-UTF-8 locale, and forwards it to mosh-server, which must find it too
+  # (the devbox image has en_US.utf8 and C.utf8).
+  if [[ "$TRANSPORT" == "mosh" ]] && command -v mosh >/dev/null && [[ "$probe" == *mosh* ]]; then
+    info "connecting to ${project} (mosh — no agent; use 'devx -s ${project}' to git push)"
+    LC_ALL=en_US.UTF-8 exec mosh "$SSH_HOST" -- bash -c "$tmux_cmd"
+  fi
+
+  if [[ "$TRANSPORT" == "mosh" ]]; then
+    command -v mosh >/dev/null \
+      || warn "mosh not installed on this Mac (brew install mosh) — using ssh"
+    [[ "$probe" == *mosh* ]] \
+      || warn "mosh-server missing in the devbox (rebuild the image) — using ssh"
+  fi
   info "connecting to ${project}"
-  exec ssh -A -t "$SSH_HOST" \
-    "tmux has-session -t '=${project}' 2>/dev/null || tmux new-session -d -s '${project}' -c '${dir}'; tmux new-session -A -t '${project}' -s '${project}-ssh' -c '${dir}'"
+  exec ssh -A -t "$SSH_HOST" "$tmux_cmd"
 }
 
 cmd_down() {
@@ -348,11 +389,15 @@ cmd_status() {
 main() {
   command -v kubectl >/dev/null || die "kubectl not found on PATH"
 
+  # Leading flags, in any order: `devx -s -v x` and `devx -v -s x` both work.
   local mode="tmux"
-  if [[ "${1:-}" == "-v" ]]; then
-    mode="vscode"
+  while [[ "${1:-}" == -[vs] ]]; do
+    case "$1" in
+      -v) mode="vscode" ;;
+      -s) TRANSPORT="ssh" ;;
+    esac
     shift
-  fi
+  done
 
   case "${1:-}" in
     ""|-h|--help|help) usage ;;

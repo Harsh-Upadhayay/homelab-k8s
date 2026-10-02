@@ -1,0 +1,67 @@
+---
+# Port-preserving SNAT for the devbox's tailscaled (devbox lag investigation,
+# 2026-09-25 / 2026-10-02). Read the devbox.yaml comment first; this is the node
+# half of that fix.
+#
+# THE PROBLEM: flannel masquerades all pod egress with `MASQUERADE --random-fully`,
+# which picks a new random source port for every destination. A tailscaled inside
+# a pod therefore shows a different public port to every peer and STUN server —
+# "hard NAT" — and can never hole-punch, so it is relayed via DERP. Measured from
+# the Mac: 0/30 direct before, 30/30 direct with this rule (p50 267ms, the same
+# path the k3s VMs themselves get), with no router port forward involved.
+#
+# THE RULE: same MASQUERADE, minus --random-fully, for exactly one UDP source port.
+# Plain MASQUERADE keeps the original source port when it is free on the node IP,
+# so every destination sees the same ip:port. Scoped as narrowly as possible:
+# pod source, non-pod destination, UDP, the devbox's tailscaled port only.
+# Every other pod packet still falls through to flannel's rule unchanged.
+#
+# WHY A BOOT-TIME UNIT IS ENOUGH: rules inserted at runtime vanish on reboot, so a
+# oneshot re-inserts it at position 1 every boot. Ordering stays correct after
+# that because flannel APPENDS its POSTROUTING jump (-A; flannel
+# pkg/trafficmngr/iptables/iptables.go) — it can never land above this rule.
+# kube-proxy and tailscaled insert their chains above it, which is harmless:
+# KUBE-POSTROUTING only masquerades service traffic it has marked, and
+# ts-postrouting only handles traffic leaving via tailscale0.
+#
+# NOT a change to flannel itself (CNI stays on defaults — claude.md). Deleting
+# this unit restores stock behaviour exactly; the devbox just goes back to DERP.
+
+- name: Install the devbox tailscaled SNAT unit
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/devbox-tailscale-snat.service
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by ansible/roles/devbox_tailscale_snat — do not edit by hand.
+      [Unit]
+      Description=Port-preserving SNAT for the devbox pod's tailscaled (UDP {{ devbox_tailscale_port }})
+      # Before k3s purely so the rule exists before any pod can send; correctness
+      # does not depend on it (see the role for why ordering holds regardless).
+      Before=k3s-agent.service
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      # -C (check) first, so a restart never stacks a duplicate rule.
+      ExecStart=/bin/sh -c '/usr/sbin/iptables -t nat -C POSTROUTING {{ _rule }} 2>/dev/null || /usr/sbin/iptables -t nat -I POSTROUTING 1 {{ _rule }}'
+      ExecStop=/usr/sbin/iptables -t nat -D POSTROUTING {{ _rule }}
+
+      [Install]
+      WantedBy=multi-user.target
+  vars:
+    _rule: >-
+      -s {{ k3s_pod_cidr }} ! -d {{ k3s_pod_cidr }} -p udp --sport {{ devbox_tailscale_port }}
+      -m comment --comment "devbox-tailscale-snat"
+      -j MASQUERADE
+  register: devbox_snat_unit
+
+# restarted (not just started) when the unit changed, so a new port or CIDR takes
+# effect immediately: ExecStop removes the old rule, ExecStart inserts the new one.
+- name: Enable and apply the devbox tailscaled SNAT rule
+  ansible.builtin.systemd:
+    name: devbox-tailscale-snat
+    enabled: true
+    state: "{{ 'restarted' if devbox_snat_unit.changed else 'started' }}"
+    daemon_reload: "{{ devbox_snat_unit.changed }}"
