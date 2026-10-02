@@ -65,3 +65,106 @@
     enabled: true
     state: "{{ 'restarted' if devbox_snat_unit.changed else 'started' }}"
     daemon_reload: "{{ devbox_snat_unit.changed }}"
+
+# --- Stale-flow reaper (2026-10-02, found verifying #100) ---------------------
+#
+# THE PROBLEM: when the devbox pod is replaced, its kernel flow records (conntrack
+# entries) for node:PORT <-> peer outlive it. They never expire on their own,
+# because every probe a peer sends to the advertised node:PORT matches the dead
+# pod's entry and resets its 120s UDP timer. While that entry holds the tuple:
+#   - the NEW pod's flows cannot take PORT, so MASQUERADE moves them elsewhere
+#     (observed: :30528, :16851, :40785) and the endpoint is wrong again;
+#   - inbound probes match the stale entry and are forwarded to the dead pod's
+#     IP, skipping the hostPort DNAT entirely (CNI-HOSTPORT-DNAT counter: 0).
+# Observed result: 0/30 direct after a restart; 30/30 the moment the dead
+# pod's entries were deleted by hand.
+#
+# WHY NOT EXISTING CLEANUP: portmap only deletes UDP entries whose ORIGINAL
+# destination is the hostPort (inbound-first flows); these were created by the
+# pod sending out, so their original destination is the peer. kube-proxy only
+# cleans entries for Service endpoints. Neither covers this.
+#
+# THE REAPER: every 15s, find pod IPs that own a PORT flow, keep the ones that
+# belong to a live pod sandbox on this node (crictl), delete the rest. A timer
+# rather than an event hook because nothing on the node announces "a pod with
+# this IP just died" in a way a unit can wait on; 15s of polling a ~10-entry
+# listing is negligible. Worst case after a restart: ~15s on DERP.
+
+- name: Install the stale-flow reaper script
+  ansible.builtin.copy:
+    dest: /usr/local/sbin/devbox-tailscale-reap
+    owner: root
+    group: root
+    mode: "0755"
+    content: |
+      #!/bin/sh
+      # Managed by ansible/roles/devbox_tailscale_snat — do not edit by hand.
+      # Deletes UDP {{ devbox_tailscale_port }} conntrack entries owned by pod IPs that no
+      # longer belong to a live pod on this node. See the role for why.
+      set -u
+      PORT={{ devbox_tailscale_port }}
+      POD_PREFIX='{{ k3s_pod_cidr.split('.')[:2] | join('\.') }}\.'
+      CT=/var/lib/rancher/k3s/data/current/bin/conntrack
+
+      # Live pod IPs. If crictl fails (k3s restarting), do NOTHING: deleting
+      # flows on a guess could cut the live pod's path, not just stale ones.
+      ids=$(/usr/local/bin/k3s crictl pods --state ready -q 2>/dev/null) || exit 0
+      [ -n "$ids" ] || exit 0
+      live=$(/usr/local/bin/k3s crictl inspectp -o json $ids 2>/dev/null \
+        | grep -o '"ip": "[0-9.]*"' | cut -d'"' -f4) || exit 0
+      [ -n "$live" ] || exit 0
+
+      # Pod IPs on either side of a PORT flow: outbound-first entries have the
+      # pod as ORIGINAL source; inbound-first (hostPort DNAT) as REPLY source.
+      owners=$({ $CT -L -p udp --orig-port-src "$PORT"; $CT -L -p udp --reply-port-src "$PORT"; } 2>/dev/null \
+        | grep -o "src=${POD_PREFIX}[0-9.]*" | cut -d= -f2 | sort -u)
+
+      for ip in $owners; do
+        echo "$live" | grep -qx "$ip" && continue
+        $CT -D -p udp --orig-src "$ip" --orig-port-src "$PORT" >/dev/null 2>&1
+        $CT -D -p udp --reply-src "$ip" --reply-port-src "$PORT" >/dev/null 2>&1
+        logger -t devbox-tailscale-reap "deleted stale UDP $PORT flows of dead pod $ip"
+      done
+      exit 0
+  register: devbox_reap_script
+
+- name: Install the stale-flow reaper service and timer
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/{{ item.name }}"
+    owner: root
+    group: root
+    mode: "0644"
+    content: "{{ item.content }}"
+  loop:
+    - name: devbox-tailscale-reap.service
+      content: |
+        # Managed by ansible/roles/devbox_tailscale_snat — do not edit by hand.
+        [Unit]
+        Description=Delete stale conntrack flows of dead devbox pods (UDP {{ devbox_tailscale_port }})
+
+        [Service]
+        Type=oneshot
+        ExecStart=/usr/local/sbin/devbox-tailscale-reap
+    - name: devbox-tailscale-reap.timer
+      content: |
+        # Managed by ansible/roles/devbox_tailscale_snat — do not edit by hand.
+        [Unit]
+        Description=Run the devbox stale-flow reaper every 15s
+
+        [Timer]
+        OnBootSec=1min
+        OnUnitActiveSec=15s
+        AccuracySec=1s
+
+        [Install]
+        WantedBy=timers.target
+  loop_control:
+    label: "{{ item.name }}"
+  register: devbox_reap_units
+
+- name: Enable and start the stale-flow reaper timer
+  ansible.builtin.systemd:
+    name: devbox-tailscale-reap.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ devbox_reap_units.changed or devbox_reap_script.changed }}"
