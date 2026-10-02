@@ -1,0 +1,10 @@
+---
+# Must match --port on the devbox's tailscaled (k8s/workbench/manifests/devbox.yaml).
+# Deliberately not 41641: each node's own tailscaled holds that port on the node IP,
+# so MASQUERADE could not preserve it and would fall back to a per-flow port.
+devbox_tailscale_port: 41642
+
+# k3s's default --cluster-cidr. Not set anywhere in this repo, so the default is
+# what the cluster runs with (verified live: pod IPs are 10.42.x.x and flannel's
+# own masquerade rules match 10.42.0.0/16).
+k3s_pod_cidr: "10.42.0.0/16"

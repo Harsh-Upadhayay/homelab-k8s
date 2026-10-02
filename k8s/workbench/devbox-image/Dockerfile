@@ -30,6 +30,12 @@ USER root
 # ripgrep        — the search tool the workflow assumes
 # less/tree/htop — basic interactive ergonomics over SSH
 # iproute2/dnsutils/netcat — network debugging from inside the cluster
+# mosh           — terminal latency (devbox lag investigation, 2026-09-25). Plain SSH
+#                  cannot draw a keystroke until the server echoes it back, so every
+#                  character costs one full round trip (~160ms from where the Mac
+#                  usually is). mosh-client predicts the echo and draws it locally,
+#                  then reconciles with the server's real screen state. Only the
+#                  server half runs here; the Mac needs `brew install mosh`.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         tmux \
@@ -40,7 +46,13 @@ RUN apt-get update \
         iproute2 \
         dnsutils \
         netcat-openbsd \
+        mosh \
     && rm -rf /var/lib/apt/lists/*
+
+# mosh-server refuses to start without a UTF-8 locale ("needs a UTF-8 native
+# locale"), and the base image leaves LANG unset, which means POSIX. C.UTF-8 is
+# compiled into Debian's glibc, so no `locales` package or locale-gen is needed.
+ENV LANG=C.UTF-8
 
 # tailscaled + tailscale. Static binaries from the official tarball rather than the
 # apt repo: no repo key to manage, and the version is pinned exactly.

@@ -23,6 +23,10 @@
     - role: longhorn_node
       tags: [longhorn]
     - role: k3s_agent
+    # Lets the devbox pod's tailscaled go direct instead of via DERP. Both workers,
+    # because the devbox can be rescheduled onto either.
+    - role: devbox_tailscale_snat
+      tags: [devbox_snat]
     # USB perms for the Google Photos relay handset. Tag-gated: runs only on an
     # explicit `--tags photos_relay`, and no-ops on workers without the handset.
     - role: photos_relay_udev
