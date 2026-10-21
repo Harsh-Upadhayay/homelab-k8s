@@ -7,16 +7,23 @@
 #
 # Sizing ledger — rewritten after the 2026-08-17 control-plane move (issue #49).
 #
-# pve-dell (14 threads / 31543MB / 816GiB thin pool) — now a worker-only host:
-#   CPU  14 vCPU on 14 threads. No overcommit, and strictly less contention than
-#        the previous 4+12=16, because the server VM left.
-#   RAM  28672MB of 31543, leaving ~2.8GiB for the host. Measured host process
+# pve-dell (14 threads / 31543MB / 816GiB thin pool) — worker-1 + devbox VM:
+#   CPU  14 worker + 8 devbox = 22 vCPU on 14 threads. A deliberate overcommit
+#        (ADR-0020 allows CPU, never RAM): the devbox is idle most of the day,
+#        and when both are busy they share threads rather than fail.
+#   RAM  18432 worker + 10240 devbox = 28672MB of 31543 — the same guest total
+#        as before the devbox, because its RAM was carved out of worker-1,
+#        leaving ~2.8GiB for the host. Measured host process
 #        usage is ~2.4GiB, and this host keeps 8GiB of swap as a backstop.
 #        The old ~5GiB reserve here existed because an OOM kill against the
 #        *control plane* would have taken etcd and the whole cluster with it.
 #        That VM now lives on ASRock, so the worst case here is a recoverable
 #        worker OOM, and the headroom was deliberately spent on the worker.
-#   DISK 60 worker OS + 650 worker data = 710G declared of the 816G pool.
+#   DISK 60 worker OS + 650 worker data + 150 devbox = 860G declared on the
+#        816G pool. Legal because the pool is thin (blocks are allocated only
+#        when written; ~30% used at 2026-10-18), and discard="on" everywhere
+#        hands freed blocks back. Watch `lvs` data% — a thin pool that actually
+#        fills pauses every guest on it.
 #
 # pve-asrock (motherboard SSD, 74.68GiB thin pool after the #49 extension;
 #             separate 1.36TiB longhorn-hdd pool; 32027MB RAM):
@@ -56,7 +63,7 @@ workers = {
     clone_datastore_id  = null
     ip_address          = "192.168.1.22"
     cores               = 14
-    memory              = 28672
+    memory              = 18432
     os_datastore_id     = "local-lvm"
     os_disk_size        = 60
     os_disk_cache       = "writeback"
@@ -111,4 +118,17 @@ workers = {
       { device = "hostpci0", mapping = "gpu-gtx1660s" },
     ]
   }
+}
+
+# --- devbox (developer VM, not a k3s node) ---
+# One OS disk, no data disk: code, home, and Docker volumes all live on scsi0.
+# Its 10240MB comes out of k3s-worker-1 (28672 -> 18432), not on top of it.
+devbox = {
+
+  node_name    = "pve-dell"
+  cores        = 8
+  memory       = 10240
+  ip_address   = "192.168.1.30"
+  disk_size    = 150
+  datastore_id = "local-lvm"
 }

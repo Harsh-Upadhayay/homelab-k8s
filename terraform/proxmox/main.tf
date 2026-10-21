@@ -195,3 +195,76 @@ resource "proxmox_virtual_environment_vm" "k3s_worker" {
     type = "l26"
   }
 }
+
+# ─── devbox — developer VM, NOT a k3s node ───
+# Replaces the in-cluster workbench pod (ADR-0054..0066). Dev stacks run under
+# Docker Compose on this VM's own disk, and it reaches the cluster as an API
+# client (cluster-admin ServiceAccount token over the LAN), never as a node.
+# Its RAM is carved out of k3s-worker-1 rather than added on top: pve-dell's
+# guest total stays 28672MB, so ADR-0020's no-RAM-overcommit still holds.
+resource "proxmox_virtual_environment_vm" "devbox" {
+  name        = "devbox"
+  description = "Developer VM — Docker Compose dev stacks + cluster-admin kubeconfig. Not a k3s node."
+  node_name   = var.devbox.node_name
+  # Not common_tags: that carries "k3s", and this VM is deliberately not a node.
+  tags = ["terraform-managed", "devbox"]
+
+  agent {
+    enabled = true
+  }
+  stop_on_destroy = true
+
+  clone {
+    vm_id = var.template_vm_id
+    full  = true
+  }
+
+  cpu {
+    cores = var.devbox.cores
+    type  = "x86-64-v2-AES"
+  }
+
+  memory {
+    dedicated = var.devbox.memory
+  }
+
+  disk {
+    datastore_id = var.devbox.datastore_id
+    interface    = "scsi0"
+    size         = var.devbox.disk_size
+
+    # Same pool and cache policy as worker-1's OS disk on this host.
+    cache = "writeback"
+    # Docker churns layers and volumes constantly; without discard the thin-pool
+    # allocation only ever grows (see the k3s_worker disk comment above).
+    discard = "on"
+  }
+
+  network_device {
+    bridge = var.network_bridge
+  }
+
+  initialization {
+    datastore_id = var.devbox.datastore_id
+
+    ip_config {
+      ipv4 {
+        address = "${var.devbox.ip_address}${var.network_cidr_suffix}"
+        gateway = var.network_gateway
+      }
+    }
+
+    dns {
+      servers = var.dns_servers
+    }
+
+    user_account {
+      username = var.vm_user
+      keys     = [var.ssh_public_key]
+    }
+  }
+
+  operating_system {
+    type = "l26"
+  }
+}

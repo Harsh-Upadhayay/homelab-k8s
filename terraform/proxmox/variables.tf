@@ -88,6 +88,18 @@ variable "server_disk_size" {
   default     = 60
 }
 
+variable "devbox" {
+  description = "The developer VM. A single object rather than a workers entry: it is not a k3s node, has no Longhorn data disk, and never joins the cluster."
+  type = object({
+    node_name    = string
+    cores        = number
+    memory       = number
+    ip_address   = string
+    disk_size    = number
+    datastore_id = string
+  })
+}
+
 variable "workers" {
   description = "Worker VM parameters; every entry follows the same VM lifecycle and differs only by these values"
   type = map(object({
