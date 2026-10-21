@@ -1,4 +1,8 @@
 ---
+# Applies to every VM cloned from template 9000 (k3s nodes + devbox) — see the
+# template_vms group in inventory.ini. Was group_vars/k3s_cluster.yml until the
+# devbox, a non-k3s VM from the same template, needed it too.
+#
 # Matches the Ubuntu codename the cloud-init template is built from
 # (GUIDE.md Phase 2 — Ubuntu 26.04 LTS "Resolute Raccoon") — used to
 # select the Tailscale apt source in roles/tailscale_host/tasks/main.yml.
