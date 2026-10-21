@@ -8,6 +8,10 @@ output "k3s_worker_ips" {
   }
 }
 
+output "devbox_ip" {
+  value = var.devbox.ip_address
+}
+
 output "vm_user" {
   value = var.vm_user
 }

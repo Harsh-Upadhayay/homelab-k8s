@@ -3,6 +3,9 @@ terraform/**/.terraform/
 terraform/**/.terraform.lock.hcl
 terraform/**/terraform.tfstate
 terraform/**/terraform.tfstate.*
+# Saved plans (terraform plan -out=...) embed resolved variable values and
+# provider state, so they're as sensitive as the state file itself.
+terraform/**/*.tfplan
 # terraform.tfvars is intentionally NOT ignored — it holds only non-secret
 # values (region, bucket name, host specs). Secrets reach Terraform via env
 # vars (PROXMOX_VE_API_TOKEN) or TF_VAR_* (ephemeral, value_wo), never tfvars.
