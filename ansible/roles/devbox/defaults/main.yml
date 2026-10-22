@@ -1,0 +1,23 @@
+---
+# Pinned deliberately (see group_vars/all.yml) — bump only as a conscious change,
+# after checking the linked releases page. Picked 2026-10-21.
+
+# Docker's apt repo for Ubuntu 26.04. The full apt version string is what apt
+# pins on, including the epoch ("5:") and the ~ubuntu.26.04~resolute suffix.
+# List what's available on the devbox with: apt-cache madison docker-ce
+docker_ce_version: "5:29.9.2-1~ubuntu.26.04~resolute"
+containerd_version: "2.4.2-3~ubuntu.26.04~resolute"
+docker_buildx_version: "0.38.1-1~ubuntu.26.04~resolute"
+docker_compose_version: "5.6.1-1~ubuntu.26.04~resolute"
+
+# Matches the cluster's server version (group_vars/all.yml k3s_version); kubectl
+# is supported one minor either side of the API server, so keep these together.
+kubectl_version: "v1.36.2"
+
+# https://github.com/helm/helm/releases — Helm 4 is the current major (3.x is in
+# maintenance). 4.3.0 rather than 4.3.1: 4.3.1 was six days old when pinned.
+helm_version: "v4.3.0"
+
+# https://github.com/jdx/mise/releases — mise ships near-daily; pinned to one
+# that had been out for two weeks rather than the newest.
+mise_version: "v2026.10.3"

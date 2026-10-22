@@ -25,7 +25,7 @@ holds the code, editor backend, agents and every project's dev stack (Docker Com
 
 ### Target daily workflow (the operator's own words, structured)
 
-1. Write code on the VM (ssh/mosh + tmux, or VS Code Remote-SSH).
+1. Write code on the VM (ssh + tmux, or VS Code Remote-SSH).
 2. Iterate against the project's Compose stack on the VM, **port-forwarded to the Mac** (`ssh -L`
    or VS Code's forwarding) — `localhost` on the Mac keeps OAuth callbacks, secure cookies and
    service workers working without TLS.
@@ -87,7 +87,7 @@ holds the code, editor backend, agents and every project's dev stack (Docker Com
 ## 5. Architecture
 
 ```
-Mac ──ssh/mosh (tailnet, direct)──► devbox VM  (pve-dell, local-lvm, LAN + tailnet)
+Mac ──ssh (tailnet, direct)──► devbox VM  (pve-dell, local-lvm, LAN + tailnet)
  │                                   ├── /workspace/<project>         code (same paths as today)
  │◄── ssh -L / VS Code forwarding ───┤── /srv/devdata/<project>/<svc> restored DB data
  │                                   ├── docker compose per project   (operator's exercise)
@@ -130,21 +130,27 @@ busy (celery fleet, Longhorn rebuild). Proxmox `cpuunits` is the dial if it bite
 
 - New inventory group **`devbox`**; `site.yml` gets a play for it running **`tailscale_host`**
   (existing role, `ubuntu` distro vars like the k3s nodes) and a **new `devbox` role**.
-- **Tailnet identity — same as the k3s nodes** (assistant's call): join with the existing
-  `tailscale_auth_key_reusable` via the unmodified `tailscale_host` role, as a user-owned
-  (untagged) machine. MagicDNS name = the OS hostname set by cloud-init, i.e. `devbox`. No
-  `--ssh`, no `--advertise-tags`, so the shared role needs no change. Access is **plain OpenSSH**
-  (+ mosh over UDP 60000–61000), exactly how `ssh harsh@k3s-worker-1` already works over the
-  tailnet today. Phase 2 verifies the tailnet policy allows tcp/22 and udp/60000–61000 from the
-  Mac to the new machine, and that key expiry is disabled for it like the k3s nodes. The old
-  devbox's `tag:devbox` grant is unrelated and goes away at decommission.
+- **Tailnet identity — tagged `tag:devbox`** (operator's call, 2026-10-22; supersedes the
+  assistant's original "untagged, like the k3s nodes"). Joined with the existing
+  `/neovara/homeinfra/workbench/tailscale-authkey` (the old pod's tagged key, read from SSM at run
+  time) via the unmodified `tailscale_host` role — a tagged key applies its tag on `tailscale up`,
+  so the role still needs no `--advertise-tags`. Why: the reusable untagged key in `.env` had
+  expired, and tagged is Tailscale's model for servers anyway — the machine is owned by the tag,
+  not a user, and **tagged nodes never have node-key expiry**, so there is no "disable key
+  expiry" step. MagicDNS name = the OS hostname set by cloud-init, i.e. `devbox`. Access is
+  **plain OpenSSH**, *not* Tailscale SSH: the old pod's
+  `tag:devbox` rule lives in the policy's `ssh` section (Tailscale SSH as `vscode`), which does
+  not cover OpenSSH, so the policy must also let the Mac reach `tag:devbox` on tcp/22 —
+  Phase 2 verifies it. Consequences: the `tag:devbox` policy entries are
+  **kept** at decommission (only pod-specific parts go), and rules written for "my user" don't
+  cover the devbox as a *source* — harmless here, since its cluster and node traffic is LAN.
 - **Bootstrap gap:** inventory addresses hosts by MagicDNS, but the VM has no tailnet identity
   until `tailscale_host` runs. The first run needs LAN reachability — e.g. `ProxyJump` through a
   tailnet host on the LAN (`pve-dell`), or a one-off `ansible_host=<LAN IP>` with a jump host.
   Builder's call; document whichever is used.
 - **`devbox` role** contents (all versions pinned, readable tasks in the style of existing roles):
-  - Base: `tmux mosh ripgrep git less tree htop iproute2 dnsutils netcat-openbsd build-essential
-    unzip jq`; `LANG=C.UTF-8` (mosh requires a UTF-8 locale).
+  - Base: `tmux ripgrep git less tree htop iproute2 dnsutils netcat-openbsd build-essential
+    unzip jq`; `LANG=C.UTF-8`.
   - **Docker Engine + Compose plugin** from Docker's apt repo, pinned; `harsh` in the `docker`
     group (root-equivalent — acceptable given D3 already grants cluster-admin).
   - **mise** (runtimes stay user state under `$HOME`), **kubectl `v1.36.2`** (cluster minor),
@@ -152,8 +158,6 @@ busy (celery fleet, Longhorn rebuild). Proxmox `cpuunits` is the dial if it bite
   - `/workspace` and `/srv/devdata` created, owned by `harsh`.
   - **Not** in the role: Claude Code, Codex and other AI CLIs — user-installed into `$HOME` as
     today (native auto-updater), per the existing Dockerfile reasoning.
-  - mosh's UDP range (60000–61000) must be reachable on the tailnet interface if a host firewall
-    exists (Ubuntu cloud images ship with ufw inactive — verify).
 
 ### 5.4 Cluster-admin access (D3)
 
@@ -175,10 +179,9 @@ busy (celery fleet, Longhorn rebuild). Proxmox `cpuunits` is the dial if it bite
 - `~/.ssh/config`: `Host devbox` → MagicDNS name, `User harsh`, `IdentityFile ~/.ssh/id_ed25519`,
   `ForwardAgent yes`. The old `workbench` entry is removed at decommission.
 - **`bin/devx` rewritten thin** (it loses all Kubernetes scaling logic):
-  - `devx <project>` — mosh to `devbox`, attach/create tmux session `<project>` in
+  - `devx <project>` — `ssh -A` to `devbox`, attach/create tmux session `<project>` in
     `/workspace/<project>` (falls back to `/workspace` if missing). Keeps today's session-group
     behaviour only if it still earns its keep (builder's call).
-  - `devx -s <project>` — same over `ssh -A` (git push needs the agent; mosh cannot forward it).
   - `devx -v <project>` — `code --remote ssh-remote+devbox /workspace/<project>`.
   - `devx fwd <port>…` (or a per-project port list) — `ssh -N -L` forwards. The runbook's
     per-project port table carries over so stacks never collide.
@@ -332,7 +335,7 @@ ADR-0062 status).
   `service-account-token` Secret, manifests Argo-managed.
 - Docker group membership for `harsh` (root-equivalent) accepted alongside cluster-admin.
 - AI CLIs stay user-installed in `$HOME`, not in the Ansible role.
-- The VM joins the tailnet like a k3s node (reusable key, untagged, plain OpenSSH) — §5.3.
+- The VM joins the tailnet as `tag:devbox` (the old pod's key from SSM; operator chose it over a new untagged key), plain OpenSSH — §5.3.
 - Phase 0 snapshot of the workspace volume kept until decommission.
 - The old `devx` tmux session-group design is kept only if still useful.
 

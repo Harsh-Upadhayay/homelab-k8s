@@ -36,3 +36,17 @@
     # any worker with no NVIDIA device.
     - role: nvidia_gpu_node
       tags: [never, nvidia_gpu]
+
+# The developer VM. tailscale_host is NOT tag-gated here, unlike the k3s play:
+# the devbox's first run is also its tailnet bootstrap (see inventory.ini), and
+# on every later run the role sees BackendState=Running and skips the join, so
+# no auth key is needed after the first time.
+- name: Developer VM — tailnet identity + dev toolchain
+  hosts: devboxes
+  become: true
+  roles:
+    - role: tailscale_host
+      vars:
+        tailscale_apt_distro: "ubuntu"
+        tailscale_apt_codename: "{{ ubuntu_codename }}"
+    - role: devbox
