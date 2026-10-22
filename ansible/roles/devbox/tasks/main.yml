@@ -1,0 +1,178 @@
+# The developer VM's toolchain. Everything system-level lives here; everything
+# user-level (dotfiles, mise runtimes, AI CLIs) stays in /home/harsh, which this
+# role deliberately never writes to — Task 5 copies the old devbox home over it.
+
+# ─── Base packages ───
+
+- name: Install base packages
+  ansible.builtin.apt:
+    name:
+      - tmux
+      - htop
+      - git
+      - jq
+      - curl
+      - wget
+      - unzip
+      - ripgrep
+      - less
+      - tree
+      - iproute2
+      - dnsutils
+      - netcat-openbsd
+      - build-essential
+      # Ubuntu 26.04 ships 0.11.6, newer than the old devbox image's upstream
+      # 0.11.3 — so the distro package, not a hand-installed tarball.
+      - neovim
+    # Refresh the package index first, unless it was refreshed in the last hour
+    # (keeps re-runs fast without ever installing from a stale index).
+    update_cache: true
+    cache_valid_time: 3600
+
+# tmux, nvim and git all misrender non-ASCII text without a UTF-8 locale.
+# C.UTF-8 is built into glibc, so there is nothing to generate — only the default to set. The image already sets
+# this; declaring it means the role doesn't depend on the image staying that way.
+- name: Set the system default locale to C.UTF-8
+  ansible.builtin.lineinfile:
+    path: /etc/default/locale
+    # regexp picks the line to replace, so a re-run edits LANG=... in place
+    # instead of appending a second LANG line.
+    regexp: '^LANG='
+    line: LANG=C.UTF-8
+    create: true
+    mode: "0644"
+
+# ─── Docker Engine + Compose, from Docker's own apt repo ───
+# Same three-step shape as roles/tailscale_host: trust the signing key, declare
+# the repository, install from it.
+
+- name: Add Docker's package signing key
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    # Docker's documented location. apt only trusts this key for the one
+    # repository whose Signed-By points at it, not for every repo on the system.
+    dest: /etc/apt/keyrings/docker.asc
+    mode: "0644"
+
+- name: Add the Docker apt repository
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/docker.sources
+    content: |
+      Types: deb
+      URIs: https://download.docker.com/linux/ubuntu
+      Suites: {{ ubuntu_codename }}
+      Components: stable
+      Architectures: amd64
+      Signed-By: /etc/apt/keyrings/docker.asc
+    mode: "0644"
+
+- name: Install Docker Engine and the Compose plugin, pinned
+  ansible.builtin.apt:
+    # "package=version" is apt's own pin syntax; the versions live in defaults.
+    name:
+      - "docker-ce={{ docker_ce_version }}"
+      - "docker-ce-cli={{ docker_ce_version }}"
+      - "containerd.io={{ containerd_version }}"
+      - "docker-buildx-plugin={{ docker_buildx_version }}"
+      - "docker-compose-plugin={{ docker_compose_version }}"
+    # The index must be refreshed here regardless of cache_valid_time: the
+    # Docker repo was only just added, so apt doesn't know its packages yet.
+    update_cache: true
+
+- name: Ensure dockerd is running and enabled
+  ansible.builtin.systemd:
+    name: docker
+    state: started
+    enabled: true
+
+# The docker group is root-equivalent (anyone in it can mount / into a
+# container). Accepted: this VM already holds cluster-admin (spec D3).
+- name: Let harsh use docker without sudo
+  ansible.builtin.user:
+    name: harsh
+    groups: docker
+    # LOAD-BEARING. Without append, `groups:` means "exactly these groups", and
+    # harsh would be removed from sudo — on a VM with no console password, that
+    # is a lockout.
+    append: true
+
+# ─── Single-binary tools ───
+# get_url with a checksum is idempotent by itself: on a re-run it hashes the
+# file already at dest, and downloads only if that doesn't match.
+
+- name: Install kubectl, pinned
+  ansible.builtin.get_url:
+    url: "https://dl.k8s.io/release/{{ kubectl_version }}/bin/linux/amd64/kubectl"
+    # A URL here means "fetch the expected hash from this file". This one holds
+    # just the bare hash.
+    checksum: "sha256:https://dl.k8s.io/release/{{ kubectl_version }}/bin/linux/amd64/kubectl.sha256"
+    dest: /usr/local/bin/kubectl
+    mode: "0755"
+
+- name: Install mise, pinned
+  ansible.builtin.get_url:
+    url: "https://github.com/jdx/mise/releases/download/{{ mise_version }}/mise-{{ mise_version }}-linux-x64"
+    # Multi-file checksum list: get_url picks the line whose filename matches
+    # the basename of `url` above.
+    checksum: "sha256:https://github.com/jdx/mise/releases/download/{{ mise_version }}/SHASUMS256.txt"
+    dest: /usr/local/bin/mise
+    mode: "0755"
+
+# ─── helm — a tarball, so it needs a version check ───
+# Unlike a single binary, the file we download (the .tar.gz) is not the file we
+# install, so get_url's checksum can't tell us whether helm is current. Same
+# pattern as roles/k3s_server: read the installed version, act only if it's wrong.
+
+- name: Read the installed helm version
+  ansible.builtin.command: helm version --short
+  register: helm_installed
+  # Read-only: never report "changed", never fail when helm isn't there yet,
+  # and still run under --check so the `when` below has something to compare.
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+# block groups several tasks under one shared `when`, instead of repeating it.
+- name: Install or upgrade helm to the pinned version
+  when: helm_installed.rc != 0 or helm_version not in helm_installed.stdout
+  block:
+    - name: Download the helm release tarball
+      ansible.builtin.get_url:
+        url: "https://get.helm.sh/helm-{{ helm_version }}-linux-amd64.tar.gz"
+        checksum: "sha256:https://get.helm.sh/helm-{{ helm_version }}-linux-amd64.tar.gz.sha256sum"
+        dest: "/tmp/helm-{{ helm_version }}.tar.gz"
+        mode: "0644"
+
+    - name: Unpack the helm tarball
+      ansible.builtin.unarchive:
+        src: "/tmp/helm-{{ helm_version }}.tar.gz"
+        # remote_src: the tarball is already on the devbox (previous task), not
+        # on the machine running Ansible.
+        remote_src: true
+        dest: /tmp
+
+    - name: Install the helm binary
+      ansible.builtin.copy:
+        # The tarball unpacks to linux-amd64/helm.
+        src: /tmp/linux-amd64/helm
+        remote_src: true
+        dest: /usr/local/bin/helm
+        mode: "0755"
+
+# ─── Directories ───
+
+- name: Create the workspace and dev-data directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: harsh
+    group: harsh
+    mode: "0755"
+  loop:
+    # Code, one directory per project — same layout as the old devbox's
+    # /workspace, so paths in scripts and docs keep working.
+    - /workspace
+    # Docker Compose bind-mounted datastores (MySQL, Qdrant, RabbitMQ...).
+    # Kept out of /workspace so a careless `rm -rf` in a project can't take a
+    # database with it.
+    - /srv/devdata
