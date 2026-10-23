@@ -14,9 +14,26 @@ metadata:
 spec:
   limits:
     - type: Container
+      # ephemeral-storage requests added 2026-09-16, closing INC-2026-008's P2
+      # action. Eviction ranking under DiskPressure sorts pods by usage RELATIVE
+      # TO REQUEST; a container with no request is ranked as if it requested
+      # zero, so it is evicted early regardless of how little it actually wrote.
+      # That is why 18 unrelated pods were evicted when GPU images filled
+      # k3s-worker-3's 40GiB OS disk, and why job-hunt lost django, celery-worker
+      # and celery-flower to the recurrence on 2026-09-15.
+      #
+      # 256Mi is deliberately generous against measured usage: the busiest
+      # container in these namespaces is job-hunt's celery-worker at 33.5MiB
+      # (kubelet summary API, 2026-09-16); every other pod was under 1MiB. The
+      # point is to be RANKED, not to reserve real space.
+      #
+      # No matching 'default' limit on purpose. A limit here means kubelet evicts
+      # a container that exceeds it, which would add a new eviction cause to fix
+      # an eviction problem. The incident asked for requests; this is requests.
       defaultRequest: # becomes 'requests' when a container specifies none
         cpu: 50m
         memory: 64Mi
+        ephemeral-storage: 256Mi
       default: # becomes 'limits' when a container specifies none
         cpu: 250m
         memory: 256Mi
