@@ -20,6 +20,7 @@ k3s_control_plane_taint: "node-role.kubernetes.io/control-plane:NoSchedule"
 # too if you set one up, so kubeconfig access survives an IP change later.
 k3s_tls_sans:
   - "192.168.1.21"
+  - "k3s-server-1.egret-pence.ts.net"
 
 # Where the fetched kubeconfig lands locally after the server role runs.
 local_kubeconfig_path: "{{ playbook_dir }}/../kubeconfig"
