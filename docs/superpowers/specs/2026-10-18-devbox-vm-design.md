@@ -76,7 +76,7 @@ holds the code, editor backend, agents and every project's dev stack (Docker Com
 |---|---|
 | D1 | Devbox is a **Proxmox VM** on `pve-dell`, not pods; dev stacks run in **Docker Compose** on it. |
 | D2 | **10GiB RAM, 8 vCPU, 150GB** disk. The 8 vCPU are **overcommitted** — `k3s-worker-1` keeps its **14** (`terraform.tfvars`), so **22 vCPU on 14 threads**, accepted knowingly. |
-| D3 | Cluster-admin via a **dedicated ServiceAccount + `cluster-admin` ClusterRoleBinding**, token on the VM, API reached directly on the LAN at `192.168.1.21:6443` (not via the Tailscale operator proxy). |
+| D3 | Cluster-admin via the operator's **own user identity**: a client certificate (`CN=harsh`) issued through the CSR API, bound to `cluster-admin` by a `ClusterRoleBinding`. API reached over the **tailnet** at `k3s-server-1.egret-pence.ts.net:6443`, end to end (not via the Tailscale operator proxy), so the VM can run off-LAN. *Revised 2026-10-24 from a ServiceAccount token over the LAN — see §5.4.* |
 | D4 | CI images go to **ghcr.io**. Pull credentials for private images flow **SSM → ESO** like every other secret. Most images are public (no creds); some are private. The pull path is designed here and **built as step 1 of the CI/CD exercise**. |
 | D5 | Dev database contents **matter and are restored as-is**. **pwm's data loss is acceptable.** |
 | D6 | During migration, **all dev workloads may be down**; the old workbench is retired after the cutover + soak. |
@@ -91,7 +91,7 @@ Mac ──ssh (tailnet, direct)──► devbox VM  (pve-dell, local-lvm, LAN + 
  │                                   ├── /workspace/<project>         code (same paths as today)
  │◄── ssh -L / VS Code forwarding ───┤── /srv/devdata/<project>/<svc> restored DB data
  │                                   ├── docker compose per project   (operator's exercise)
- │                                   └── kubectl (cluster-admin) ──LAN──► k3s API 192.168.1.21:6443
+ │                                   └── kubectl (cluster-admin) ─tailnet─► k3s API k3s-server-1.egret-pence.ts.net:6443
  └── GitHub ── CI → ghcr.io ── dev ns ;  CD (Argo) → prod ns        (operator's exercise)
 ```
 
@@ -161,18 +161,37 @@ busy (celery fleet, Longhorn rebuild). Proxmox `cpuunits` is the dial if it bite
 
 ### 5.4 Cluster-admin access (D3)
 
-- In `homelab-k8s`: a ServiceAccount (e.g. `devbox-admin` in `kube-system`), a
-  `ClusterRoleBinding` to `cluster-admin`, and a **`kubernetes.io/service-account-token` Secret**
-  for a long-lived token. Manifest location: a new small platform directory under `k8s/` managed
-  by Argo (builder's call on the exact path); the token Secret is created by the token controller,
-  not stored in git.
-- The VM's `~/.kube/config`: server `https://192.168.1.21:6443`, the k3s CA, and the SA token.
-  Getting the token onto the VM is a one-time manual step (`kubectl get secret … | ssh devbox`),
-  like the other bootstrap credentials. Revocation = delete the token Secret.
+*Revised 2026-10-24.* The first design used a ServiceAccount token over the LAN. Two changes
+replaced it: the operator chose a user identity (a person, not a pod — and CKA material), and the
+VM must be able to run off-LAN (cloud, or hardware in India).
+
+- **Identity — user client certificate via the CSR API.** Built 2026-10-22..24:
+  - Key + PKCS#10 request generated **on the devbox** (`openssl genrsa 2048`;
+    `-subj "/CN=harsh"`, **no `O=` groups**). The private key never leaves the VM.
+  - `CertificateSigningRequest` `harsh`, signer `kubernetes.io/kube-apiserver-client` (k3s's
+    `client-ca`), `usages: [client auth]`, `expirationSeconds: 31536000`. Submitted and approved
+    from the Mac (`kubectl certificate approve`). One-off, **not in git** — the cluster
+    garbage-collects approved CSRs, so Argo would keep recreating it.
+  - Kubeconfig built with `kubectl config set-cluster/set-credentials/set-context` and
+    `--embed-certs`; CA = `server-ca`, taken from the `kube-root-ca.crt` ConfigMap.
+- **Authorization — `k8s/devbox/manifests/rbac.yaml`:** one `ClusterRoleBinding`
+  `devbox-harsh-cluster-admin`, `kind: User` `harsh` → `cluster-admin`, Argo-managed.
+- **Network path — over the tailnet.** This needed `k3s-server-1.egret-pence.ts.net`
+  in the API server's SANs (`k3s_tls_sans`, PR #106, applied 2026-10-24). Tailscale carries the
+  TLS connection untouched, so the client cert authenticates end to end. Rejected alternatives:
+  a subnet route for `192.168.1.0/24` (collides with remote home LANs, which commonly use the same
+  range) and the operator proxy (replaces the cert identity with the tailnet login; Dell-hosted pod).
+- **Revocation:** a certificate can't be cancelled before it expires (no CRL). Remove the binding
+  **from git** — Argo self-heals, so a bare `kubectl delete` is undone. The cert still
+  authenticates as `harsh` afterwards but is authorized for nothing. Never issue a cert with
+  `O=system:masters`: that group bypasses RBAC, so no binding change could revoke it.
+- **Renewal — yearly** (the signer's 1-year cap; k3s sets no `--cluster-signing-duration`). Repeat
+  the CSR steps with the same CN; the binding is unchanged. Check expiry with
+  `kubectl config view --raw -o jsonpath='{.users[0].user.client-certificate-data}' | base64 -d | openssl x509 -noout -enddate`.
+- **Portability:** the cluster path works from anywhere on the tailnet; the VM itself does not
+  move for free — Terraform is Proxmox-specific, while the Ansible role runs on any Ubuntu 26.04.
 - **Accepted risk, recorded in the new ADR:** a machine that runs arbitrary third-party code
   (`npm install`, agents) holds cluster-admin. This deliberately exceeds ADR-0065's namespace-admin.
-- Why not the Tailscale operator proxy: it adds a dependency on the operator pod (which also runs
-  on Dell) for no gain on a LAN-resident VM.
 
 ### 5.5 Access from the Mac
 
@@ -289,7 +308,7 @@ the understanding that encrypted columns are undecryptable.)
 Verify the node is Ready and Longhorn volumes re-attach healthy.
 
 **Phase 2 — build the VM:** Terraform devbox VM → Ansible (`tailscale_host` + `devbox`) →
-cluster-admin SA + kubeconfig (§5.4). Verify: direct tailnet path from the Mac
+cluster-admin user cert + kubeconfig (§5.4). Verify: direct tailnet path from the Mac
 (`tailscale ping devbox` reports direct), `docker run hello-world`, `kubectl auth can-i '*' '*'
 --all-namespaces` → yes.
 
@@ -331,8 +350,8 @@ ADR-0062 status).
 
 - Code stays at `/workspace/<dir>`; restored data at `/srv/devdata/<project>/<service>`.
 - Devbox is a separate Terraform resource, not a `k3s_worker` entry.
-- Cluster-admin SA lives in `kube-system` (name `devbox-admin`), token via a
-  `service-account-token` Secret, manifests Argo-managed.
+- Cluster-admin is a CSR-issued user cert `CN=harsh` + CRB `devbox-harsh-cluster-admin` (Argo-managed),
+  API over the tailnet — operator's choice 2026-10-23, replacing the SA-token design (§5.4).
 - Docker group membership for `harsh` (root-equivalent) accepted alongside cluster-admin.
 - AI CLIs stay user-installed in `$HOME`, not in the Ansible role.
 - The VM joins the tailnet as `tag:devbox` (the old pod's key from SSM; operator chose it over a new untagged key), plain OpenSSH — §5.3.

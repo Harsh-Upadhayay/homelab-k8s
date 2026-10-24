@@ -1,0 +1,34 @@
+# Child Application: devbox — cluster access for the developer VM that replaces
+# the workbench pod (docs/superpowers/specs/2026-10-18-devbox-vm-design.md §5.4).
+#
+# Manages one object: the ClusterRoleBinding that grants cluster-admin to the
+# user "harsh" — the CN of the devbox's CSR-issued client certificate. The
+# certificate itself is not a cluster object and is not in git.
+#
+# The `default` project for the same reason as workbench: a platform component
+# from this repo, which the `personal` project forbids as a source.
+#
+# No destination namespace: the only object is cluster-scoped.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: devbox
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Harsh-Upadhayay/homelab-k8s.git
+    targetRevision: main
+    path: k8s/devbox/manifests
+  destination:
+    server: https://kubernetes.default.svc
+
+  # Fully automated — the opposite of workbench, on purpose. An access grant
+  # should change in exactly one place: git.
+  syncPolicy:
+    automated:
+      # Undo hand edits (e.g. a subject added with kubectl) within minutes.
+      selfHeal: true
+      # Deleting rbac.yaml from git deletes the binding — this is the
+      # revocation path, since the certificate can't be cancelled early.
+      prune: true

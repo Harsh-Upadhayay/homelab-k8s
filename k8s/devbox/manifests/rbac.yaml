@@ -1,0 +1,32 @@
+# cluster-admin for the devbox VM's own user identity.
+#
+# WHO "harsh" IS: not an object in the cluster — Kubernetes has no User
+# resource. It is the CN of a client certificate issued through the CSR API
+# (signer kubernetes.io/kube-apiserver-client, i.e. k3s's client-ca), whose
+# private key was generated on the devbox and never left it. The cert carries
+# no O= groups, so this binding is the ONLY thing that gives it any rights.
+#
+# WHY A USER CERT, NOT A SERVICEACCOUNT TOKEN: a person's identity, not a pod's;
+# the secret is born on the VM instead of being copied out of the cluster; and
+# it expires (one year — the signer's cap), so a leaked copy dies on its own.
+#
+# REVOKING: a cert can't be cancelled before it expires (no CRL), so revocation
+# means removing this binding — the cert then still authenticates as "harsh"
+# but is authorized for nothing. Argo self-heals it, so a bare
+# `kubectl delete` is undone within minutes: remove it from git instead.
+#
+# Renewal (yearly) and the network path (API over Tailscale, via the
+# k3s-server-1.egret-pence.ts.net SAN) are in docs/superpowers/specs/2026-10-18-devbox-vm-design.md §5.4.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: devbox-harsh-cluster-admin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  # Must match the certificate's CN exactly. No namespace: Users are cluster-wide.
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: harsh
