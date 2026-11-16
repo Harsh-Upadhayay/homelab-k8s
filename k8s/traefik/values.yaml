@@ -16,11 +16,28 @@ ports:
     # k8s/cloudflared/). TLS already terminated at Cloudflare's edge, so
     # plain HTTP cluster-internal is fine here — end-to-end TLS to the
     # origin is a later hardening step, not a day-one requirement.
+    transport:
+      respondingTimeouts:
+        # Traefik v2.11.2+/v3 changed the built-in default readTimeout from
+        # 0 (disabled) to 60s. That silently killed large Immich video
+        # uploads mid-transfer (client sees "Bad Gateway") well before the
+        # request itself was anywhere near done — confirmed 2026-09-02 via
+        # a 1.2GB upload failing at the ~60s mark while immich-server's own
+        # write to its (slow, HDD-backed) volume was still in progress.
+        # 30m is a deliberately generous, bounded ceiling, not "0/unlimited"
+        # — this is a trusted homelab, but an unbounded timeout still lets
+        # one stalled connection hold a server slot forever.
+        readTimeout: 30m
+        writeTimeout: 30m
   websecure:
     port: 8443
     http:
       tls:
         enabled: false   # not used yet — see note above; flip on later if wanted
+    transport:
+      respondingTimeouts:
+        readTimeout: 30m
+        writeTimeout: 30m
   traefik:
     # Internal dashboard/api entrypoint — NOT part of the `service` above,
     # so it is not reachable via the ClusterIP on 8000/8443. Exposed
@@ -43,6 +60,14 @@ ingressRoute:
                        # hand-written one (manifests/ingressroute-dashboard.yaml) on
                        # traefik.in.neovara.uk, matching every other internal dashboard's
                        # pattern, reached through the traefik-internal front door
+
+accessLog:
+  enabled: true
+  # JSON so duration/bytes fields are grep/jq-able — needed to diagnose the
+  # large-video-upload 502s (2026-09-02): with this off, Traefik logs
+  # nothing per-request, so a backend-reset 502 leaves no trace of how long
+  # the request ran or how many bytes it read before failing.
+  format: json
 
 resources:
   requests:
