@@ -1,5 +1,5 @@
 # AppProject: 'personal' — the SECURITY BOUNDARY for dev-owned code (kiroku,
-# job-hunt, documentor-pro, and future friend-shared projects). Their
+# job-hunt, and future friend-shared projects). Their
 # manifests live in THEIR OWN repos under deploy/; this cluster repo holds
 # only a pointer Application
 # (k8s/argocd/apps/<app>.yaml) per app. See docs/Migration Plan.md
@@ -33,15 +33,12 @@ spec:
   # corrected 2026-08-20).
   sourceRepos:
     - https://github.com/Harsh-Upadhayay/kiroku.git
-    - git@github.com:nirajmatere/documentor_pro.git
     - https://github.com/deep-astaad/job-hunt.git
 
   # One namespace per app, in-cluster only. Extended per app as they land.
   destinations:
     - server: https://kubernetes.default.svc
       namespace: kiroku
-    - server: https://kubernetes.default.svc
-      namespace: documentor-pro
     - server: https://kubernetes.default.svc
       namespace: job-hunt
 

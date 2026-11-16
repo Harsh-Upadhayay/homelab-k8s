@@ -234,7 +234,7 @@ stream `tar` to `harsh@devbox` over LAN/tailnet.
   with `git status --ignored` that nothing excluded is irreplaceable.
 - From `/home/vscode`: `.claude* .codex .agents .copilot .config .gitconfig* .git-credentials-work
   .ssh .aws .terraform.d .npmrc .tmux .tmux.conf .bashrc .bash_profile .kube` plus loose notes
-  (`cheatsheet.md`, `RESTART-RECOVERY.md`, `argocd-documentor-ai-deploy*`). **Skip:** `.cache
+  (`cheatsheet.md`, `RESTART-RECOVERY.md`). **Skip:** `.cache
   .npm .vscode-server .zed_server .local/share/mise` (reinstalled), `go` caches, `.docker`, stray
   `*.tmp.*`/`*.bak*`. `.kube` is copied but superseded by §5.4's kubeconfig.
 - Per repo before copying: confirm everything is committed **and pushed**, or explicitly list what
