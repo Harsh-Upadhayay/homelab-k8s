@@ -54,12 +54,20 @@ rbac:
 alloy:
   # Slightly above a per-node figure because this one pod carries the whole
   # cluster's (low) log throughput, not a third of it.
+  #
+  # Limit 512Mi, not 256Mi: on 2026-11-02 Alloy sat at the 256Mi ceiling, and
+  # the kernel kept its working set inside that by dropping the pages holding
+  # Alloy's own binary, then reading them straight back from disk (~280 MB/s
+  # of refaults). That re-reading saturated pve-asrock's shared SSD, the same
+  # disk under k3s-server-1's etcd, and k3s crash-looped 8 times. A limit
+  # with headroom keeps the binary resident. The request stays at 128Mi (its
+  # normal working set), so scheduling isn't affected.
   resources:
     requests:
       cpu: 50m
       memory: 128Mi
     limits:
-      memory: 256Mi
+      memory: 512Mi
   # Alloy's config language (River): discover every pod via the API, attach
   # k8s labels (namespace/pod/container — the same label vocabulary Prometheus
   # uses), read each container's log stream via the API, push to Loki.
