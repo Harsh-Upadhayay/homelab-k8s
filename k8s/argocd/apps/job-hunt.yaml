@@ -1,8 +1,7 @@
 # Pointer Application: job-hunt's WORKLOADS, sourced from the app's OWN
 # public repo (deploy/) — NOT this repo. Same Option E dev-owned pattern as
-# kiroku/documentor-pro. Public repo + public image, so unlike
-# documentor-pro this needs no repository-credential Secret and no
-# imagePullSecret — plain HTTPS clone, plain public image pull.
+# kiroku. Public repo + public image, so it needs no repository-credential
+# Secret and no imagePullSecret — plain HTTPS clone, plain public image pull.
 #
 # In the locked-down `personal` project: sourceRepos allow-lists only this
 # repo, destinations only the job-hunt namespace, and cluster-scoped
