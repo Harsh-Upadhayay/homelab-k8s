@@ -52,7 +52,12 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/name: devbox
-  replicas: 1
+  # 0 since 2026-11-16: retired in favour of the devbox VM (VM 102 on pve-dell,
+  # docs/superpowers/plans/2026-10-18-devbox-vm.md). Kept as a manifest, not
+  # deleted, so the `workspace` PVC above stays until that plan's Task 9
+  # decommission. The workbench app has no RespectIgnoreDifferences, so a
+  # manual sync applies this value: at 1, it would start the pod again.
+  replicas: 0
   # Recreate, not the default RollingUpdate (2026-10-02). RollingUpdate starts the
   # new pod BEFORE stopping the old one, which deadlocks here:
   #   - the old pod holds hostPort 41642 on its node, so the scheduler must put
